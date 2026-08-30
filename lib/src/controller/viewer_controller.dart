@@ -87,6 +87,7 @@ class ViewerHighlight {
     required this.style,
     required this.createdAtIso,
     this.note,
+    this.cfi,
   });
 
   /// Restores from JSON ([toJson]).
@@ -149,6 +150,10 @@ class ViewerHighlight {
 
   /// Creation timestamp (ISO 8601).
   final String createdAtIso;
+
+  /// EPUB CFI of the highlight start (dual-write with the char
+  /// offsets for Calibre/Readium interop). Null for legacy entries.
+  final String? cfi;
 
   /// JSON for host persistence.
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -652,11 +657,23 @@ class ViewerController extends ChangeNotifier {
       style: style,
       createdAtIso: DateTime.now().toIso8601String(),
       note: note,
+      cfi: _highlightCfi(selection.fileIndex, selection.start),
     );
     _highlights.add(highlight);
     await _applyHighlightsToEngine(_active, selection.fileIndex);
+    _notifyAnnotationsChanged();
     notifyListeners();
     return highlight;
+  }
+
+  /// Dual-write: every highlight serializes its EPUB CFI alongside the
+  /// char offsets (interop with Calibre/Readium tooling).
+  String? _highlightCfi(final int fileIndex, final int start) {
+    try {
+      return _cfiDocFor(fileIndex).cfiForOffset(start).serialize();
+    } on Object {
+      return null;
+    }
   }
 
   /// Removes a highlight and unwraps it in the page.
