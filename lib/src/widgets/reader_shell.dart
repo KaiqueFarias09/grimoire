@@ -36,8 +36,10 @@ class ReaderShell extends StatelessWidget {
               ),
             ),
             if (controller.hasSelection)
-              Align(
-                alignment: Alignment.bottomCenter,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
                 child: _SelectionToolbar(controller: controller),
               ),
           ],
@@ -56,7 +58,7 @@ class _TopBar extends StatelessWidget {
   Widget build(final BuildContext context) {
     final theme = Theme.of(context);
     return Material(
-      color: theme.colorScheme.surface.withValues(alpha: 0.97),
+      color: theme.colorScheme.surface,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -140,7 +142,7 @@ class _BottomBar extends StatelessWidget {
     final position = controller.position;
     final percent = (controller.progress * 100).round();
     return Material(
-      color: theme.colorScheme.surface.withValues(alpha: 0.97),
+      color: theme.colorScheme.surface,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -193,32 +195,36 @@ class _SelectionToolbar extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: Card(
-          elevation: 6,
-          color: theme.colorScheme.surface,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final (icon, style, tooltip) in _styles)
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          heightFactor: 1,
+          child: Card(
+            elevation: 6,
+            color: theme.colorScheme.surface,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (icon, style, tooltip) in _styles)
+                    IconButton(
+                      iconSize: 20,
+                      tooltip: tooltip,
+                      icon: icon,
+                      onPressed: () {
+                        controller.addHighlightFromSelection(style: style);
+                        controller.clearSelection();
+                      },
+                    ),
+                  const VerticalDivider(width: 8, indent: 10, endIndent: 10),
                   IconButton(
                     iconSize: 20,
-                    tooltip: tooltip,
-                    icon: icon,
-                    onPressed: () {
-                      controller.addHighlightFromSelection(style: style);
-                      controller.clearSelection();
-                    },
+                    tooltip: 'Clear selection',
+                    icon: const Icon(Icons.close),
+                    onPressed: controller.clearSelection,
                   ),
-                const VerticalDivider(width: 8, indent: 10, endIndent: 10),
-                IconButton(
-                  iconSize: 20,
-                  tooltip: 'Clear selection',
-                  icon: const Icon(Icons.close),
-                  onPressed: controller.clearSelection,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

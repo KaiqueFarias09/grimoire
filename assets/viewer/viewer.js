@@ -45,10 +45,22 @@
   }
 
   function inlineSize() {
-    return window.innerWidth;
+    // Embedded iOS WebViews can disagree with the hosting widget about
+    // their own size (Calibre ships IOSScrollViewport for the same
+    // reason), so the host-reported logical size wins when available.
+    if (state.hostViewport && state.hostViewport.w) {
+      return state.hostViewport.w;
+    }
+    // clientWidth is the CSS viewport after the meta viewport applies;
+    // window.innerWidth can report stale or native-pixel values inside
+    // embedded WebViews, which would size columns wider than the screen.
+    return document.documentElement.clientWidth || window.innerWidth;
   }
 
   function blockSize() {
+    if (state.hostViewport && state.hostViewport.h) {
+      return state.hostViewport.h;
+    }
     return window.innerHeight;
   }
 
@@ -102,8 +114,18 @@
       ' height: ' + blockSize() + 'px !important;' +
       ' width: ' + screenInline + 'px !important;' +
       ' box-sizing: content-box !important;' +
+      ' overflow-wrap: break-word !important;' +
       ' margin: 0 !important; padding: 0 !important; }';
     document.body.classList.add('elv-paged');
+    // Without this, WebKit bleeds the margin of the first block(s) of
+    // body above the columns (margin collapse reaching the viewport).
+    document.body.style.setProperty('-webkit-margin-collapse', 'separate');
+    // Remove page breaks on the first elements to avoid blank first
+    // pages at chapter starts (Calibre paged_mode does the same).
+    var first = document.body.firstElementChild;
+    if (first) {
+      first.style.setProperty('break-before', 'avoid', 'important');
+    }
     fitImages();
     state.colCount = numberOfCols();
   }
@@ -327,21 +349,40 @@
     return Math.min(lo, node.length);
   }
 
+  // Collapsed-range rects come back as ZeroRect when the caret sits in a
+  // multicol fragment outside the painted region, so fall back to the
+  // hosting element's rect (first fragment = the column the node starts in).
+  function rectFor(node, within) {
+    var range = document.createRange();
+    range.setStart(node, within);
+    range.collapse(true);
+    var rect = range.getBoundingClientRect();
+    if (rect && (rect.width || rect.height || rect.left || rect.top)) {
+      return rect;
+    }
+    var host = node.parentElement;
+    if (host) {
+      rect = host.getBoundingClientRect();
+      if (rect) {
+        return rect;
+      }
+    }
+    return { left: 0, top: 0 };
+  }
+
   function goToOffset(target) {
     var nodes = textNodes();
     var consumed = 0;
-    var range = document.createRange();
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
       if (consumed + node.length > target || i === nodes.length - 1) {
         var within = Math.max(0, Math.min(target - consumed, node.length));
-        range.setStart(node, within);
-        range.collapse(true);
-        var rect = range.getBoundingClientRect();
         if (isScrollMode()) {
+          var rect = rectFor(node, within);
           var docY = rect.top + scrollElement().scrollTop;
           scrollElement().scrollTop = Math.max(0, docY - 8);
         } else {
+          var rect = rectFor(node, within);
           var docX = rect.left + scrollElement().scrollLeft;
           scrollToColumn(columnAt(docX));
         }
@@ -854,6 +895,13 @@
         state.columns = Math.max(0, Math.min(4, message.n || 0));
         relayoutKeepingPosition();
         break;
+      case 'setViewport':
+        state.hostViewport = {
+          w: Number(message.width) || 0,
+          h: Number(message.height) || 0,
+        };
+        relayoutKeepingPosition();
+        break;
       case 'setOverrideColors':
         if (message.enabled) {
           document.body.classList.add('elv-override-colors');
@@ -887,9 +935,20 @@
   function boot() {
     document.documentElement.style.fontSize = state.fontSize + 'px';
     layout();
-    document.body.addEventListener('click', onTap, true);
+    // Clicks land on the document element (not the body) whenever they
+    // hit the column-overflow area outside the body's fixed-width box,
+    // which is every paged column past the first — so the listener must
+    // live on the document to see them.
+    document.addEventListener('click', onTap, true);
     document.addEventListener('selectionchange', onSelectionChanged);
     window.addEventListener('resize', onResize);
+    // Embedded WebViews sometimes skip the window resize event when the
+    // hosting widget changes size; observe the element directly.
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(function () {
+        onResize();
+      }).observe(document.documentElement);
+    }
     document.addEventListener('keydown', function (event) {
       if (event.key === 'ArrowRight' || event.key === 'PageDown') {
         nextColumn();

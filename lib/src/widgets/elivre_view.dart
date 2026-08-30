@@ -126,17 +126,28 @@ class _ELivreViewState extends State<ELivreView> {
             final engines = controller.engines;
             final active = controller.activeEngineIndex;
             final below = 1 - active;
+            // LayoutBuilder reports the real webview box: embedded iOS
+            // WebViews cannot be trusted to measure themselves (the
+            // MediaQuery size is the whole screen, not this widget).
             return SafeArea(
-              child: Stack(
-                children: [
-                  // Inactive engine below (preloaded content), active on
-                  // top, reader chrome overlays everything.
-                  if (engines.length > below)
-                    Positioned.fill(child: engines[below].buildWidget()),
-                  if (engines.length > active)
-                    Positioned.fill(child: engines[active].buildWidget()),
-                  Positioned.fill(child: ReaderShell(controller: controller)),
-                ],
+              child: LayoutBuilder(
+                builder: (final context, final constraints) {
+                  controller.setLogicalViewport(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
+                  return Stack(
+                    children: [
+                      // Inactive engine below (preloaded content), active on
+                      // top, reader chrome overlays everything.
+                      if (engines.length > below)
+                        Positioned.fill(child: engines[below].buildWidget()),
+                      if (engines.length > active)
+                        Positioned.fill(child: engines[active].buildWidget()),
+                      Positioned.fill(child: ReaderShell(controller: controller)),
+                    ],
+                  );
+                },
               ),
             );
           },

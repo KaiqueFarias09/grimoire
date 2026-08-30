@@ -1,12 +1,23 @@
 /// Text model shared by positions and search.
 ///
-/// The viewer JS walks the DOM text nodes (skipping `script`/`style`)
-/// and concatenates them; [documentText] mirrors that exactly on the
-/// HTML source: entities decoded in a single pass (like the HTML
-/// parser), tags and comments contributing nothing, whitespace kept
-/// as-is. Char offsets in this space are stable across reflow.
+/// The viewer JS walks the DOM text nodes rooted at `<body>` (skipping
+/// `script`/`style`) and concatenates them; [documentText] mirrors that
+/// exactly on the HTML source: everything outside `<body>` (head, title,
+/// doctype) contributes nothing, entities decoded in a single pass (like
+/// the HTML parser), tags and comments contributing nothing, whitespace
+/// kept as-is. Char offsets in this space are stable across reflow and
+/// match the DOM on the WebView side.
 String documentText(final String html) {
-  var text = html
+  var text = html;
+  final body = RegExp(
+    r'<body[^>]*>(.*)</body>',
+    dotAll: true,
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (body != null) {
+    text = body.group(1)!;
+  }
+  return text
       .replaceAll(
         RegExp(
           r'<(script|style)\b[^>]*>.*?</\1>',
@@ -18,11 +29,10 @@ String documentText(final String html) {
       .replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '')
       .replaceAll(RegExp(r'<!\[CDATA\[(.*?)\]\]>', dotAll: true), r'$1')
       .replaceAll(RegExp(r'<![^>]*>'), '')
-      .replaceAll(RegExp(r'<[^>]*>'), '');
-
-  return text.replaceAllMapped(_entityPattern, (final match) {
-    return decodeEntity(match.group(1)!) ?? match.group(0)!;
-  });
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAllMapped(_entityPattern, (final match) {
+        return decodeEntity(match.group(1)!) ?? match.group(0)!;
+      });
 }
 
 final RegExp _entityPattern =

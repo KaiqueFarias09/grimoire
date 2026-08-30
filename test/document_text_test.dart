@@ -15,8 +15,19 @@ void main() {
         '<style>.a{}</style><script>bad()</script></head>'
         '<body><!-- note -->text</body></html>',
       ),
-      'Ttext',
+      'text',
     );
+  });
+
+  test('contributes nothing outside <body>, matching the JS TreeWalker', () {
+    expect(
+      documentText(
+        '<html><head><title>Offset pollution</title></head>'
+        '<body><p>abc</p></body></html>',
+      ),
+      'abc',
+    );
+    expect(documentText('<p>no body tag</p>'), 'no body tag');
   });
 
   test('decodes entities in a single pass', () {

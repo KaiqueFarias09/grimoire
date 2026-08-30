@@ -294,6 +294,33 @@ class ViewerController extends ChangeNotifier {
   ViewerLayoutMode _layoutMode;
   int _columnsPerScreen;
 
+  /// Logical size of the hosting widget, reported by the view. On iOS
+  /// the WebView's own `innerWidth` can disagree with the real widget
+  /// size (Calibre ships IOSScrollViewport for the same reason), so the
+  /// layout math is driven by the host-provided size instead.
+  double? _logicalViewportWidth;
+  double? _logicalViewportHeight;
+
+  /// Reports the logical size of the hosting widget to the viewer.
+  void setLogicalViewport(final double width, final double height) {
+    if (_logicalViewportWidth == width &&
+        _logicalViewportHeight == height) {
+      return;
+    }
+    _logicalViewportWidth = width;
+    _logicalViewportHeight = height;
+    if (!_started) {
+      return;
+    }
+    for (var slot = 0; slot < _engines.length; slot++) {
+      _sendTo(slot, <String, Object?>{
+        'action': 'setViewport',
+        'width': width,
+        'height': height,
+      });
+    }
+  }
+
   int _bookmarkCounter = 0;
   int _highlightCounter = 0;
 
@@ -934,6 +961,11 @@ class ViewerController extends ChangeNotifier {
     await _sendTo(slot, <String, Object?>{
       'action': 'setOverrideColors',
       'enabled': _theme.overrideBookColors,
+    });
+    await _sendTo(slot, <String, Object?>{
+      'action': 'setViewport',
+      'width': _logicalViewportWidth,
+      'height': _logicalViewportHeight,
     });
     await _sendTo(
       slot,
