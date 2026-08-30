@@ -234,13 +234,13 @@ class ViewerController extends ChangeNotifier {
   /// Creates a controller for [book].
   ViewerController(
     this.book, {
-    ViewerTheme theme = ViewerTheme.light,
-    int fontSizePx = 17,
-    int marginsPx = 20,
-    ViewerLayoutMode layoutMode = ViewerLayoutMode.paged,
-    int columnsPerScreen = 0,
+    final ViewerTheme theme = ViewerTheme.light,
+    final int fontSizePx = 17,
+    final int marginsPx = 20,
+    final ViewerLayoutMode layoutMode = ViewerLayoutMode.paged,
+    final int columnsPerScreen = 0,
     this.onExternalLink,
-    ViewerEngineFactory? engineFactory,
+    final ViewerEngineFactory? engineFactory,
   })  : _theme = theme,
         _fontSizePx = fontSizePx,
         _marginsPx = marginsPx,
@@ -374,7 +374,9 @@ class ViewerController extends ChangeNotifier {
 
     _loadedFile[_active] = 0;
     _engineReady[_active] = false;
+    debugPrint('🔌 Loading URL: ${server.urlForItem(0)}');
     await _engines[_active].loadUrl(server.urlForItem(0));
+    debugPrint('🔌 URL loaded on engine $_active');
   }
 
   @mustCallSuper

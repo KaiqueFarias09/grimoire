@@ -83,7 +83,7 @@ class _ELivreViewState extends State<ELivreView> {
         controller.addListener(_notifyPosition);
       }
       if (widget.onSelection != null) {
-        controller.selectionEvents.listen((selection) {
+        controller.selectionEvents.listen((final selection) {
           if (mounted) {
             widget.onSelection?.call(selection);
           }
@@ -128,8 +128,8 @@ class _ELivreViewState extends State<ELivreView> {
             final below = 1 - active;
             return Stack(
               children: [
-                // Both engines stay in the tree; the active one paints
-                // on top. The spare shows the preloaded file beneath.
+                // Inactive engine below (preloaded content), active on
+                // top, reader chrome overlays everything.
                 if (engines.length > below)
                   Positioned.fill(child: engines[below].buildWidget()),
                 if (engines.length > active)

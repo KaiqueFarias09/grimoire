@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:e_livre_viewer/e_livre_viewer.dart';
@@ -123,7 +122,7 @@ void main() {
       );
       // Slot 1 preloaded chapter 2.
       expect(
-        factory.engines[1].loadedUrls.map((u) => u.path).toList(),
+        factory.engines[1].loadedUrls.map((final u) => u.path).toList(),
         everyElement(contains('chapter2')),
       );
     });
@@ -171,7 +170,7 @@ void main() {
       // The engine received the applyHighlights command.
       expect(
         factory.engines[controller.activeEngineIndex].scripts
-            .where((s) => s.contains('applyHighlights'))
+            .where((final s) => s.contains('applyHighlights'))
             .length,
         greaterThanOrEqualTo(1),
       );
@@ -202,7 +201,7 @@ void main() {
 
     test('external link callback fires', () async {
       var externalHref = '';
-      controller.onExternalLink = (href) => externalHref = href;
+      controller.onExternalLink = (final href) => externalHref = href;
       await controller.start();
 
       factory.engines[controller.activeEngineIndex].postMessage({
@@ -229,7 +228,7 @@ void main() {
       // Both engines should have received the theme vars.
       for (final engine in factory.engines) {
         expect(
-          engine.scripts.where((s) => s.contains('setVars')),
+          engine.scripts.where((final s) => s.contains('setVars')),
           isNotEmpty,
         );
       }

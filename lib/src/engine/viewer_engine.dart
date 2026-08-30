@@ -27,10 +27,10 @@ abstract class ViewerEngine {
   Widget buildWidget();
 
   /// Navigates the engine to [url].
-  Future<void> loadUrl(Uri url);
+  Future<void> loadUrl(final Uri url);
 
   /// Evaluates [code] in the current page.
-  Future<void> evaluateJavaScript(String code);
+  Future<void> evaluateJavaScript(final String code);
 
   /// Releases platform resources.
   Future<void> dispose();
@@ -40,7 +40,7 @@ abstract class ViewerEngine {
 abstract class ViewerEngineFactory {
   /// Creates the two engine slots wired to [onMessage].
   List<ViewerEngine> createPair(
-    void Function(Object message, int source) onMessage,
+    final void Function(Object message, int source) onMessage,
   );
 
   /// The factory for the running platform: the official

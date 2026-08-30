@@ -4,8 +4,8 @@ description: >-
   Calibre-style ebook reader for Flutter built on eLivre. Renders
   EPUB, MOBI, AZW3, FB2 and comics with paginated layouts, themes,
   table of contents, search and text selection hooks.
-repository: https://github.com/KaiqueFarias09/eLivre
-issue_tracker: https://github.com/KaiqueFarias09/eLivre/issues
+repository: https://github.com/KaiqueFarias09/eLivreViewer
+issue_tracker: https://github.com/KaiqueFarias09/eLivreViewer/issues
 
 environment:
   sdk: ">=3.1.0 <4.0.0"
@@ -18,8 +18,7 @@ topics:
   - viewer
 
 dependencies:
-  # Path dependency during development; swap for e_livre: ^3.2.0
-  # when publishing (path deps are not allowed on pub.dev).
+  # Path dep during development; swap to ^3.2.0 after publishing eLivre.
   e_livre:
     path: ../eLivre
   flutter:

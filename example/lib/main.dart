@@ -34,8 +34,24 @@ const List<_Fixture> _fixtures = <_Fixture>[
   _Fixture('assets/books/sample1.epub', 'Geography of Bliss (EPUB)'),
 ];
 
-class LibraryPage extends StatelessWidget {
+class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});
+
+  @override
+  State<LibraryPage> createState() => _LibraryPageState();
+}
+
+class _LibraryPageState extends State<LibraryPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Auto-open the first book for device validation.
+    Future<void>.delayed(const Duration(seconds: 2)).then((_) {
+      if (mounted) {
+        _open(context, _fixtures.first);
+      }
+    });
+  }
 
   @override
   Widget build(final BuildContext context) {

@@ -17,14 +17,15 @@ class ReaderShell extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (final context, final _) {
+        final chromeVisible = controller.chromeVisible;
         return Stack(
           children: [
-            // Block page taps where the chrome paints.
+            // Chrome bars: only intercept taps when visible.
             AnimatedOpacity(
-              opacity: controller.chromeVisible ? 1 : 0,
+              opacity: chromeVisible ? 1 : 0,
               duration: const Duration(milliseconds: 180),
               child: IgnorePointer(
-                ignoring: !controller.chromeVisible,
+                ignoring: !chromeVisible,
                 child: Column(
                   children: [
                     _TopBar(controller: controller),
