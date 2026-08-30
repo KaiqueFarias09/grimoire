@@ -2,6 +2,8 @@ import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:e_livre_viewer/src/controller/viewer_position.dart';
 import 'package:e_livre_viewer/src/widgets/reader_shell.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 /// Renders a parsed [Book] as a Calibre-style paginated reader.
@@ -67,12 +69,19 @@ class _ELivreViewState extends State<ELivreView> {
     _startFuture = _boot();
   }
 
+  StreamSubscription<String>? _imagePopupSub;
+
   Future<void> _boot() async {
     final controller = _controller;
     if (widget.onExternalLink != null) {
       controller.onExternalLink = widget.onExternalLink;
     }
     await controller.start();
+    _imagePopupSub = controller.imagePopupEvents.listen((final src) {
+      if (mounted) {
+        _showImagePopup(src);
+      }
+    });
     if (widget.initialPosition != null) {
       await controller.goToSerializedPosition(widget.initialPosition!);
     }
@@ -98,8 +107,37 @@ class _ELivreViewState extends State<ELivreView> {
     }
   }
 
+  void _showImagePopup(final String src) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (final dialogContext) => Dialog.fullscreen(
+        backgroundColor: Colors.transparent,
+        child: GestureDetector(
+          onTap: () => Navigator.of(dialogContext).pop(),
+          child: InteractiveViewer(
+            maxScale: 8,
+            child: Center(
+              child: Image.network(
+                src,
+                fit: BoxFit.contain,
+                errorBuilder: (final context, final error, final stack) =>
+                    const Icon(
+                      Icons.broken_image,
+                      size: 48,
+                      color: Colors.white70,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _imagePopupSub?.cancel();
     _ownedController?.removeListener(_notifyPosition);
     _ownedController?.dispose();
     super.dispose();

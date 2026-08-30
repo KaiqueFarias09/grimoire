@@ -72,6 +72,20 @@ class ShortcutEvent extends ViewerEvent {
   final String name;
 }
 
+/// The reader tapped an inline image.
+class ViewImageEvent extends ViewerEvent {
+  ViewImageEvent({required this.src, super.source});
+
+  final String src;
+}
+
+/// The reader tapped a link recognized as a footnote reference.
+class FootnoteTapEvent extends ViewerEvent {
+  FootnoteTapEvent({required this.href, super.source});
+
+  final String href;
+}
+
 /// The text selection changed (empty [text] means cleared).
 class SelectionEvent extends ViewerEvent {
   SelectionEvent({
@@ -206,6 +220,16 @@ class ViewerBridge {
         return ChromeToggleEvent(source: source);
       case 'fontSizeBump':
         return FontSizeBumpEvent(delta: _asInt(map['delta']), source: source);
+      case 'viewImage':
+        return ViewImageEvent(
+          src: map['src'] is String ? map['src'] as String : '',
+          source: source,
+        );
+      case 'footnoteTap':
+        return FootnoteTapEvent(
+          href: map['href'] is String ? map['href'] as String : '',
+          source: source,
+        );
       case 'shortcut':
         return ShortcutEvent(
           name: map['name'] is String ? map['name'] as String : '',

@@ -13,6 +13,24 @@ html, body {
   background-color: var(--elv-bg);
 }
 
+/* Parity: calibre settings.pyj:80-87 — macOS renders the default
+   hyphenation character (U+2010) as a missing glyph (bug 1951467). */
+html {
+  -webkit-hyphenate-character: "-";
+}
+
+/* Parity: calibre settings.pyj:109-115 — RTL/vertical content scrolls
+   leftwards, which Chrome won't paint with visible scrollbars. */
+.elv-hide-scrollbars {
+  scrollbar-width: none;
+}
+
+.elv-hide-scrollbars::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 body {
   color: var(--elv-fg);
   -webkit-text-size-adjust: 100%;

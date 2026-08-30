@@ -336,6 +336,11 @@ class ViewerController extends ChangeNotifier {
   /// Book-wide progress `0..1` for the current position.
   double get progress => readingState.progressOf(_position);
 
+  double _fileFraction = 0;
+
+  /// Fraction `0..1` inside the current file (drives the scrollbar).
+  double get fileFraction => _fileFraction;
+
   /// Whether the reader chrome is visible.
   bool get chromeVisible => _chromeVisible;
 
@@ -675,6 +680,20 @@ class ViewerController extends ChangeNotifier {
     );
   }
 
+  final StreamController<String> _imagePopups =
+      StreamController<String>.broadcast();
+
+  /// Image sources the reader wants enlarged (tap on an inline image).
+  Stream<String> get imagePopupEvents => _imagePopups.stream;
+
+  /// Jumps the current file to [fraction] `0..1` (custom scrollbar).
+  Future<void> goToFraction(final double fraction) async {
+    await _send(<String, Object?>{
+      'action': 'goToFraction',
+      'frac': fraction.clamp(0.0, 1.0),
+    });
+  }
+
   /// Broadcast stream of selections (for dictionary lookups).
   Stream<ViewerSelection> get selectionEvents => bridge.events
       .where((final event) => event is SelectionEvent && event.text.isNotEmpty)
@@ -906,6 +925,7 @@ class ViewerController extends ChangeNotifier {
           column: event.column,
           columns: event.columns,
         );
+        _fileFraction = event.frac;
         notifyListeners();
       case BoundaryEvent():
         if (event.source != _active) {
@@ -942,6 +962,14 @@ class ViewerController extends ChangeNotifier {
           return;
         }
         await _handleShortcut(shortcut.name);
+      case ViewImageEvent image:
+        if (event.source == _active) {
+          _imagePopups.add(image.src);
+        }
+      case FootnoteTapEvent footnote:
+        if (event.source == _active) {
+          await _followInternalLink(footnote.href);
+        }
       case LinkTapEvent link:
         if (event.source != _active) {
           return;

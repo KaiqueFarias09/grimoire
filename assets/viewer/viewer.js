@@ -90,6 +90,11 @@
       // Chrome scrolling breaks for some RTL content without this.
       document.documentElement.style.overflow = 'visible';
     }
+    // Parity: calibre settings.pyj:109-115.
+    document.body.classList.toggle(
+      'elv-hide-scrollbars',
+      state.writingMode.vertical || state.writingMode.rtl
+    );
   }
 
   // Parity: calibre src/pyj/read_book/viewport.pyj:348-365 (rem_size)
@@ -1151,6 +1156,20 @@
     if (isComic()) {
       return; // comics handle their own gestures
     }
+    var img = target && target.closest ? target.closest('img') : null;
+    if (img && img.src) {
+      post({ type: 'viewImage', src: img.currentSrc || img.src });
+      return;
+    }
+    var link = target && target.closest ? target.closest('a') : null;
+    if (link && link.dataset && link.dataset.elvFootnote) {
+      event.preventDefault();
+      post({
+        type: 'footnoteTap',
+        href: link.getAttribute('href') || '',
+      });
+      return;
+    }
     var x = event.clientX;
     var y = event.clientY;
     var w = inlineSize();
@@ -1400,6 +1419,19 @@
           goToEnd();
         } else {
           state.pendingPosition = { action: 'goToEnd' };
+        }
+        break;
+      case 'goToFraction':
+        if (state.ready) {
+          layout();
+          var frac = Math.min(1, Math.max(0, Number(message.frac) || 0));
+          var se2 = scrollElement();
+          if (isScrollMode()) {
+            se2.scrollTop = frac * (se2.scrollHeight - blockSize());
+          } else {
+            scrollToPos(frac * (se2.scrollWidth - inlineSize()));
+          }
+          reportPosition();
         }
         break;
       case 'goToColumn':
@@ -1674,9 +1706,41 @@
     );
   }
 
+  // Parity: calibre src/pyj/read_book/footnotes.pyj:33 (is_footnote_link)
+  // — EPUB roles, epub:type noteref, or super/sub script styling.
+  function isFootnoteLink(a) {
+    var roles = a.getAttribute('role') || '';
+    if (/\b(doc-noteref|biblioref|glossref)\b/.test(roles)) {
+      return true;
+    }
+    var types =
+      a.getAttributeNS('http://www.idpf.org/2007/ops', 'type') ||
+      a.getAttribute('epub:type') ||
+      '';
+    if (/\bnoteref\b/.test(types)) {
+      return true;
+    }
+    var va = getComputedStyle(a).verticalAlign;
+    return va === 'super' || va === 'sub';
+  }
+
+  function markFootnoteLinks() {
+    var links = document.body.querySelectorAll('a[href]');
+    for (var i = 0; i < links.length; i++) {
+      try {
+        if (isFootnoteLink(links[i])) {
+          links[i].dataset.elvFootnote = '1';
+        }
+      } catch (err) {
+        // getComputedStyle can throw on detached nodes; skip.
+      }
+    }
+  }
+
   function boot() {
     document.documentElement.style.fontSize = state.fontSize + 'px';
     fixFullscreenSvgImages();
+    markFootnoteLinks();
     layout();
     // Clicks land on the document element (not the body) whenever they
     // hit the column-overflow area outside the body's fixed-width box,
