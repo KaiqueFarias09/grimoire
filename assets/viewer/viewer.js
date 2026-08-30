@@ -28,6 +28,11 @@
     resizeTimer: null,
     suppressScrollNotify: false,
     highlights: {}, // id -> [span, ...]
+    hostViewport: null, // {w, h} from the Flutter widget when known
+    writingMode: { vertical: false, rtl: false },
+    firstLayout: true,
+    remCache: null,
+    lineHeightCache: null,
   };
 
   function post(message) {
@@ -72,16 +77,160 @@
     return document.body.classList.contains('elv-comic');
   }
 
+  // --- writing mode + measure helpers (Calibre viewport.pyj) ---
+
+  // Parity: calibre src/pyj/read_book/viewport.pyj:28-49 (initialize_on_layout)
+  function initializeWritingMode() {
+    var bs = getComputedStyle(document.body);
+    state.writingMode.vertical =
+      bs.writingMode === 'vertical-rl' || bs.writingMode === 'vertical-lr';
+    state.writingMode.rtl = bs.direction === 'rtl' || bs.writingMode === 'vertical-rl';
+    if (bs.direction === 'rtl') {
+      // Chrome scrolling breaks for some RTL content without this.
+      document.documentElement.style.overflow = 'visible';
+    }
+  }
+
+  // Parity: calibre src/pyj/read_book/viewport.pyj:348-365 (rem_size)
+  function remSize(reset) {
+    if (reset) {
+      state.remCache = null;
+      return;
+    }
+    if (state.remCache === null) {
+      state.remCache = Math.max(
+        2,
+        parseFloat(getComputedStyle(document.documentElement).fontSize) || 2
+      );
+    }
+    return state.remCache;
+  }
+
+  // Parity: calibre src/pyj/read_book/viewport.pyj:367-382 (line_height)
+  function lineHeight(reset) {
+    if (reset) {
+      state.lineHeightCache = null;
+      return;
+    }
+    if (state.lineHeightCache === null) {
+      var bs = getComputedStyle(document.body);
+      var lh = parseFloat(bs.lineHeight);
+      if (!lh || isNaN(lh)) {
+        // fails if line-height = normal
+        lh = (parseFloat(bs.fontSize) || 16) * 1.2;
+      }
+      state.lineHeightCache = Math.max(5, lh);
+    }
+    return state.lineHeightCache;
+  }
+
+  // Parity: calibre src/pyj/read_book/paged_mode.pyj:866-873 — when the
+  // rect comes back all zeroes (WebKit bug 2037543), rebuild it from a
+  // Range over the node's contents.
+  function getBoundingClientRectFixed(elem) {
+    var br = elem.getBoundingClientRect();
+    if (!br.left && !br.right && !br.top && !br.bottom && elem.childNodes.length) {
+      var range = document.createRange();
+      range.selectNodeContents(elem);
+      br = range.getBoundingClientRect();
+    }
+    return br;
+  }
+
   // --- layout (Calibre paged_mode) ---
 
   function autoColumns() {
-    // Calibre: floor(inline / (35 * rem_px)), clamped 1..20.
-    var perColumn = 35 * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16);
-    return Math.max(1, Math.min(4, Math.floor(inlineSize() / perColumn)));
+    // Parity: calibre src/pyj/read_book/paged_mode.pyj:182-192
+    // (calc_columns_per_screen) — floor(inline / (35 * em)), clamped 1..20.
+    var perColumn = 35 * remSize();
+    return Math.max(1, Math.min(20, Math.floor(inlineSize() / perColumn)));
   }
 
   function effectiveColumns() {
     return state.columns > 0 ? state.columns : autoColumns();
+  }
+
+  // Parity: calibre src/pyj/read_book/paged_mode.pyj:52-61 (has_start_text)
+  function hasStartText(elem) {
+    var node = elem.firstChild;
+    while (node && node !== elem.lastChild) {
+      if (node.nodeType === 3 && node.data.trim()) {
+        return true;
+      }
+      node = node.nextSibling;
+    }
+    return false;
+  }
+
+  // Parity: calibre src/pyj/read_book/paged_mode.pyj:69-74 (create_page_div)
+  // Dummy columns fill the tail of the last screen when several columns
+  // fit at once; the min-height forces Firefox to break before them.
+  function createPageDiv() {
+    var div = document.createElement('blank-page-div');
+    div.textContent = ' \n    ';
+    div.style.setProperty('break-before', 'column', 'important');
+    div.style.setProperty('break-inside', 'avoid', 'important');
+    div.style.setProperty('display', 'block', 'important');
+    div.style.setProperty('min-height', '100vh', 'important');
+    div.style.setProperty('background-image', 'none', 'important');
+    div.style.setProperty('border-width', '0', 'important');
+    div.style.setProperty('float', 'none', 'important');
+    div.style.setProperty('position', 'static', 'important');
+    document.body.appendChild(div);
+  }
+
+  // Parity: calibre src/pyj/read_book/fs_images.pyj — QtWebEngine sizes
+  // fullscreen svg to the viewport width and only adjusts the height;
+  // replacing 100% with 100vw/100vh keeps the aspect ratio.
+  function fixFullscreenSvgImages() {
+    var kids = [];
+    for (var c = document.body.firstChild; c; c = c.nextSibling) {
+      if (
+        c.nodeType === 1 &&
+        c.nodeName !== 'STYLE' &&
+        c.nodeName !== 'SCRIPT'
+      ) {
+        kids.push(c);
+      }
+    }
+    if (kids.length !== 1) {
+      return;
+    }
+    var svg = null;
+    if (kids[0].nodeName === 'svg') {
+      svg = kids[0];
+    } else if (
+      kids[0].nodeName === 'div' &&
+      kids[0].firstElementChild &&
+      kids[0].firstElementChild.nodeName === 'svg'
+    ) {
+      svg = kids[0].firstElementChild;
+    }
+    if (
+      svg &&
+      svg.querySelector(':scope > image') &&
+      svg.getAttribute('width') === '100%' &&
+      svg.getAttribute('height') === '100%'
+    ) {
+      svg.setAttribute('width', '100vw');
+      svg.setAttribute('height', '100vh');
+    }
+  }
+
+  // Parity: calibre src/pyj/read_book/paged_mode.pyj:351-363
+  function checkColumnSizes() {
+    var se = scrollElement();
+    var nc = (se.scrollWidth + state.colGap) / (state.colSize + state.colGap);
+    if (Math.floor(nc) !== nc) {
+      // Probably non-reflowable content wider than the column.
+      console.warn('eLivre: column layout broken', {
+        colSize: state.colSize,
+        gap: state.colGap,
+        scrollWidth: se.scrollWidth,
+        ncols: nc,
+        screenInline: inlineSize(),
+      });
+    }
   }
 
   function layout() {
@@ -89,13 +238,54 @@
       layoutScroll();
       return;
     }
+    remSize(true);
+    lineHeight(true);
+    initializeWritingMode();
     var screenInline = inlineSize();
     var n = effectiveColumns();
+    var firstLayout = state.firstLayout;
+    var se = scrollElement();
+
+    var imgs = document.getElementsByTagName('img');
+    var svgs = document.getElementsByTagName('svg');
+    var hasSvg = svgs.length > 0;
+    var onlyImg =
+      imgs.length === 1 &&
+      document.getElementsByTagName('div').length < 3 &&
+      document.getElementsByTagName('p').length < 2;
+    if (firstLayout && onlyImg && getComputedStyle(imgs[0]).zIndex < 0) {
+      // Fixed-layout EPUB comics ship a negative z-index on the only
+      // image, hiding it entirely (Calibre bug 1667357).
+      imgs[0].style.zIndex = '0';
+    }
+
+    // Parity: paged_mode.pyj:271 — full-page layouts like covers are
+    // detected once, on the first pass, as block height ≈ screen height.
+    var documentBlock = Math.max(
+      document.body.scrollHeight,
+      document.body.offsetHeight,
+      se.scrollHeight,
+      se.clientHeight
+    );
+    var singleScreen = documentBlock < blockSize() + 75;
+
     var gap = Math.max(1, state.margins);
     if (n > 1) {
       gap += n - ((screenInline + gap) % n);
     }
     var colSize = ((screenInline + gap) / n) - gap;
+
+    if (firstLayout && n > 1) {
+      // Workaround: content wrapped in a 100% height <div> ends up in
+      // the wrong page divs in WebKit (Calibre bug 1594657).
+      var elems = document.body.children;
+      if (elems.length === 1) {
+        elems[0].style.height = 'auto';
+      }
+      for (var pd = n - 1; pd > 0; pd--) {
+        createPageDiv();
+      }
+    }
 
     state.colSize = Math.max(80, Math.floor(colSize));
     state.colGap = gap;
@@ -110,10 +300,13 @@
       'html { height: 100%; }' +
       'body { column-width: ' + state.colSize + 'px !important;' +
       ' column-gap: ' + state.colGap + 'px !important;' +
+      ' column-rule: 0px inset blue !important;' +
       ' column-fill: auto !important;' +
       ' height: ' + blockSize() + 'px !important;' +
       ' width: ' + screenInline + 'px !important;' +
       ' box-sizing: content-box !important;' +
+      ' min-width: 0 !important; max-width: none !important;' +
+      ' min-height: 0 !important; max-height: 100vh !important;' +
       ' overflow-wrap: break-word !important;' +
       ' margin: 0 !important; padding: 0 !important; }';
     document.body.classList.add('elv-paged');
@@ -121,13 +314,54 @@
     // body above the columns (margin collapse reaching the viewport).
     document.body.style.setProperty('-webkit-margin-collapse', 'separate');
     // Remove page breaks on the first elements to avoid blank first
-    // pages at chapter starts (Calibre paged_mode does the same).
+    // pages at chapter starts.
     var first = document.body.firstElementChild;
     if (first) {
       first.style.setProperty('break-before', 'avoid', 'important');
+      if (first.tagName.toLowerCase() === 'div') {
+        // Content fully wrapped in a div: also keep the div's first
+        // child from breaking (Calibre bug 1366074).
+        var c2 = first.firstElementChild;
+        if (c2 && !hasStartText(first)) {
+          c2.style.setProperty('break-before', 'avoid', 'important');
+        }
+      }
     }
     fitImages();
     state.colCount = numberOfCols();
+
+    // Parity: paged_mode.pyj:332-348 — WebKit column-mode bugs with
+    // svg/img at 100% producing a spurious blank page after the first.
+    if (firstLayout) {
+      state.firstLayout = false;
+      var isFullScreenLayout = singleScreen;
+      if (!isFullScreenLayout) {
+        var twoColsMax =
+          se.scrollWidth < 2 * screenInline + 10;
+        if (twoColsMax && singleScreen) {
+          if (
+            onlyImg &&
+            imgs.length &&
+            imgs[0].getBoundingClientRect().left < screenInline
+          ) {
+            isFullScreenLayout = true;
+          }
+          if (
+            hasSvg &&
+            svgs.length === 1 &&
+            svgs[0].getBoundingClientRect().left < screenInline
+          ) {
+            isFullScreenLayout = true;
+          }
+        }
+      }
+      if (isFullScreenLayout && onlyImg && n > 1) {
+        document.body.style.columnWidth = '100vw';
+        state.colSize = Math.floor(screenInline);
+        state.colCount = 1;
+      }
+      checkColumnSizes();
+    }
   }
 
   function layoutScroll() {
@@ -143,19 +377,90 @@
   }
 
   function fitImages() {
-    var colSize = state.colSize || inlineSize();
+    if (isComic()) {
+      return; // comics manage their own sizing
+    }
+    if (isScrollMode()) {
+      fitImagesScroll();
+      return;
+    }
+    fitImagesPaged();
+  }
+
+  // Scroll mode keeps the simple viewport clamp.
+  function fitImagesScroll() {
+    var colSize = inlineSize();
     var vh = blockSize();
     var images = document.body.querySelectorAll('img, svg, video');
     for (var i = 0; i < images.length; i++) {
       var img = images[i];
-      if (isComic()) {
-        continue; // comics manage their own sizing
-      }
       if (img.width > colSize || img.height > vh) {
         img.style.maxWidth = colSize + 'px';
         img.style.maxHeight = vh + 'px';
         img.style.objectFit = 'contain';
       }
+    }
+  }
+
+  // Parity: calibre src/pyj/read_book/paged_mode.pyj:116-167 (fit_images).
+  // Images wider than the remaining column space get max-width limited
+  // to that space; images taller than the screen get their own column
+  // (break-before: always + max-height: 100vh). Every image refuses to
+  // be split across columns. The original rect and the applied flags
+  // are persisted on the element so re-layouts neither accumulate
+  // shrinking nor lose the pre-limit display value.
+  function fitImagesPaged() {
+    var colSize = state.colSize || inlineSize();
+    var maxb = blockSize();
+    var imgs = document.getElementsByTagName('img');
+    var rects = [];
+    var i, img;
+    // Collect all rects before applying any styles — reading a rect
+    // forces a synchronous layout, so batching avoids thrash.
+    for (i = 0; i < imgs.length; i++) {
+      rects.push(getBoundingClientRectFixed(imgs[i]));
+    }
+    var se = scrollElement();
+    for (i = 0; i < imgs.length; i++) {
+      img = imgs[i];
+      var br = rects[i];
+      var previouslyInline = img.dataset.elvInlineLimited === '1';
+      if (!img.dataset.elvImgData) {
+        img.dataset.elvImgData = JSON.stringify({
+          left: br.left,
+          right: br.right,
+          height: br.height,
+          display: img.style.display,
+        });
+      }
+      var imageStart = br.left + (se.scrollLeft || 0);
+      var colStart = columnAt(imageStart) * (colSize + state.colGap);
+      var startToImage = imageStart - colStart;
+      var imageInline = br.width;
+      var imageEnd = startToImage + imageInline;
+      if (previouslyInline || imageEnd > colSize) {
+        if (state.writingMode.vertical) {
+          img.style.maxHeight = Math.max(0, colSize - startToImage) + 'px';
+        } else {
+          img.style.maxWidth = Math.max(0, colSize - startToImage) + 'px';
+        }
+        img.dataset.elvInlineLimited = '1';
+      }
+      var previouslyBlock = img.dataset.elvBlockLimited === '1';
+      if (
+        previouslyBlock ||
+        br.height > maxb ||
+        (br.height === maxb && imageInline > colSize)
+      ) {
+        if (state.writingMode.vertical) {
+          img.style.setProperty('max-width', '100vw', 'important');
+        } else {
+          img.style.setProperty('max-height', '100vh', 'important');
+        }
+        img.style.setProperty('break-before', 'always', 'important');
+        img.dataset.elvBlockLimited = '1';
+      }
+      img.style.setProperty('break-inside', 'avoid', 'important');
     }
   }
 
@@ -169,6 +474,13 @@
   }
 
   function columnAt(x) {
+    // Parity: calibre src/pyj/read_book/paged_mode.pyj:106-113 — points
+    // in the tail past the last full column resolve against the final
+    // column's inner edge, not a phantom next column.
+    var inline = scrollElement().scrollWidth;
+    if (x >= inline - colAndGap()) {
+      x = inline - state.colSize + 10;
+    }
     return Math.max(0, Math.floor((x + state.colGap - 1) / colAndGap()));
   }
 
@@ -892,7 +1204,7 @@
         relayoutKeepingPosition();
         break;
       case 'setColumns':
-        state.columns = Math.max(0, Math.min(4, message.n || 0));
+        state.columns = Math.max(0, Math.min(20, message.n || 0));
         relayoutKeepingPosition();
         break;
       case 'setViewport':
@@ -934,6 +1246,7 @@
 
   function boot() {
     document.documentElement.style.fontSize = state.fontSize + 'px';
+    fixFullscreenSvgImages();
     layout();
     // Clicks land on the document element (not the body) whenever they
     // hit the column-overflow area outside the body's fixed-width box,
