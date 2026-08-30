@@ -1581,20 +1581,30 @@
   var longTapTimer = null;
   var longTapPos = null;
 
+  function cancelLongTap() {
+    clearTimeout(longTapTimer);
+    longTapTimer = null;
+    longTapPos = null;
+  }
+
   function installLongTap() {
+    // Long tap is a touch gesture: on desktop the drag does it. On
+    // iOS the pointerup after a quick tap is unreliable, so every
+    // release path cancels and the timer fires only on a real hold.
+    if (!('ontouchstart' in window)) {
+      return;
+    }
     document.addEventListener('pointerdown', function (event) {
-      if (isComic() || isScrollMode() && false) {
+      if (isComic() || event.pointerType !== 'touch') {
         return;
       }
-      if (event.pointerType === 'mouse' && event.button !== 0) {
-        return;
-      }
+      cancelLongTap();
       longTapPos = { x: event.clientX, y: event.clientY };
       longTapTimer = setTimeout(function () {
-        if (!longTapPos) {
+        var pos = longTapPos;
+        if (!pos) {
           return;
         }
-        var pos = longTapPos;
         longTapPos = null;
         var range = document.caretRangeFromPoint
           ? document.caretRangeFromPoint(pos.x, pos.y)
@@ -1619,14 +1629,16 @@
         (Math.abs(event.clientX - longTapPos.x) > 8 ||
           Math.abs(event.clientY - longTapPos.y) > 8)
       ) {
-        clearTimeout(longTapTimer);
-        longTapPos = null;
+        cancelLongTap();
       }
     });
-    document.addEventListener('pointerup', function () {
-      clearTimeout(longTapTimer);
-      longTapPos = null;
-    });
+    ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach(
+      function (name) {
+        document.addEventListener(name, function () {
+          cancelLongTap();
+        });
+      }
+    );
   }
 
   // Parity: calibre touch.pyj:108-136 — swipe thresholds (64px max
@@ -1842,6 +1854,11 @@
       initComicPan();
     }
     installTextGestures();
+    // Parity: calibre touch.pyj:386 (touchAction none, PR 1101) — the
+    // gesture handlers need the raw stream without browser panning.
+    if ('ontouchstart' in window) {
+      document.body.style.touchAction = 'none';
+    }
 
     var scrollNotifyTimer = null;
     window.addEventListener(
