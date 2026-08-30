@@ -69,6 +69,24 @@ body.elv-override-colors * {
   border-color: var(--elv-fg) !important;
 }
 
+/* Search match markers (all hits stay marked; the active one is the
+   native selection on top). */
+.elv-search-hit {
+  background-color: rgba(255, 220, 0, 0.35);
+}
+
+/* Parity: calibre viewer prefs — text justification and hyphenation
+   toggles. */
+body.elv-justify {
+  text-align: justify !important;
+  -webkit-hyphens: none;
+}
+
+body.elv-hyphenate {
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+
 /* Highlights (Calibre palette). */
 .elv-hl { border-radius: 2px; }
 .elv-hl-yellow { background-color: rgba(181, 137, 0, 0.35); }

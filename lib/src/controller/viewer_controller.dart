@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:e_livre/e_livre.dart';
@@ -9,6 +10,8 @@ import 'package:e_livre_viewer/src/server/book_server.dart';
 import 'package:e_livre_viewer/src/theme/viewer_theme.dart';
 import 'package:e_livre_viewer/src/utils/document_text.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'dart:ui' show Rect;
 
 /// How the reader lays out pages.
 enum ViewerLayoutMode {
@@ -146,6 +149,7 @@ class ViewerHighlight {
     final int? start,
     final int? end,
     final String? note,
+    final ViewerHighlightStyle? style,
   }) {
     return ViewerHighlight(
       id: id,
@@ -155,7 +159,7 @@ class ViewerHighlight {
       text: text,
       before: before,
       after: after,
-      style: style,
+      style: style ?? this.style,
       createdAtIso: createdAtIso,
       note: note ?? this.note,
     );
@@ -171,6 +175,7 @@ class ViewerBookmark {
     required this.title,
     required this.position,
     required this.createdAtIso,
+    this.note,
   });
 
   /// Unique identifier.
@@ -185,11 +190,44 @@ class ViewerBookmark {
   /// Creation timestamp (ISO 8601).
   final String createdAtIso;
 
+  /// Optional note attached to the bookmark.
+  final String? note;
+
   /// The reading-order index encoded in [position].
   int get fileIndex {
     final parts = position.split(':');
     return parts.length == 3 ? int.tryParse(parts[1]) ?? 0 : 0;
   }
+
+  /// JSON for host persistence.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'title': title,
+        'position': position,
+        'createdAt': createdAtIso,
+        if (note != null) 'note': note,
+      };
+
+  /// Restores from [json] (host persistence).
+  static ViewerBookmark fromJson(final Map<String, dynamic> json) =>
+      ViewerBookmark(
+        id: json['id'] is String ? json['id'] as String : '',
+        title: json['title'] is String ? json['title'] as String : '',
+        position:
+            json['position'] is String ? json['position'] as String : '',
+        createdAtIso:
+            json['createdAt'] is String ? json['createdAt'] as String : '',
+        note: json['note'] is String ? json['note'] as String : null,
+      );
+
+  ViewerBookmark copyWith({final String? title, final String? note}) =>
+      ViewerBookmark(
+        id: id,
+        title: title ?? this.title,
+        position: position,
+        createdAtIso: createdAtIso,
+        note: note ?? this.note,
+      );
 }
 
 /// A search hit inside the book.
@@ -340,6 +378,45 @@ class ViewerController extends ChangeNotifier {
 
   /// Fraction `0..1` inside the current file (drives the scrollbar).
   double get fileFraction => _fileFraction;
+
+  Rect? _selectionExtents;
+
+  /// Selection bounding rect in document coordinates (null when no
+  /// selection) — drives the anchored selection toolbar.
+  Rect? get selectionExtents => _selectionExtents;
+
+  /// Optional host hooks for the selection bar actions. When null the
+  /// corresponding buttons stay hidden (Calibre's lookup/search-net
+  /// are host-provided services).
+  void Function(String word)? onLookup;
+  void Function(String query)? onSearchNet;
+
+  /// Calibre default template (session.pyj net_search_url).
+  static const String defaultNetSearchUrl =
+      'https://google.com/search?q={q}';
+
+  String _netSearchUrl = defaultNetSearchUrl;
+  String? _fontFamily;
+  bool _justify = false;
+  bool _hyphenate = false;
+  int _searchCursor = -1;
+
+  /// Calibre formatting of a web search for the selected text.
+  /// Parity: session.pyj net_search_url with `{q}` substitution.
+  String formatNetSearchUrl(final String query) =>
+      _netSearchUrl.replaceAll('{q}', Uri.encodeQueryComponent(query));
+
+  void setNetSearchUrl(final String template) {
+    _netSearchUrl = template;
+  }
+
+  /// Copies the current selection to the clipboard.
+  Future<void> copySelection() async {
+    final selection = _lastSelection;
+    if (selection != null) {
+      await Clipboard.setData(ClipboardData(text: selection.text));
+    }
+  }
 
   /// Whether the reader chrome is visible.
   bool get chromeVisible => _chromeVisible;
@@ -765,6 +842,146 @@ class ViewerController extends ChangeNotifier {
   }
 
   /// Toggles the reader chrome visibility.
+  /// Applies the visual markers for every search match of the active
+  /// file and resets the match cursor. [matches] are (start, end) pairs
+  /// in the file's character space.
+  Future<void> showSearchMatches(
+    final List<(int, int)> matches,
+  ) async {
+    _searchCursor = -1;
+    await _sendTo(_active, <String, Object?>{
+      'action': 'setSearchMatches',
+      'matches': [
+        for (final (start, end) in matches) <int>[start, end],
+      ],
+    });
+  }
+
+  /// Moves the match cursor and jumps to [index]. Wraps around.
+  Future<void> goToSearchMatch(final int index) async {
+    if (_searchResults.isEmpty) {
+      return;
+    }
+    final count = _searchResults.length;
+    _searchCursor = ((index % count) + count) % count;
+    await goToSearchResult(_searchResults[_searchCursor]);
+    notifyListeners();
+  }
+
+  Future<void> nextSearchMatch() => goToSearchMatch(_searchCursor + 1);
+
+  Future<void> previousSearchMatch() => goToSearchMatch(_searchCursor - 1);
+
+  /// (current match index, total) — `-1` before the first jump.
+  (int, int) get searchCursorState => (_searchCursor, _searchResults.length);
+
+  /// Next/previous annotation (highlights in reading order) relative to
+  /// the current position; wraps at the ends.
+  Future<ViewerHighlight?> nextAnnotation() => _stepAnnotation(1);
+
+  Future<ViewerHighlight?> previousAnnotation() => _stepAnnotation(-1);
+
+  Future<ViewerHighlight?> _stepAnnotation(final int direction) async {
+    final ordered = [..._highlights]..sort((final a, final b) {
+        final byFile = a.fileIndex.compareTo(b.fileIndex);
+        return byFile != 0 ? byFile : a.start.compareTo(b.start);
+      });
+    if (ordered.isEmpty) {
+      return null;
+    }
+    ViewerHighlight found;
+    if (direction > 0) {
+      found = ordered.firstWhere(
+        (final h) =>
+            h.fileIndex > _position.fileIndex ||
+            (h.fileIndex == _position.fileIndex &&
+                h.start > _position.charOffset),
+        orElse: () => ordered.first,
+      );
+    } else {
+      found = ordered.lastWhere(
+        (final h) =>
+            h.fileIndex < _position.fileIndex ||
+            (h.fileIndex == _position.fileIndex &&
+                h.start < _position.charOffset),
+        orElse: () => ordered.last,
+      );
+    }
+    await goToHighlight(found);
+    return found;
+  }
+
+  /// Changes the style of an existing highlight in place.
+  Future<void> updateHighlightStyle(
+    final String id,
+    final ViewerHighlightStyle style,
+  ) async {
+    final index = _highlights.indexWhere((final h) => h.id == id);
+    if (index < 0) {
+      return;
+    }
+    _highlights[index] = _highlights[index].copyWith(style: style);
+    await _applyHighlightsToEngine(_active, _highlights[index].fileIndex);
+    notifyListeners();
+  }
+
+  /// Attaches a note to an existing highlight.
+  Future<void> addNoteToHighlight(final String id, final String note) async {
+    final index = _highlights.indexWhere((final h) => h.id == id);
+    if (index < 0) {
+      return;
+    }
+    _highlights[index] = _highlights[index].copyWith(note: note);
+    notifyListeners();
+  }
+
+  /// Serializes all annotations for persistence (host-owned storage).
+  String exportAnnotations() => jsonEncode(<String, Object?>{
+        'highlights': [for (final h in _highlights) h.toJson()],
+        'bookmarks': [for (final b in _bookmarks) b.toJson()],
+      });
+
+  /// Imports annotations, merging by identity and keeping the newest
+  /// timestamp (the ported Calibre merge semantics, annot_merge.dart).
+  Future<void> importAnnotations(final String json) async {
+    final decoded = jsonDecode(json);
+    if (decoded is! Map<String, dynamic>) {
+      return;
+    }
+    final incomingHighlights = <ViewerHighlight>[
+      for (final h in (decoded['highlights'] as List<dynamic>? ?? []))
+        if (h is Map<String, dynamic>)
+          if (ViewerHighlight.fromJson(h) case final parsedHighlight?)
+            parsedHighlight,
+    ];
+    final incomingBookmarks = <ViewerBookmark>[
+      for (final b in (decoded['bookmarks'] as List<dynamic>? ?? []))
+        if (b is Map<String, dynamic>) ViewerBookmark.fromJson(b),
+    ];
+    for (final incoming in incomingHighlights) {
+      final at = _highlights.indexWhere((final h) => h.id == incoming.id);
+      if (at < 0) {
+        _highlights.add(incoming);
+      } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) > 0) {
+        _highlights[at] = incoming;
+      }
+    }
+    for (final incoming in incomingBookmarks) {
+      final at = _bookmarks.indexWhere(
+        (final b) =>
+            b.title == incoming.title ||
+            b.position == incoming.position,
+      );
+      if (at < 0) {
+        _bookmarks.add(incoming);
+      } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) > 0) {
+        _bookmarks[at] = incoming;
+      }
+    }
+    await _applyHighlightsToEngine(_active, _position.fileIndex);
+    notifyListeners();
+  }
+
   void toggleChrome() {
     _chromeVisible = !_chromeVisible;
     notifyListeners();
@@ -996,6 +1213,7 @@ class ViewerController extends ChangeNotifier {
                 start: selection.start,
                 end: selection.end,
               );
+        _selectionExtents = selection.extents;
         notifyListeners();
       case HighlightTapEvent tap:
         if (event.source != _active) {

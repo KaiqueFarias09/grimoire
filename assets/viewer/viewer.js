@@ -931,11 +931,26 @@
       var range = selection.getRangeAt(0);
       var start = offsetOfBoundary(range.startContainer, range.startOffset, false);
       var end = offsetOfBoundary(range.endContainer, range.endOffset, true);
+      var rects = range.getClientRects();
+      var first = rects.length ? rects[0] : null;
+      var last = rects.length ? rects[rects.length - 1] : null;
+      var extents = null;
+      if (first && last) {
+        var sl = scrollElement().scrollLeft || 0;
+        var st = scrollElement().scrollTop || 0;
+        extents = {
+          left: Math.min(first.left, last.left) + sl,
+          top: Math.min(first.top, last.top) + st,
+          right: Math.max(first.right, last.right) + sl,
+          bottom: Math.max(first.bottom, last.bottom) + st,
+        };
+      }
       post({
         type: 'selectionChanged',
         text: selection.toString(),
         start: start,
         end: end,
+        extents: extents,
       });
     }, 150);
   }
@@ -1416,6 +1431,27 @@
           state.pendingPosition = { action: 'goToEnd' };
         }
         break;
+      case 'setSearchMatches':
+        applySearchMatches(message.matches || []);
+        break;
+      case 'setFontFamily':
+        applyFontFamily(message.font || '');
+        break;
+      case 'setTextJustify':
+        document.body.classList.toggle(
+          'elv-justify',
+          !!message.enabled
+        );
+        break;
+      case 'setHyphenation':
+        document.body.classList.toggle(
+          'elv-hyphenate',
+          !!message.enabled
+        );
+        if (message.lang) {
+          document.documentElement.lang = message.lang;
+        }
+        break;
       case 'goToFraction':
         if (state.ready) {
           layout();
@@ -1497,6 +1533,70 @@
   }
 
   // --- boot ---
+
+  // Persistent visual markers for every search match of the current
+  // file (the selection shows the active one). Calibre wraps all
+  // search results the same way (find.pyj / show_search_result).
+  function applySearchMatches(matches) {
+    var existing = document.body.querySelectorAll('span[data-elv-search]');
+    for (var e = 0; e < existing.length; e++) {
+      var parent = existing[e].parentNode;
+      existing[e].replaceWith.apply(
+        existing[e],
+        Array.prototype.slice.call(existing[e].childNodes)
+      );
+      if (parent && parent.normalize) {
+        parent.normalize();
+      }
+    }
+    if (!matches.length) {
+      return;
+    }
+    // Snapshot the text nodes once and wrap in reverse document order:
+    // wrapping a later range never shifts an earlier one's offsets.
+    var nodes = textNodes();
+    var ranges = [];
+    var consumed = 0;
+    for (var m = 0; m < matches.length; m++) {
+      var start = matches[m][0];
+      var end = matches[m][1];
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var nodeStart = consumed;
+        var nodeEnd = consumed + node.length;
+        if (nodeEnd <= start || nodeStart >= end) {
+          consumed = nodeEnd;
+          continue;
+        }
+        var range = document.createRange();
+        range.setStart(node, Math.max(0, start - nodeStart));
+        range.setEnd(node, Math.min(node.length, end - nodeStart));
+        if (!range.collapsed) {
+          ranges.push(range);
+        }
+        consumed = nodeEnd;
+        break;
+      }
+    }
+    for (var r = ranges.length - 1; r >= 0; r--) {
+      var span = document.createElement('span');
+      span.setAttribute('data-elv-search', '1');
+      span.className = 'elv-search-hit';
+      wrapRange(ranges[r], span);
+    }
+  }
+
+  function applyFontFamily(font) {
+    // Parity: calibre viewer prefs — an empty font keeps the book's.
+    document.body.style.setProperty(
+      'font-family',
+      font ? font + ' !important' : '',
+      font ? 'important' : ''
+    );
+    if (!font) {
+      document.body.style.removeProperty('font-family');
+    }
+  }
 
   function goToEnd() {
     layout();

@@ -1,3 +1,7 @@
+import 'dart:math' as math;
+
+import 'dart:ui' show Rect;
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -92,8 +96,13 @@ class SelectionEvent extends ViewerEvent {
     required this.text,
     required this.start,
     required this.end,
+    this.extents,
     super.source,
   });
+
+  /// Selection bounding rect in document coordinates, when the browser
+  /// reported one (drives the anchored selection bar).
+  final Rect? extents;
 
   final String text;
   final int start;
@@ -199,10 +208,21 @@ class ViewerBridge {
           source: source,
         );
       case 'selectionChanged':
+        final rawExtents = map['extents'];
+        Rect? extents;
+        if (rawExtents is Map) {
+          extents = Rect.fromLTRB(
+            _asDouble(rawExtents['left']),
+            _asDouble(rawExtents['top']),
+            _asDouble(rawExtents['right']),
+            _asDouble(rawExtents['bottom']),
+          );
+        }
         return SelectionEvent(
           text: map['text'] is String ? map['text'] as String : '',
           start: _asInt(map['start']),
           end: _asInt(map['end']),
+          extents: extents,
           source: source,
         );
       case 'linkTap':
