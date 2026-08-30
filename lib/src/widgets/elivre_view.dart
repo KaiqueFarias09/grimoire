@@ -173,9 +173,10 @@ class _ELivreViewState extends State<ELivreView> {
             // from the window), so text never touches the edges.
             return SafeArea(
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: controller.marginsPx.toDouble(),
-                ),
+                // Calibre margins: 20 on every side (margin_left/right
+                // frame the text horizontally; margin_top/bottom keep
+                // it clear of the chrome).
+                padding: EdgeInsets.all(controller.marginsPx.toDouble()),
                 child: LayoutBuilder(
                   builder: (final context, final constraints) {
                     controller.setLogicalViewport(
