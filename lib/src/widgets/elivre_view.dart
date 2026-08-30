@@ -167,25 +167,36 @@ class _ELivreViewState extends State<ELivreView> {
             // LayoutBuilder reports the real webview box: embedded iOS
             // WebViews cannot be trusted to measure themselves (the
             // MediaQuery size is the whole screen, not this widget).
+            // The horizontal padding insets the webview with the reader
+            // margins — the Calibre desktop viewer frames its iframe
+            // the same way (margin: 0 on the body, but the frame comes
+            // from the window), so text never touches the edges.
             return SafeArea(
-              child: LayoutBuilder(
-                builder: (final context, final constraints) {
-                  controller.setLogicalViewport(
-                    constraints.maxWidth,
-                    constraints.maxHeight,
-                  );
-                  return Stack(
-                    children: [
-                      // Inactive engine below (preloaded content), active on
-                      // top, reader chrome overlays everything.
-                      if (engines.length > below)
-                        Positioned.fill(child: engines[below].buildWidget()),
-                      if (engines.length > active)
-                        Positioned.fill(child: engines[active].buildWidget()),
-                      Positioned.fill(child: ReaderShell(controller: controller)),
-                    ],
-                  );
-                },
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: controller.marginsPx.toDouble(),
+                ),
+                child: LayoutBuilder(
+                  builder: (final context, final constraints) {
+                    controller.setLogicalViewport(
+                      constraints.maxWidth,
+                      constraints.maxHeight,
+                    );
+                    return Stack(
+                      children: [
+                        // Inactive engine below (preloaded content), active on
+                        // top, reader chrome overlays everything.
+                        if (engines.length > below)
+                          Positioned.fill(child: engines[below].buildWidget()),
+                        if (engines.length > active)
+                          Positioned.fill(child: engines[active].buildWidget()),
+                        Positioned.fill(
+                          child: ReaderShell(controller: controller),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             );
           },
