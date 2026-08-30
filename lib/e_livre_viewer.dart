@@ -7,10 +7,16 @@ export 'package:e_livre/e_livre.dart'
 
 export 'src/bridge/viewer_bridge.dart'
     show ViewerBridge, ViewerEvent, ReadyEvent, PositionEvent, BoundaryEvent,
-    SelectionEvent, LinkTapEvent, HighlightTapEvent, ChromeToggleEvent;
+    SelectionEvent, LinkTapEvent, HighlightTapEvent, ChromeToggleEvent,
+    FontSizeBumpEvent, ShortcutEvent, ViewImageEvent, FootnoteTapEvent;
 export 'src/controller/viewer_controller.dart'
     show ViewerController, ViewerSearchResult, ViewerSelection,
-    ViewerHighlight, ViewerHighlightStyle, ViewerBookmark, ViewerLayoutMode;
+    ViewerHighlight, ViewerHighlightStyle, ViewerBookmark, ViewerLayoutMode,
+    BookPageCountMode;
+export 'src/utils/epub_cfi.dart' show EpubCfi, EpubCfiDocument;
+export 'src/utils/page_estimation.dart' show estimateBookPages;
+export 'src/utils/annot_merge.dart'
+    show CalibreAnnot, mergeAnnotsWithIdenticalField;
 export 'src/controller/viewer_position.dart'
     show ViewerPosition, ReadingState;
 export 'src/engine/viewer_engine.dart'

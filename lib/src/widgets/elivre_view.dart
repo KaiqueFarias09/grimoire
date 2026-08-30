@@ -1,4 +1,5 @@
 import 'package:e_livre/e_livre.dart';
+import 'package:e_livre_viewer/src/bridge/viewer_bridge.dart';
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:e_livre_viewer/src/controller/viewer_position.dart';
 import 'package:e_livre_viewer/src/widgets/reader_shell.dart';
@@ -28,6 +29,9 @@ class ELivreView extends StatefulWidget {
     this.onPositionChanged,
     this.onSelection,
     this.onExternalLink,
+    this.onReady,
+    this.onViewImage,
+    this.onFootnoteTap,
     super.key,
   });
 
@@ -51,6 +55,17 @@ class ELivreView extends StatefulWidget {
   /// Called when the user taps an external http(s) link.
   final ValueChanged<String>? onExternalLink;
 
+  /// Called once the first file is loaded and laid out.
+  final VoidCallback? onReady;
+
+  /// Custom image viewer hook. When null, a fullscreen
+  /// InteractiveViewer dialog is used.
+  final ValueChanged<String>? onViewImage;
+
+  /// Called when the reader taps a footnote reference (after the
+  /// navigation to the footnote target already happened).
+  final ValueChanged<FootnoteTapEvent>? onFootnoteTap;
+
   @override
   State<ELivreView> createState() => _ELivreViewState();
 }
@@ -70,6 +85,7 @@ class _ELivreViewState extends State<ELivreView> {
   }
 
   StreamSubscription<String>? _imagePopupSub;
+  StreamSubscription<FootnoteTapEvent>? _footnoteSub;
 
   Future<void> _boot() async {
     final controller = _controller;
@@ -77,9 +93,27 @@ class _ELivreViewState extends State<ELivreView> {
       controller.onExternalLink = widget.onExternalLink;
     }
     await controller.start();
+    unawaited(
+      controller.ready.then((_) {
+        if (mounted) {
+          widget.onReady?.call();
+        }
+      }),
+    );
     _imagePopupSub = controller.imagePopupEvents.listen((final src) {
-      if (mounted) {
+      if (!mounted) {
+        return;
+      }
+      final custom = widget.onViewImage;
+      if (custom != null) {
+        custom(src);
+      } else {
         _showImagePopup(src);
+      }
+    });
+    _footnoteSub = controller.footnoteTapEvents.listen((final event) {
+      if (mounted) {
+        widget.onFootnoteTap?.call(event);
       }
     });
     if (widget.initialPosition != null) {
@@ -138,6 +172,7 @@ class _ELivreViewState extends State<ELivreView> {
   @override
   void dispose() {
     _imagePopupSub?.cancel();
+    _footnoteSub?.cancel();
     _ownedController?.removeListener(_notifyPosition);
     _ownedController?.dispose();
     super.dispose();

@@ -9,6 +9,7 @@ import 'package:e_livre_viewer/src/engine/viewer_engine.dart';
 import 'package:e_livre_viewer/src/server/book_server.dart';
 import 'package:e_livre_viewer/src/theme/viewer_theme.dart';
 import 'package:e_livre_viewer/src/utils/document_text.dart';
+import 'package:e_livre_viewer/src/utils/epub_cfi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'dart:ui' show Rect;
@@ -611,6 +612,8 @@ class ViewerController extends ChangeNotifier {
       createdAtIso: DateTime.now().toIso8601String(),
     );
     _bookmarks.add(bookmark);
+    _notifyAnnotationsChanged();
+    _notifyAnnotationsChanged();
     notifyListeners();
     return bookmark;
   }
@@ -805,6 +808,27 @@ class ViewerController extends ChangeNotifier {
 
   final StreamController<String> _imagePopups =
       StreamController<String>.broadcast();
+  final StreamController<void> _annotationsChanged =
+      StreamController<void>.broadcast();
+
+  final Completer<void> _readyCompleter = Completer<void>();
+
+  /// Completes when the initial file is loaded and laid out.
+  Future<void> get ready => _readyCompleter.future;
+
+  final StreamController<FootnoteTapEvent> _footnoteTaps =
+      StreamController<FootnoteTapEvent>.broadcast();
+
+  /// Footnote link taps (the reader also navigates to the target).
+  Stream<FootnoteTapEvent> get footnoteTapEvents => _footnoteTaps.stream;
+
+  /// Fires whenever highlights or bookmarks mutate — the host saves
+  /// [exportAnnotations] output here (no more polling).
+  Stream<void> get annotationsChanged => _annotationsChanged.stream;
+
+  void _notifyAnnotationsChanged() {
+    _annotationsChanged.add(null);
+  }
 
   /// Image sources the reader wants enlarged (tap on an inline image).
   Stream<String> get imagePopupEvents => _imagePopups.stream;
@@ -1253,6 +1277,7 @@ class ViewerController extends ChangeNotifier {
         }
       case FootnoteTapEvent footnote:
         if (event.source == _active) {
+          _footnoteTaps.add(footnote);
           await _followInternalLink(footnote.href);
         }
       case LinkTapEvent link:
@@ -1561,6 +1586,87 @@ class ViewerController extends ChangeNotifier {
     _measureTimer = Timer(pageMeasureBatchDelay, _measureNext);
   }
 
+  final Map<int, EpubCfiDocument> _cfiDocs = <int, EpubCfiDocument>{};
+
+  EpubCfiDocument _cfiDocFor(final int fileIndex) {
+    return _cfiDocs.putIfAbsent(fileIndex, () {
+      final name = book.readingOrder[fileIndex].name;
+      final html = book.files.html
+          .firstWhere(
+            (final f) => f.path == name,
+            orElse: () => book.files.html.first,
+          )
+          .content;
+      return EpubCfiDocument.parse(html);
+    });
+  }
+
+  /// CFI of the current reading position (dual-write alongside
+  /// `eLv1:`; both address the same characters).
+  String? get positionCfi {
+    final doc = _cfiDocFor(_position.fileIndex);
+    try {
+      return doc.cfiForOffset(_position.charOffset).serialize();
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Jumps to a CFI in the current book (single-file subset: no `!`
+  /// indirection). Returns false when the CFI cannot be resolved.
+  Future<bool> goToCfi(final String cfi) async {
+    final parsed = EpubCfi.parse(cfi);
+    if (parsed == null) {
+      return false;
+    }
+    // Find the file whose text space contains it: try the current file
+    // first, then scan (the steps are file-local).
+    for (var fileIndex = 0;
+        fileIndex < book.readingOrder.length;
+        fileIndex++) {
+      if (!book.readingOrder[fileIndex].isHtml) {
+        continue;
+      }
+      final offset = _cfiDocFor(fileIndex).offsetForCfi(parsed);
+      if (offset != null) {
+        await _navigate(
+          fileIndex,
+          _PendingNavigation(offset: offset),
+        );
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Next reading-order section (chapter), Calibre's next_section.
+  Future<void> nextChapter() async {
+    final target = _position.fileIndex + 1;
+    if (target < (server?.itemCount ?? 0)) {
+      await _navigate(target, const _PendingNavigation());
+    }
+  }
+
+  /// Previous reading-order section (chapter).
+  Future<void> previousChapter() async {
+    final target = _position.fileIndex - 1;
+    if (target >= 0) {
+      await _navigate(target, const _PendingNavigation(atEnd: true));
+    }
+  }
+
+  void showChrome() {
+    if (!_chromeVisible) {
+      toggleChrome();
+    }
+  }
+
+  void hideChrome() {
+    if (_chromeVisible) {
+      toggleChrome();
+    }
+  }
+
   /// Host-side actions for keyboard shortcuts the JS layer cannot do
   /// on its own (cross-file jumps, columns, layout mode).
   Future<void> _handleShortcut(final String name) async {
@@ -1569,6 +1675,9 @@ class ViewerController extends ChangeNotifier {
         await _navigate(0, const _PendingNavigation());
         _refreshPageCacheKey();
         _scheduleMeasure();
+        if (!_readyCompleter.isCompleted) {
+          _readyCompleter.complete();
+        }
       case 'bookEnd':
         await _navigate(
           book.readingOrder.length - 1,
