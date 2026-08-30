@@ -57,6 +57,21 @@ class BoundaryEvent extends ViewerEvent {
   final int colsPerScreen;
 }
 
+/// A wheel pinch/burst asking for a font size step.
+class FontSizeBumpEvent extends ViewerEvent {
+  FontSizeBumpEvent({required this.delta, super.source});
+
+  /// `1` larger, `-1` smaller.
+  final int delta;
+}
+
+/// A keyboard shortcut the JS layer resolves to a host-side action.
+class ShortcutEvent extends ViewerEvent {
+  ShortcutEvent({required this.name, super.source});
+
+  final String name;
+}
+
 /// The text selection changed (empty [text] means cleared).
 class SelectionEvent extends ViewerEvent {
   SelectionEvent({
@@ -189,6 +204,13 @@ class ViewerBridge {
         );
       case 'chromeToggle':
         return ChromeToggleEvent(source: source);
+      case 'fontSizeBump':
+        return FontSizeBumpEvent(delta: _asInt(map['delta']), source: source);
+      case 'shortcut':
+        return ShortcutEvent(
+          name: map['name'] is String ? map['name'] as String : '',
+          source: source,
+        );
       default:
         return null;
     }

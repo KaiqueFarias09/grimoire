@@ -125,6 +125,20 @@
     return state.lineHeightCache;
   }
 
+  // Parity: calibre src/pyj/read_book/viewport.pyj:333-346 — measure a
+  // CSS unit (in/em/rem) with an off-screen span.
+  function unitSizeInPixels(unit) {
+    var span = document.createElement('span');
+    span.style.position = 'absolute';
+    span.style.width = span.style.fontSize = '1' + unit;
+    span.style.padding = span.style.margin = '0';
+    span.style.borderWidth = '0';
+    document.body.appendChild(span);
+    var px = span.clientWidth || 2;
+    document.body.removeChild(span);
+    return Math.max(2, px);
+  }
+
   // Parity: calibre src/pyj/read_book/paged_mode.pyj:866-873 — when the
   // rect comes back all zeroes (WebKit bug 2037543), rebuild it from a
   // Range over the node's contents.
@@ -1138,13 +1152,24 @@
       return; // comics handle their own gestures
     }
     var x = event.clientX;
-    var width = window.innerWidth;
-    if (x < width * 0.3) {
-      previousColumn();
-    } else if (x > width * 0.7) {
+    var y = event.clientY;
+    var w = inlineSize();
+    var h = blockSize();
+    // Parity: calibre touch.pyj:332-341 — the top strip is the control
+    // zone (chrome); one physical inch on the reading-start side turns
+    // back; everything else turns forward.
+    if (y < Math.min(100, h / 4)) {
+      post({ type: 'chromeToggle' });
+      return;
+    }
+    var backZone = Math.min(unitSizeInPixels('in'), w / 4);
+    var forward = state.writingMode.rtl
+      ? x < w - backZone
+      : x >= backZone;
+    if (forward) {
       nextColumn();
     } else {
-      post({ type: 'chromeToggle' });
+      previousColumn();
     }
   }
 
@@ -1372,13 +1397,7 @@
         break;
       case 'goToEnd':
         if (state.ready) {
-          layout();
-          if (isScrollMode()) {
-            scrollElement().scrollTop = scrollElement().scrollHeight;
-          } else {
-            scrollToColumn(state.colCount - 1);
-          }
-          reportPosition();
+          goToEnd();
         } else {
           state.pendingPosition = { action: 'goToEnd' };
         }
@@ -1452,6 +1471,209 @@
 
   // --- boot ---
 
+  function goToEnd() {
+    layout();
+    if (isScrollMode()) {
+      scrollElement().scrollTop = scrollElement().scrollHeight;
+    } else {
+      scrollToColumn(state.colCount - 1);
+    }
+    reportPosition();
+  }
+
+  // --- interaction: wheel, long tap, swipe/pinch (Calibre parity) ---
+
+  // Parity: calibre src/pyj/read_book/paged_mode.pyj:704-773
+  // (WheelState/HandleWheel) — pixels accumulate and one page turn
+  // fires when they cross paged_pixel_scroll_threshold (60); a pause
+  // over 1s or a direction flip resets; horizontal delta is the
+  // section jump; ctrl+wheel is font size (iframe.pyj:666).
+  var wheelState = { amount: 0, at: 0, mode: 'pixel', dir: 0 };
+  var PAGED_PIXEL_SCROLL_THRESHOLD = 60;
+
+  function handleWheel(event) {
+    event.preventDefault();
+    if (
+      event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey
+    ) {
+      post({ type: 'fontSizeBump', delta: event.deltaY < 0 ? 1 : -1 });
+      return;
+    }
+    var mode =
+      event.deltaMode === 1
+        ? 'line'
+        : event.deltaMode === 2
+          ? 'page'
+          : 'pixel';
+    var dx = event.deltaX;
+    var dy = event.deltaY;
+    if (mode === 'line') {
+      dx *= lineHeight();
+      dy *= lineHeight();
+    } else if (mode === 'page') {
+      dx *= blockSize() - 30;
+      dy *= blockSize() - 30;
+    }
+    var main = state.writingMode.vertical ? dy : dx;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // Horizontal wheel = section (file) jump.
+      var dir = state.writingMode.rtl ? (dx < 0 ? 1 : -1) : dx < 0 ? -1 : 1;
+      postBoundary(dir);
+      return;
+    }
+    var delta = state.writingMode.rtl ? -dy : dy;
+    var now = Date.now();
+    var ws = wheelState;
+    if (now - ws.at > 1000 || ws.dir * delta < 0 || ws.mode !== mode) {
+      ws.amount = 0;
+      ws.dir = 0;
+    }
+    ws.at = now;
+    ws.mode = mode;
+    ws.dir = delta < 0 ? -1 : 1;
+    var previous = Math.abs(ws.amount);
+    ws.amount += Math.abs(delta);
+    if (previous < PAGED_PIXEL_SCROLL_THRESHOLD &&
+        Math.abs(ws.amount) >= PAGED_PIXEL_SCROLL_THRESHOLD) {
+      ws.amount = 0;
+      if (delta < 0) {
+        previousColumn();
+      } else {
+        nextColumn();
+      }
+    }
+  }
+
+  // Parity: calibre touch.pyj:317-330 — long tap (750ms hold within
+  // 8px) selects the word under the point for the highlight flow.
+  var longTapTimer = null;
+  var longTapPos = null;
+
+  function installLongTap() {
+    document.addEventListener('pointerdown', function (event) {
+      if (isComic() || isScrollMode() && false) {
+        return;
+      }
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
+      longTapPos = { x: event.clientX, y: event.clientY };
+      longTapTimer = setTimeout(function () {
+        if (!longTapPos) {
+          return;
+        }
+        var pos = longTapPos;
+        longTapPos = null;
+        var range = document.caretRangeFromPoint
+          ? document.caretRangeFromPoint(pos.x, pos.y)
+          : null;
+        if (!range) {
+          return;
+        }
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        try {
+          sel.modify('extend', 'forward', 'word');
+        } catch (err) {
+          // Selection.modify is unavailable; leave the caret alone.
+        }
+        onSelectionChanged();
+      }, 750);
+    });
+    document.addEventListener('pointermove', function (event) {
+      if (
+        longTapPos &&
+        (Math.abs(event.clientX - longTapPos.x) > 8 ||
+          Math.abs(event.clientY - longTapPos.y) > 8)
+      ) {
+        clearTimeout(longTapTimer);
+        longTapPos = null;
+      }
+    });
+    document.addEventListener('pointerup', function () {
+      clearTimeout(longTapTimer);
+      longTapPos = null;
+    });
+  }
+
+  // Parity: calibre touch.pyj:108-136 — swipe thresholds (64px max
+  // axis, ratio < 0.35) turn pages; two-finger pinch changes the font
+  // size (gestures.pyj defaults).
+  function installTextGestures() {
+    var start = null;
+    var pinchStart = null;
+    document.addEventListener(
+      'touchstart',
+      function (event) {
+        if (isComic()) {
+          return;
+        }
+        if (event.touches.length === 2) {
+          var dx = event.touches[0].clientX - event.touches[1].clientX;
+          var dy = event.touches[0].clientY - event.touches[1].clientY;
+          pinchStart = Math.sqrt(dx * dx + dy * dy);
+          start = null;
+          return;
+        }
+        if (event.touches.length === 1) {
+          start = {
+            x: event.touches[0].clientX,
+            y: event.touches[0].clientY,
+          };
+        }
+      },
+      { passive: true }
+    );
+    document.addEventListener(
+      'touchmove',
+      function (event) {
+        if (isComic() || event.touches.length !== 2 || !pinchStart) {
+          return;
+        }
+        var dx = event.touches[0].clientX - event.touches[1].clientX;
+        var dy = event.touches[0].clientY - event.touches[1].clientY;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        if (Math.abs(dist - pinchStart) > 20) {
+          // Parity: touch.pyj PINCH_THRESHOLD = 20px.
+          post({
+            type: 'fontSizeBump',
+            delta: dist > pinchStart ? 1 : -1,
+          });
+          pinchStart = dist;
+        }
+      },
+      { passive: true }
+    );
+    document.addEventListener(
+      'touchend',
+      function (event) {
+        if (isComic() || !start) {
+          return;
+        }
+        var t = event.changedTouches[0];
+        var dx = t.clientX - start.x;
+        var dy = t.clientY - start.y;
+        start = null;
+        var adx = Math.abs(dx);
+        var ady = Math.abs(dy);
+        if (Math.max(adx, ady) < 64 || ady / Math.max(adx, ady) >= 0.35) {
+          return;
+        }
+        var forward = dx < 0;
+        if (state.writingMode.rtl) {
+          forward = !forward;
+        }
+        if (forward) {
+          nextColumn();
+        } else {
+          previousColumn();
+        }
+      },
+      { passive: true }
+    );
+  }
+
   function boot() {
     document.documentElement.style.fontSize = state.fontSize + 'px';
     fixFullscreenSvgImages();
@@ -1471,23 +1693,91 @@
       }).observe(document.documentElement);
     }
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'ArrowRight') {
-        nextColumn();
-      }
-      if (event.key === 'ArrowLeft') {
-        previousColumn();
-      }
-      if (event.key === 'PageDown') {
-        nextScreen();
-      }
-      if (event.key === 'PageUp') {
-        previousScreen();
+      // Parity: calibre src/pyj/read_book/shortcuts.pyj:93-376.
+      var ctrl = event.ctrlKey || event.metaKey;
+      switch (event.key) {
+        case 'ArrowRight':
+          nextColumn();
+          event.preventDefault();
+          break;
+        case 'ArrowLeft':
+          previousColumn();
+          event.preventDefault();
+          break;
+        case 'PageDown':
+          nextScreen();
+          event.preventDefault();
+          break;
+        case 'PageUp':
+          previousScreen();
+          event.preventDefault();
+          break;
+        case ' ':
+          event.shiftKey ? previousScreen() : nextScreen();
+          event.preventDefault();
+          break;
+        case 'Home':
+          if (ctrl) {
+            post({ type: 'shortcut', name: 'bookStart' });
+          } else {
+            goToOffset(0);
+          }
+          event.preventDefault();
+          break;
+        case 'End':
+          if (ctrl) {
+            post({ type: 'shortcut', name: 'bookEnd' });
+          } else {
+            goToEnd();
+          }
+          event.preventDefault();
+          break;
+        case 'Escape':
+          post({ type: 'chromeToggle' });
+          event.preventDefault();
+          break;
+        case ']':
+          if (ctrl) {
+            post({ type: 'shortcut', name: 'moreColumns' });
+            event.preventDefault();
+          }
+          break;
+        case '[':
+          if (ctrl) {
+            post({ type: 'shortcut', name: 'fewerColumns' });
+            event.preventDefault();
+          }
+          break;
+        case 'm':
+        case 'M':
+          if (ctrl) {
+            post({ type: 'shortcut', name: 'toggleLayout' });
+            event.preventDefault();
+          }
+          break;
       }
     });
+    document.addEventListener('mousedown', function (event) {
+      // Back/forward mouse buttons.
+      if (event.button === 3) {
+        previousColumn();
+      } else if (event.button === 4) {
+        nextColumn();
+      }
+    });
+    document.addEventListener(
+      'wheel',
+      function (event) {
+        handleWheel(event);
+      },
+      { passive: false }
+    );
+    installLongTap();
     if (isComic()) {
       initComicGestures();
       initComicPan();
     }
+    installTextGestures();
 
     var scrollNotifyTimer = null;
     window.addEventListener(

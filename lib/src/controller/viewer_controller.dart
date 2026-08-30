@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/bridge/viewer_bridge.dart';
@@ -932,6 +933,15 @@ class ViewerController extends ChangeNotifier {
         if (event.source == _active) {
           toggleChrome();
         }
+      case FontSizeBumpEvent bump:
+        if (event.source == _active) {
+          setFontSize(_fontSizePx + bump.delta);
+        }
+      case ShortcutEvent shortcut:
+        if (event.source != _active) {
+          return;
+        }
+        await _handleShortcut(shortcut.name);
       case LinkTapEvent link:
         if (event.source != _active) {
           return;
@@ -1002,6 +1012,30 @@ class ViewerController extends ChangeNotifier {
       slot,
       <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen},
     );
+  }
+
+  /// Host-side actions for keyboard shortcuts the JS layer cannot do
+  /// on its own (cross-file jumps, columns, layout mode).
+  Future<void> _handleShortcut(final String name) async {
+    switch (name) {
+      case 'bookStart':
+        await _navigate(0, const _PendingNavigation());
+      case 'bookEnd':
+        await _navigate(
+          book.readingOrder.length - 1,
+          const _PendingNavigation(atEnd: true),
+        );
+      case 'moreColumns':
+        await setColumnsPerScreen(math.min(4, _columnsPerScreen + 1));
+      case 'fewerColumns':
+        await setColumnsPerScreen(math.max(0, _columnsPerScreen - 1));
+      case 'toggleLayout':
+        await setLayoutMode(
+          _layoutMode == ViewerLayoutMode.paged
+              ? ViewerLayoutMode.scroll
+              : ViewerLayoutMode.paged,
+        );
+    }
   }
 
   Future<void> _followInternalLink(final String href) async {
