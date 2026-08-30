@@ -278,6 +278,11 @@ class ViewerController extends ChangeNotifier {
   Timer? _preloadTimer;
 
   ViewerPosition _position = const ViewerPosition(fileIndex: 0, charOffset: 0);
+
+  /// Where the reader left each file, so backward chapter turns can
+  /// restore the exact column (Calibre forward_scroll_data).
+  final Map<int, _FileExitState> _exitStateByFile =
+      <int, _FileExitState>{};
   ViewerSelection? _lastSelection;
   List<ViewerSearchResult> _searchResults = const <ViewerSearchResult>[];
   final List<ViewerBookmark> _bookmarks = <ViewerBookmark>[];
@@ -796,6 +801,11 @@ class ViewerController extends ChangeNotifier {
         'action': 'goToOffset',
         'offset': pending.offset,
       });
+    } else if (pending.restoreColumn != null) {
+      await _sendTo(slot, <String, Object?>{
+        'action': 'goToColumn',
+        'column': pending.restoreColumn,
+      });
     } else if (pending.anchor != null) {
       await _sendTo(
         slot,
@@ -900,14 +910,23 @@ class ViewerController extends ChangeNotifier {
         if (event.source != _active) {
           return;
         }
-        final target = _position.fileIndex + event.direction;
+        final fromFile = _position.fileIndex;
+        final target = fromFile + event.direction;
         if (target >= 0 && target < (server?.itemCount ?? 0)) {
-          await _navigate(
-            target,
-            event.direction < 0
-                ? const _PendingNavigation(atEnd: true)
-                : const _PendingNavigation(),
-          );
+          final _PendingNavigation pending;
+          if (event.direction < 0) {
+            final exit = _exitStateByFile[target];
+            pending = exit != null
+                ? _PendingNavigation(restoreColumn: exit.column)
+                : const _PendingNavigation(atEnd: true);
+          } else {
+            _exitStateByFile[fromFile] = _FileExitState(
+              column: event.exitColumn,
+              colsPerScreen: event.colsPerScreen,
+            );
+            pending = const _PendingNavigation();
+          }
+          await _navigate(target, pending);
         }
       case ChromeToggleEvent():
         if (event.source == _active) {
@@ -1075,16 +1094,29 @@ class ViewerController extends ChangeNotifier {
   }
 }
 
+class _FileExitState {
+  const _FileExitState({required this.column, required this.colsPerScreen});
+
+  final int column;
+  final int colsPerScreen;
+}
+
 class _PendingNavigation {
   const _PendingNavigation({
     this.offset,
     this.anchor,
     this.atEnd = false,
     this.selection,
+    this.restoreColumn,
   });
 
   final int? offset;
   final String? anchor;
   final bool atEnd;
   final (int, int)? selection;
+
+  /// Column to land on in the target file, used when returning to a
+  /// chapter the reader had left part-way through (Calibre's
+  /// forward_scroll_data/is_return pair).
+  final int? restoreColumn;
 }

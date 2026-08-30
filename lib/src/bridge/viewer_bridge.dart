@@ -39,10 +39,22 @@ class PositionEvent extends ViewerEvent {
 
 /// A page turn hit the start/end of the current file.
 class BoundaryEvent extends ViewerEvent {
-  BoundaryEvent({required this.direction, super.source});
+  BoundaryEvent({
+    required this.direction,
+    this.exitColumn = 0,
+    this.colsPerScreen = 1,
+    super.source,
+  });
 
   /// `1` for forward, `-1` for backward.
   final int direction;
+
+  /// Column the reader was on when leaving the file, so coming back
+  /// can restore it (Calibre's forward_scroll_data).
+  final int exitColumn;
+
+  /// Columns per screen in effect when leaving.
+  final int colsPerScreen;
 }
 
 /// The text selection changed (empty [text] means cleared).
@@ -153,6 +165,8 @@ class ViewerBridge {
         final direction = _asInt(map['direction']);
         return BoundaryEvent(
           direction: direction >= 0 ? 1 : -1,
+          exitColumn: _asInt(map['exitColumn']),
+          colsPerScreen: _asInt(map['colsPerScreen']),
           source: source,
         );
       case 'selectionChanged':

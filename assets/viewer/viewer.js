@@ -28,6 +28,7 @@
     resizeTimer: null,
     suppressScrollNotify: false,
     highlights: {}, // id -> [span, ...]
+    isFullScreenLayout: false,
     hostViewport: null, // {w, h} from the Flutter widget when known
     writingMode: { vertical: false, rtl: false },
     firstLayout: true,
@@ -334,6 +335,7 @@
     // svg/img at 100% producing a spurious blank page after the first.
     if (firstLayout) {
       state.firstLayout = false;
+      state.isFullScreenLayout = false;
       var isFullScreenLayout = singleScreen;
       if (!isFullScreenLayout) {
         var twoColsMax =
@@ -356,6 +358,7 @@
         }
       }
       if (isFullScreenLayout && onlyImg && n > 1) {
+        state.isFullScreenLayout = true;
         document.body.style.columnWidth = '100vw';
         state.colSize = Math.floor(screenInline);
         state.colCount = 1;
@@ -532,6 +535,118 @@
     }, 50);
   }
 
+  // --- navigation locations (Calibre paged_mode.pyj:425-513) ---
+
+  function currentScrollOffset() {
+    return isScrollMode()
+      ? scrollElement().scrollTop
+      : scrollElement().scrollLeft;
+  }
+
+  // Starting edge of the first visible column, in document px.
+  function currentColumnLocation() {
+    if (state.isFullScreenLayout) {
+      return 0;
+    }
+    return columnAt(currentScrollOffset() + 10) * colAndGap();
+  }
+
+  function numberOfColsLeft() {
+    var currentCol = columnAt(currentScrollOffset() + 10);
+    return Math.max(0, state.colCount - (currentCol + effectiveColumns()));
+  }
+
+  // Position to scroll to for the next screen; -1 when at the end.
+  function nextScreenLocation() {
+    if (state.isFullScreenLayout) {
+      return -1;
+    }
+    var cc = currentColumnLocation();
+    var ans = cc + inlineSize() + 1;
+    var cps = effectiveColumns();
+    var colsLeft = numberOfColsLeft();
+    if (cps > 1 && colsLeft > 0 && colsLeft < cps) {
+      return -1; // Only blank, dummy pages left
+    }
+    var limit = scrollElement().scrollWidth - inlineSize();
+    if (limit < colAndGap()) {
+      return -1;
+    }
+    if (ans > limit) {
+      var currentPos = Math.ceil(currentScrollOffset());
+      ans = currentPos < limit ? limit : -1;
+      if (cps === 1 && ans !== -1 && ans - currentPos < state.colSize) {
+        ans = -1; // can't scroll partial columns
+      }
+    }
+    return ans;
+  }
+
+  function previousScreenLocation() {
+    if (state.isFullScreenLayout) {
+      return -1;
+    }
+    var cc = currentColumnLocation();
+    var ans = cc - effectiveColumns() * colAndGap();
+    if (ans < 0) {
+      // Ignore small scrolls (less than 15px) going to previous screen.
+      ans = currentScrollOffset() > 15 ? 0 : -1;
+    }
+    return ans;
+  }
+
+  function nextColLocation() {
+    if (state.isFullScreenLayout) {
+      return -1;
+    }
+    var cc = currentColumnLocation();
+    var ans = cc + colAndGap();
+    var limit = scrollElement().scrollWidth - inlineSize();
+    if (ans > limit) {
+      if (
+        Math.ceil(currentScrollOffset()) < limit &&
+        columnAt(limit) > columnAt(currentScrollOffset() + 10)
+      ) {
+        ans = limit;
+      } else {
+        ans = -1;
+      }
+    }
+    return ans;
+  }
+
+  function previousColLocation() {
+    if (state.isFullScreenLayout) {
+      return -1;
+    }
+    var cc = currentColumnLocation();
+    var ans = cc - colAndGap();
+    if (ans < 0) {
+      if (
+        Math.floor(currentScrollOffset()) > 0 &&
+        columnAt(0) < columnAt(currentScrollOffset() + 10)
+      ) {
+        ans = 0;
+      } else {
+        ans = -1;
+      }
+    }
+    return ans;
+  }
+
+  function scrollToPos(pos) {
+    scrollToColumn(columnAt(pos));
+  }
+
+  function postBoundary(direction) {
+    post({
+      type: 'fileBoundary',
+      direction: direction,
+      exitColumn: columnAt(currentScrollOffset() + 10),
+      colsPerScreen: effectiveColumns(),
+    });
+  }
+
   function nextColumn() {
     if (isScrollMode()) {
       var scroller = scrollElement();
@@ -539,19 +654,19 @@
       var next = scroller.scrollTop + step;
       var max = scroller.scrollHeight - blockSize();
       if (next >= max - 2) {
-        post({ type: 'fileBoundary', direction: 1 });
+        postBoundary(1);
         return;
       }
       scroller.scrollTop = next;
       reportPosition();
       return;
     }
-    var col = currentColumn() + 1;
-    if (col >= state.colCount) {
-      post({ type: 'fileBoundary', direction: 1 });
+    var pos = nextColLocation();
+    if (pos === -1) {
+      postBoundary(1);
       return;
     }
-    scrollToColumn(col);
+    scrollToPos(pos);
     reportPosition();
   }
 
@@ -559,19 +674,48 @@
     if (isScrollMode()) {
       var scroller = scrollElement();
       if (scroller.scrollTop <= 2) {
-        post({ type: 'fileBoundary', direction: -1 });
+        postBoundary(-1);
         return;
       }
       scroller.scrollTop -= blockSize() - 10;
       reportPosition();
       return;
     }
-    var current = currentColumn();
-    if (current === 0) {
-      post({ type: 'fileBoundary', direction: -1 });
+    var pos = previousColLocation();
+    if (pos === -1) {
+      postBoundary(-1);
       return;
     }
-    scrollToColumn(current - 1);
+    scrollToPos(pos);
+    reportPosition();
+  }
+
+  // Screen turns (PageUp/PageDown): multiple columns at once.
+  function nextScreen() {
+    if (isScrollMode()) {
+      nextColumn();
+      return;
+    }
+    var pos = nextScreenLocation();
+    if (pos === -1) {
+      postBoundary(1);
+      return;
+    }
+    scrollToPos(pos);
+    reportPosition();
+  }
+
+  function previousScreen() {
+    if (isScrollMode()) {
+      previousColumn();
+      return;
+    }
+    var pos = previousScreenLocation();
+    if (pos === -1) {
+      postBoundary(-1);
+      return;
+    }
+    scrollToPos(pos);
     reportPosition();
   }
 
@@ -810,6 +954,32 @@
     return walker.nextNode();
   }
 
+  // Parity: calibre src/pyj/read_book/paged_mode.pyj:571-603 — keep the
+  // selection start (or end) inside the visible column, restoring the
+  // column first when the selection was applied from another page.
+  function ensureSelectionBoundaryVisible(useEnd) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || state.isFullScreenLayout) {
+      return;
+    }
+    var range = sel.getRangeAt(0);
+    var rect = range.getBoundingClientRect();
+    if (!rect || (!rect.left && !rect.right && !rect.top && !rect.bottom)) {
+      var host =
+        range.startContainer.parentElement || range.startContainer;
+      if (!host || !host.getBoundingClientRect) {
+        return;
+      }
+      rect = host.getBoundingClientRect();
+    }
+    var sl = scrollElement().scrollLeft || 0;
+    scrollToColumn(columnAt(rect.left + sl));
+    var x = useEnd ? rect.right : rect.left;
+    if (x < 0 || x >= inlineSize()) {
+      scrollToPos(x + sl + 5);
+    }
+  }
+
   function setSelection(start, end) {
     var selection = window.getSelection();
     selection.removeAllRanges();
@@ -835,6 +1005,7 @@
     range.setStart(startRef.node, startRef.offset);
     range.setEnd(endRef.node, endRef.offset);
     selection.addRange(range);
+    ensureSelectionBoundaryVisible(false);
   }
 
   // --- highlights ---
@@ -1126,9 +1297,12 @@
       clearTimeout(state.resizeTimer);
     }
     state.resizeTimer = setTimeout(function () {
-      var saved = currentOffset();
+      // Parity: calibre paged_mode.pyj:901-933 (ResizeManager) — the
+      // column, not the raw offset, survives a layout change.
+      var savedColumn = columnAt(currentScrollOffset() + 10);
       layout();
-      goToOffset(saved);
+      scrollToColumn(savedColumn);
+      reportPosition();
     }, 500);
   }
 
@@ -1185,6 +1359,18 @@
           reportPosition();
         } else {
           state.pendingPosition = { action: 'goToEnd' };
+        }
+        break;
+      case 'goToColumn':
+        if (state.ready) {
+          layout();
+          scrollToColumn(Math.max(0, message.column | 0));
+          reportPosition();
+        } else {
+          state.pendingPosition = {
+            action: 'goToColumn',
+            column: message.column | 0,
+          };
         }
         break;
       case 'setVars':
@@ -1263,11 +1449,17 @@
       }).observe(document.documentElement);
     }
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+      if (event.key === 'ArrowRight') {
         nextColumn();
       }
-      if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+      if (event.key === 'ArrowLeft') {
         previousColumn();
+      }
+      if (event.key === 'PageDown') {
+        nextScreen();
+      }
+      if (event.key === 'PageUp') {
+        previousScreen();
       }
     });
     if (isComic()) {
