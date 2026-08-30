@@ -126,16 +126,18 @@ class _ELivreViewState extends State<ELivreView> {
             final engines = controller.engines;
             final active = controller.activeEngineIndex;
             final below = 1 - active;
-            return Stack(
-              children: [
-                // Inactive engine below (preloaded content), active on
-                // top, reader chrome overlays everything.
-                if (engines.length > below)
-                  Positioned.fill(child: engines[below].buildWidget()),
-                if (engines.length > active)
-                  Positioned.fill(child: engines[active].buildWidget()),
-                Positioned.fill(child: ReaderShell(controller: controller)),
-              ],
+            return SafeArea(
+              child: Stack(
+                children: [
+                  // Inactive engine below (preloaded content), active on
+                  // top, reader chrome overlays everything.
+                  if (engines.length > below)
+                    Positioned.fill(child: engines[below].buildWidget()),
+                  if (engines.length > active)
+                    Positioned.fill(child: engines[active].buildWidget()),
+                  Positioned.fill(child: ReaderShell(controller: controller)),
+                ],
+              ),
             );
           },
         );
