@@ -1,12 +1,12 @@
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:e_livre_viewer/src/theme/viewer_theme.dart';
+import 'package:e_livre_viewer/src/widgets/bookmarks_sheet.dart';
 import 'package:e_livre_viewer/src/widgets/search_overlay.dart';
 import 'package:e_livre_viewer/src/widgets/toc_sheet.dart';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
-/// The full-screen reader: webview plus the app chrome (bars, TOC,
-/// search) that toggles on the center tap.
+/// The reader chrome: app bars, selection toolbar and panels that
+/// overlay the webviews. Tap zones live in the viewer JS.
 class ReaderShell extends StatelessWidget {
   const ReaderShell({required this.controller, super.key});
 
@@ -17,15 +17,14 @@ class ReaderShell extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (final context, final _) {
-        final chromeVisible = controller.chromeVisible;
         return Stack(
           children: [
-            WebViewWidget(controller: controller.webviewController!),
+            // Block page taps where the chrome paints.
             AnimatedOpacity(
-              opacity: chromeVisible ? 1 : 0,
+              opacity: controller.chromeVisible ? 1 : 0,
               duration: const Duration(milliseconds: 180),
               child: IgnorePointer(
-                ignoring: !chromeVisible,
+                ignoring: !controller.chromeVisible,
                 child: Column(
                   children: [
                     _TopBar(controller: controller),
@@ -35,6 +34,11 @@ class ReaderShell extends StatelessWidget {
                 ),
               ),
             ),
+            if (controller.hasSelection)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: _SelectionToolbar(controller: controller),
+              ),
           ],
         );
       },
@@ -86,6 +90,11 @@ class _TopBar extends StatelessWidget {
                 tooltip: 'Search',
                 icon: const Icon(Icons.search),
                 onPressed: () => showSearchOverlay(context, controller),
+              ),
+              IconButton(
+                tooltip: 'Bookmarks and highlights',
+                icon: const Icon(Icons.bookmarks_outlined),
+                onPressed: () => showBookmarksSheet(context, controller),
               ),
               _ThemeButton(controller: controller),
             ],
@@ -158,6 +167,58 @@ class _BottomBar extends StatelessWidget {
                     controller.setFontSize(controller.fontSizePx + 1),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionToolbar extends StatelessWidget {
+  const _SelectionToolbar({required this.controller});
+
+  final ViewerController controller;
+
+  static const List<(Icon, ViewerHighlightStyle, String)> _styles = [
+    (Icon(Icons.highlight, color: Color(0xFFB58900)), ViewerHighlightStyle.yellow, 'Yellow'),
+    (Icon(Icons.highlight, color: Color(0xFF2AA198)), ViewerHighlightStyle.green, 'Green'),
+    (Icon(Icons.highlight, color: Color(0xFF268BD2)), ViewerHighlightStyle.blue, 'Blue'),
+    (Icon(Icons.format_underlined), ViewerHighlightStyle.underline, 'Underline'),
+  ];
+
+  @override
+  Widget build(final BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Card(
+          elevation: 6,
+          color: theme.colorScheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (icon, style, tooltip) in _styles)
+                  IconButton(
+                    iconSize: 20,
+                    tooltip: tooltip,
+                    icon: icon,
+                    onPressed: () {
+                      controller.addHighlightFromSelection(style: style);
+                      controller.clearSelection();
+                    },
+                  ),
+                const VerticalDivider(width: 8, indent: 10, endIndent: 10),
+                IconButton(
+                  iconSize: 20,
+                  tooltip: 'Clear selection',
+                  icon: const Icon(Icons.close),
+                  onPressed: controller.clearSelection,
+                ),
+              ],
+            ),
           ),
         ),
       ),

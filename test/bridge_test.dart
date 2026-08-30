@@ -11,15 +11,15 @@ void main() {
     final subscription = bridge.events.listen(events.add);
     addTearDown(subscription.cancel);
 
-    bridge.acceptRaw('{"type":"ready","chars":120,"columns":8}');
-    bridge.acceptRaw(
+    bridge.accept('{"type":"ready","chars":120,"columns":8}');
+    bridge.accept(
       '{"type":"positionChanged","column":2,"columns":8,"offset":40,'
       '"chars":120,"frac":0.25}',
     );
-    bridge.acceptRaw('{"type":"fileBoundary","direction":1}');
-    bridge.acceptRaw('{"type":"selectionChanged","text":"hi","start":3,"end":5}');
-    bridge.acceptRaw('{"type":"linkTap","href":"https://x.dev","external":true}');
-    bridge.acceptRaw('{"type":"chromeToggle"}');
+    bridge.accept('{"type":"fileBoundary","direction":1}');
+    bridge.accept('{"type":"selectionChanged","text":"hi","start":3,"end":5}');
+    bridge.accept('{"type":"linkTap","href":"https://x.dev","external":true}');
+    bridge.accept('{"type":"chromeToggle"}');
 
     await Future<void>.delayed(Duration.zero);
     expect(events, hasLength(6));
@@ -40,9 +40,9 @@ void main() {
     final subscription = bridge.events.listen(events.add);
     addTearDown(subscription.cancel);
 
-    bridge.acceptRaw('not json');
-    bridge.acceptRaw('{"type":"unknown"}');
-    bridge.acceptRaw('[1,2,3]');
+    bridge.accept('not json');
+    bridge.accept('{"type":"unknown"}');
+    bridge.accept('[1,2,3]');
     await Future<void>.delayed(Duration.zero);
     expect(events, isEmpty);
   });
@@ -54,7 +54,7 @@ void main() {
     final subscription = bridge.events.listen(events.add);
     addTearDown(subscription.cancel);
 
-    bridge.acceptRaw(
+    bridge.accept(
       '{"type":"positionChanged","column":"3","columns":"9",'
       '"offset":"12","chars":"999","frac":"0.5"}',
     );

@@ -3,11 +3,193 @@ import 'dart:async';
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/bridge/viewer_bridge.dart';
 import 'package:e_livre_viewer/src/controller/viewer_position.dart';
+import 'package:e_livre_viewer/src/engine/viewer_engine.dart';
 import 'package:e_livre_viewer/src/server/book_server.dart';
 import 'package:e_livre_viewer/src/theme/viewer_theme.dart';
 import 'package:e_livre_viewer/src/utils/document_text.dart';
 import 'package:flutter/foundation.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+
+/// How the reader lays out pages.
+enum ViewerLayoutMode {
+  /// Calibre-style paginated columns (default).
+  paged,
+
+  /// Continuous vertical scroll.
+  scroll,
+}
+
+/// Highlight styles (Calibre palette).
+enum ViewerHighlightStyle {
+  /// Yellow marker.
+  yellow('yellow'),
+
+  /// Green marker.
+  green('green'),
+
+  /// Blue marker.
+  blue('blue'),
+
+  /// Underline only.
+  underline('underline');
+
+  const ViewerHighlightStyle(this.wireName);
+
+  /// The name sent to the viewer JS and persisted in JSON.
+  final String wireName;
+
+  /// Parses the wire name (persisted JSON).
+  static ViewerHighlightStyle? fromWireName(final String? name) {
+    for (final style in values) {
+      if (style.wireName == name) {
+        return style;
+      }
+    }
+    return null;
+  }
+}
+
+/// A persistent highlight: a character range in the file's text
+/// model plus context to relocate if offsets drift.
+@immutable
+class ViewerHighlight {
+  /// Creates a highlight.
+  const ViewerHighlight({
+    required this.id,
+    required this.fileIndex,
+    required this.start,
+    required this.end,
+    required this.text,
+    required this.before,
+    required this.after,
+    required this.style,
+    required this.createdAtIso,
+    this.note,
+  });
+
+  /// Restores from JSON ([toJson]).
+  static ViewerHighlight? fromJson(final Map<String, dynamic> json) {
+    final id = json['id'];
+    final fileIndex = json['fileIndex'];
+    final start = json['start'];
+    final end = json['end'];
+    final text = json['text'];
+    final style = ViewerHighlightStyle.fromWireName(json['style'] as String?);
+    if (id is! String ||
+        fileIndex is! int ||
+        start is! int ||
+        end is! int ||
+        text is! String ||
+        style == null) {
+      return null;
+    }
+    return ViewerHighlight(
+      id: id,
+      fileIndex: fileIndex,
+      start: start,
+      end: end,
+      text: text,
+      before: json['before'] is String ? json['before'] as String : '',
+      after: json['after'] is String ? json['after'] as String : '',
+      style: style,
+      createdAtIso:
+          json['createdAt'] is String ? json['createdAt'] as String : '',
+      note: json['note'] is String ? json['note'] as String : null,
+    );
+  }
+
+  /// Unique identifier.
+  final String id;
+
+  /// Reading-order index of the file.
+  final int fileIndex;
+
+  /// Character range start (documentText space).
+  final int start;
+
+  /// Character range end.
+  final int end;
+
+  /// The highlighted text (for display and fuzzy relocation).
+  final String text;
+
+  /// Context before the highlight (fuzzy relocation).
+  final String before;
+
+  /// Context after the highlight (fuzzy relocation).
+  final String after;
+
+  /// Marker style.
+  final ViewerHighlightStyle style;
+
+  /// Optional note.
+  final String? note;
+
+  /// Creation timestamp (ISO 8601).
+  final String createdAtIso;
+
+  /// JSON for host persistence.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'fileIndex': fileIndex,
+        'start': start,
+        'end': end,
+        'text': text,
+        'before': before,
+        'after': after,
+        'style': style.wireName,
+        'note': note,
+        'createdAt': createdAtIso,
+      };
+
+  ViewerHighlight copyWith({
+    final int? start,
+    final int? end,
+    final String? note,
+  }) {
+    return ViewerHighlight(
+      id: id,
+      fileIndex: fileIndex,
+      start: start ?? this.start,
+      end: end ?? this.end,
+      text: text,
+      before: before,
+      after: after,
+      style: style,
+      createdAtIso: createdAtIso,
+      note: note ?? this.note,
+    );
+  }
+}
+
+/// A quick bookmark: a named reading position.
+@immutable
+class ViewerBookmark {
+  /// Creates a bookmark.
+  const ViewerBookmark({
+    required this.id,
+    required this.title,
+    required this.position,
+    required this.createdAtIso,
+  });
+
+  /// Unique identifier.
+  final String id;
+
+  /// Display title.
+  final String title;
+
+  /// Serialized position (`eLv1:file:offset`).
+  final String position;
+
+  /// Creation timestamp (ISO 8601).
+  final String createdAtIso;
+
+  /// The reading-order index encoded in [position].
+  int get fileIndex {
+    final parts = position.split(':');
+    return parts.length == 3 ? int.tryParse(parts[1]) ?? 0 : 0;
+  }
+}
 
 /// A search hit inside the book.
 @immutable
@@ -46,52 +228,74 @@ class ViewerSelection {
   final int end;
 }
 
-/// Drives the reader: owns the [BookServer], the WebView bridge, the
-/// position streams and the viewer settings.
-///
-/// Typically created by [ELivreView]; apps that need to control the
-/// reader before the view exists can create it directly and pass it
-/// in.
+/// Drives the reader: two preloading webview engines, the book
+/// server, positions, bookmarks, highlights, search and settings.
 class ViewerController extends ChangeNotifier {
   /// Creates a controller for [book].
   ViewerController(
     this.book, {
-    final ViewerTheme theme = ViewerTheme.light,
-    final int fontSizePx = 17,
-    final int marginsPx = 20,
+    ViewerTheme theme = ViewerTheme.light,
+    int fontSizePx = 17,
+    int marginsPx = 20,
+    ViewerLayoutMode layoutMode = ViewerLayoutMode.paged,
+    int columnsPerScreen = 0,
+    this.onExternalLink,
+    ViewerEngineFactory? engineFactory,
   })  : _theme = theme,
         _fontSizePx = fontSizePx,
-        _marginsPx = marginsPx {
+        _marginsPx = marginsPx,
+        _layoutMode = layoutMode,
+        _columnsPerScreen = columnsPerScreen,
+        _engineFactory =
+            engineFactory ?? ViewerEngineFactory.forCurrentPlatform() {
     readingState = ReadingState.of(book);
+    _subscription = bridge.events.listen(_onEvent);
   }
 
   /// The parsed book being read.
   final Book book;
 
-  /// The typed JS bridge.
+  /// The typed JS bridge (codec + event stream).
   final ViewerBridge bridge = ViewerBridge();
+
+  /// Called when the user taps an external http(s) link — the host
+  /// app decides how to open it.
+  void Function(String href)? onExternalLink;
 
   /// Per-book reading state (lengths + progress math).
   late final ReadingState readingState;
 
-  BookServer? _server;
-  WebViewController? _webview;
+  final ViewerEngineFactory _engineFactory;
   StreamSubscription<ViewerEvent>? _subscription;
 
+  BookServer? _server;
+  List<ViewerEngine> _engines = const <ViewerEngine>[];
+  int _active = 0;
+  final List<int?> _loadedFile = <int?>[null, null];
+  final List<bool> _engineReady = <bool>[false, false];
+  final List<_PendingNavigation?> _pending = <_PendingNavigation?>[null, null];
+  int? _swapOnReadySlot;
+  Timer? _preloadTimer;
+
   ViewerPosition _position = const ViewerPosition(fileIndex: 0, charOffset: 0);
-  _PendingNavigation? _pendingNavigation;
+  ViewerSelection? _lastSelection;
   List<ViewerSearchResult> _searchResults = const <ViewerSearchResult>[];
+  final List<ViewerBookmark> _bookmarks = <ViewerBookmark>[];
+  final List<ViewerHighlight> _highlights = <ViewerHighlight>[];
+  final StreamController<ViewerHighlight> _highlightTaps =
+      StreamController<ViewerHighlight>.broadcast();
   bool _chromeVisible = false;
   bool _started = false;
+  bool _disposed = false;
 
-  /// Current theme.
   ViewerTheme _theme;
-
-  /// Base font size in pixels.
   int _fontSizePx;
-
-  /// Page margins in pixels (doubles as the column gap).
   int _marginsPx;
+  ViewerLayoutMode _layoutMode;
+  int _columnsPerScreen;
+
+  int _bookmarkCounter = 0;
+  int _highlightCounter = 0;
 
   /// The current reading position.
   ViewerPosition get position => _position;
@@ -111,19 +315,52 @@ class ViewerController extends ChangeNotifier {
   /// Base font size in pixels.
   int get fontSizePx => _fontSizePx;
 
-  /// Page margins in pixels.
+  /// Page margins in pixels (doubles as the column gap).
   int get marginsPx => _marginsPx;
 
-  /// The live WebViewController, available after [start].
-  WebViewController? get webviewController => _webview;
+  /// Current layout mode.
+  ViewerLayoutMode get layoutMode => _layoutMode;
+
+  /// Columns per screen: 0 = auto (wide screens get 2+ columns).
+  int get columnsPerScreen => _columnsPerScreen;
+
+  /// The live engines (index 0 and 1), available after [start].
+  List<ViewerEngine> get engines => _engines;
+
+  /// Which engine slot is visible.
+  int get activeEngineIndex => _active;
 
   /// The running [BookServer], available after [start].
   BookServer? get server => _server;
 
-  /// Starts the book server and the webview for the initial file.
-  Future<WebViewController> start() async {
+  /// The last text selection, when active (drives the highlight
+  /// toolbar).
+  ViewerSelection? get lastSelection => _lastSelection;
+
+  /// Whether a text selection is active.
+  bool get hasSelection =>
+      _lastSelection != null && _lastSelection!.text.isNotEmpty;
+
+  /// Bookmarks in creation order.
+  List<ViewerBookmark> get bookmarks =>
+      List<ViewerBookmark>.unmodifiable(_bookmarks);
+
+  /// Highlights in creation order.
+  List<ViewerHighlight> get highlights =>
+      List<ViewerHighlight>.unmodifiable(_highlights);
+
+  /// Whether the book renders as comic pages (image-only items).
+  bool get isComicMode => book.readingOrder.any(
+        (final item) => !item.isHtml,
+      );
+
+  /// Taps on highlights (resolved against [highlights]).
+  Stream<ViewerHighlight> get highlightTapEvents => _highlightTaps.stream;
+
+  /// Starts the book server and the engines, loading the first file.
+  Future<void> start() async {
     if (_started) {
-      return _webview!;
+      return;
     }
     _started = true;
 
@@ -131,52 +368,39 @@ class ViewerController extends ChangeNotifier {
     await server.start(book);
     _server = server;
 
-    final webview = WebViewController.fromPlatformCreationParams(
-      const PlatformWebViewControllerCreationParams(),
-    )
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'ELivreBridge',
-        onMessageReceived: (final message) => bridge.acceptRaw(message.message),
-      )
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: (final request) {
-            // Keep the reader inside the local server.
-            return request.url.startsWith('http://localhost:') ||
-                    request.url.startsWith('http://127.0.0.1:')
-                ? NavigationDecision.navigate
-                : NavigationDecision.prevent;
-          },
-        ),
-      );
-    _webview = webview;
-    bridge.attach(webview);
-    _subscription?.cancel();
-    _subscription = bridge.events.listen(_onEvent);
+    _engines = _engineFactory.createPair(
+      (final message, final source) => bridge.accept(message, source: source),
+    );
 
-    await _loadFile(0);
-    return webview;
+    _loadedFile[_active] = 0;
+    _engineReady[_active] = false;
+    await _engines[_active].loadUrl(server.urlForItem(0));
   }
 
   @mustCallSuper
   @override
   void dispose() {
+    _disposed = true;
     _subscription?.cancel();
+    _preloadTimer?.cancel();
+    _highlightTaps.close();
     bridge.dispose();
+    for (final engine in _engines) {
+      engine.dispose();
+    }
     _server?.stop();
     super.dispose();
   }
 
   // --- navigation ---
 
-  /// Turns one page forward.
+  /// Turns one page forward (or one screen in scroll mode).
   Future<void> nextPage() =>
-      bridge.send(const <String, Object?>{'action': 'nextColumn'});
+      _send(const <String, Object?>{'action': 'nextColumn'});
 
   /// Turns one page backward.
   Future<void> previousPage() =>
-      bridge.send(const <String, Object?>{'action': 'previousColumn'});
+      _send(const <String, Object?>{'action': 'previousColumn'});
 
   /// Navigates to a table-of-contents entry.
   Future<void> goToNavPoint(final NavPoint point) async {
@@ -185,14 +409,10 @@ class ViewerController extends ChangeNotifier {
       return;
     }
     final (fileIndex, anchor) = target;
-    if (fileIndex == _position.fileIndex) {
-      await bridge.send(<String, Object?>{'action': 'goToAnchor', 'id': anchor});
-    } else {
-      await _loadFile(
-        fileIndex,
-        initialAnchor: anchor.isEmpty ? null : anchor,
-      );
-    }
+    await _navigate(
+      fileIndex,
+      _PendingNavigation(anchor: anchor.isEmpty ? null : anchor),
+    );
     _chromeVisible = false;
     notifyListeners();
   }
@@ -207,16 +427,161 @@ class ViewerController extends ChangeNotifier {
   }
 
   /// Navigates to [position].
-  Future<void> goToPosition(final ViewerPosition position) async {
-    if (position.fileIndex == _position.fileIndex) {
-      await bridge.send(<String, Object?>{
-        'action': 'goToOffset',
-        'offset': position.charOffset,
-      });
-    } else {
-      await _loadFile(position.fileIndex, initialOffset: position.charOffset);
-    }
+  Future<void> goToPosition(final ViewerPosition position) {
+    return _navigate(
+      position.fileIndex,
+      _PendingNavigation(offset: position.charOffset),
+    );
   }
+
+  // --- bookmarks ---
+
+  /// Bookmarks the current position.
+  ViewerBookmark addBookmark([final String? title]) {
+    _bookmarkCounter++;
+    final bookmark = ViewerBookmark(
+      id: 'bm-$_bookmarkCounter-${DateTime.now().millisecondsSinceEpoch}',
+      title: title?.isNotEmpty == true
+          ? title!
+          : 'Bookmark $_bookmarkCounter · ${(progress * 100).round()}%',
+      position: _position.serialize(),
+      createdAtIso: DateTime.now().toIso8601String(),
+    );
+    _bookmarks.add(bookmark);
+    notifyListeners();
+    return bookmark;
+  }
+
+  /// Removes a bookmark.
+  void removeBookmark(final String id) {
+    _bookmarks.removeWhere((final bookmark) => bookmark.id == id);
+    notifyListeners();
+  }
+
+  /// Jumps to a bookmark.
+  Future<void> goToBookmark(final ViewerBookmark bookmark) {
+    return goToSerializedPosition(bookmark.position);
+  }
+
+  // --- highlights ---
+
+  /// Highlights the active selection with [style].
+  Future<ViewerHighlight?> addHighlightFromSelection({
+    final ViewerHighlightStyle style = ViewerHighlightStyle.yellow,
+    final String? note,
+  }) async {
+    final selection = _lastSelection;
+    if (selection == null || selection.text.isEmpty) {
+      return null;
+    }
+    _highlightCounter++;
+    final highlight = ViewerHighlight(
+      id: 'hl-$_highlightCounter-${DateTime.now().millisecondsSinceEpoch}',
+      fileIndex: selection.fileIndex,
+      start: selection.start,
+      end: selection.end,
+      text: selection.text,
+      before: _contextAround(selection.fileIndex, selection.start, before: true),
+      after: _contextAround(selection.fileIndex, selection.end, before: false),
+      style: style,
+      createdAtIso: DateTime.now().toIso8601String(),
+      note: note,
+    );
+    _highlights.add(highlight);
+    await _applyHighlightsToEngine(_active, selection.fileIndex);
+    notifyListeners();
+    return highlight;
+  }
+
+  /// Removes a highlight and unwraps it in the page.
+  Future<void> removeHighlight(final String id) async {
+    final index =
+        _highlights.indexWhere((final highlight) => highlight.id == id);
+    if (index == -1) {
+      return;
+    }
+    final highlight = _highlights.removeAt(index);
+    if (_loadedFile[_active] == highlight.fileIndex) {
+      await _send(<String, Object?>{'action': 'removeHighlight', 'id': id});
+    }
+    notifyListeners();
+  }
+
+  /// Jumps to a highlight and flashes its selection.
+  Future<void> goToHighlight(final ViewerHighlight highlight) {
+    return _navigate(
+      highlight.fileIndex,
+      _PendingNavigation(selection: (highlight.start, highlight.end)),
+    );
+  }
+
+  /// Relocates a persisted highlight against the current text of its
+  /// file: exact offsets win, then the highlighted text relocates
+  /// them; `null` when the text no longer exists.
+  static (int, int)? relocateHighlight(
+    final ViewerHighlight highlight,
+    final String text,
+  ) {
+    if (highlight.text.isEmpty || text.isEmpty) {
+      return null;
+    }
+    if (highlight.end <= text.length &&
+        text.substring(highlight.start, highlight.end) == highlight.text) {
+      return (highlight.start, highlight.end);
+    }
+    final at = text.indexOf(highlight.text);
+    return at == -1 ? null : (at, at + highlight.text.length);
+  }
+
+  String _contextAround(
+    final int fileIndex,
+    final int offset, {
+    required final bool before,
+  }) {
+    final text = _documentTextOf(fileIndex);
+    if (before) {
+      final from = offset - 40 < 0 ? 0 : offset - 40;
+      return text.substring(from, offset);
+    }
+    final to = offset + 40 > text.length ? text.length : offset + 40;
+    return text.substring(offset, to);
+  }
+
+  String _documentTextOf(final int fileIndex) {
+    if (fileIndex < 0 || fileIndex >= book.readingOrder.length) {
+      return '';
+    }
+    final name = book.readingOrder[fileIndex].name;
+    for (final file in book.files.html) {
+      if (file.path == name) {
+        return documentText(file.content);
+      }
+    }
+    return '';
+  }
+
+  Future<void> _applyHighlightsToEngine(
+    final int slot,
+    final int fileIndex,
+  ) async {
+    final items = <Map<String, Object?>>[
+      for (final highlight in _highlights.where(
+        (final highlight) => highlight.fileIndex == fileIndex,
+      ))
+        <String, Object?>{
+          'id': highlight.id,
+          'start': highlight.start,
+          'end': highlight.end,
+          'style': highlight.style.wireName,
+        },
+    ];
+    await _sendTo(
+      slot,
+      <String, Object?>{'action': 'applyHighlights', 'items': items},
+    );
+  }
+
+  // --- search ---
 
   /// Searches [query] across the book (case-insensitive, tolerant to
   /// hyphenation and whitespace differences, like Calibre's reader).
@@ -239,14 +604,12 @@ class ViewerController extends ChangeNotifier {
       }
       final text = documentText(htmlByPath[item.name] ?? '');
       for (final match in pattern.allMatches(text)) {
-        final start = match.start;
-        final end = match.end;
         results.add(
           ViewerSearchResult(
             fileIndex: fileIndex,
-            start: start,
-            end: end,
-            excerpt: _excerpt(text, start, end),
+            start: match.start,
+            end: match.end,
+            excerpt: _excerpt(text, match.start, match.end),
           ),
         );
         if (results.length >= 500) {
@@ -266,185 +629,15 @@ class ViewerController extends ChangeNotifier {
   Future<void> clearSearch() async {
     _searchResults = const <ViewerSearchResult>[];
     notifyListeners();
-    await bridge.send(const <String, Object?>{'action': 'clearSelection'});
+    await _send(const <String, Object?>{'action': 'clearSelection'});
   }
 
   /// Navigates to and highlights a search result.
-  Future<void> goToSearchResult(final ViewerSearchResult result) async {
-    if (result.fileIndex == _position.fileIndex) {
-      await bridge.send(<String, Object?>{
-        'action': 'setSelection',
-        'start': result.start,
-        'end': result.end,
-      });
-      await bridge.send(<String, Object?>{
-        'action': 'goToOffset',
-        'offset': result.start,
-      });
-    } else {
-      await _loadFile(
-        result.fileIndex,
-        initialSelection: (result.start, result.end),
-      );
-    }
-  }
-
-  // --- settings ---
-
-  /// Applies a new theme to the current page.
-  Future<void> setTheme(final ViewerTheme theme) async {
-    _theme = theme;
-    notifyListeners();
-    await bridge.send(<String, Object?>{'action': 'setVars', 'vars': theme.cssVars()});
-    await bridge.send(<String, Object?>{
-      'action': 'setOverrideColors',
-      'enabled': theme.overrideBookColors,
-    });
-  }
-
-  /// Changes the base font size (px) and relayouts keeping position.
-  Future<void> setFontSize(final int px) async {
-    if (px < 9 || px > 48) {
-      return;
-    }
-    _fontSizePx = px;
-    notifyListeners();
-    await bridge.send(<String, Object?>{'action': 'setFontSize', 'px': px});
-  }
-
-  /// Changes the page margins (px) and relayouts keeping position.
-  Future<void> setMargins(final int px) async {
-    if (px < 0 || px > 96) {
-      return;
-    }
-    _marginsPx = px;
-    notifyListeners();
-    await bridge.send(<String, Object?>{'action': 'setMargins', 'px': px});
-  }
-
-  /// Toggles the reader chrome visibility.
-  void toggleChrome() {
-    _chromeVisible = !_chromeVisible;
-    notifyListeners();
-  }
-
-  // --- internals ---
-
-  Future<void> _loadFile(
-    final int fileIndex, {
-    final int? initialOffset,
-    final String? initialAnchor,
-    final bool atEnd = false,
-    final (int, int)? initialSelection,
-  }) async {
-    final server = _server;
-    final webview = _webview;
-    if (server == null || webview == null) {
-      return;
-    }
-    final index = fileIndex.clamp(0, server.itemCount - 1);
-    _pendingNavigation = _PendingNavigation(
-      offset: initialOffset,
-      anchor: initialAnchor,
-      atEnd: atEnd,
-      selection: initialSelection,
+  Future<void> goToSearchResult(final ViewerSearchResult result) {
+    return _navigate(
+      result.fileIndex,
+      _PendingNavigation(selection: (result.start, result.end)),
     );
-    _position = ViewerPosition(fileIndex: index, charOffset: 0);
-    await webview.loadRequest(server.urlForItem(index));
-  }
-
-  Future<void> _onEvent(final ViewerEvent event) async {
-    switch (event) {
-      case ReadyEvent():
-        await _applySettings();
-        final pending = _pendingNavigation;
-        _pendingNavigation = null;
-        if (pending?.offset != null) {
-          await bridge.send(<String, Object?>{
-            'action': 'goToOffset',
-            'offset': pending!.offset,
-          });
-        } else if (pending?.anchor != null) {
-          await bridge.send(<String, Object?>{
-            'action': 'goToAnchor',
-            'id': pending!.anchor,
-          });
-        } else if (pending?.atEnd == true) {
-          await bridge.send(const <String, Object?>{'action': 'goToEnd'});
-        } else if (pending?.selection != null) {
-          final selection = pending!.selection!;
-          await bridge.send(<String, Object?>{
-            'action': 'setSelection',
-            'start': selection.$1,
-            'end': selection.$2,
-          });
-          await bridge.send(<String, Object?>{
-            'action': 'goToOffset',
-            'offset': selection.$1,
-          });
-        }
-      case PositionEvent position:
-        _position = _position.copyWith(
-          charOffset: position.offset,
-          column: position.column,
-          columns: position.columns,
-        );
-        notifyListeners();
-      case BoundaryEvent boundary:
-        final target = _position.fileIndex + boundary.direction;
-        if (target >= 0 && target < (server?.itemCount ?? 0)) {
-          await _loadFile(target, atEnd: boundary.direction < 0);
-        }
-      case ChromeToggleEvent():
-        toggleChrome();
-      case LinkTapEvent link:
-        if (!link.external) {
-          await _followInternalLink(link.href);
-        } else {
-          if (kDebugMode) {
-            debugPrint('eLivre viewer: external link ignored: ${link.href}');
-          }
-        }
-      case SelectionEvent():
-      // Selection consumers listen through [selectionEvents].
-    }
-  }
-
-  Future<void> _applySettings() async {
-    await bridge.send(<String, Object?>{
-      'action': 'setVars',
-      'vars': _theme.cssVars(),
-    });
-    await bridge.send(<String, Object?>{
-      'action': 'setOverrideColors',
-      'enabled': _theme.overrideBookColors,
-    });
-    await bridge.send(<String, Object?>{
-      'action': 'setFontSize',
-      'px': _fontSizePx,
-    });
-    await bridge.send(<String, Object?>{
-      'action': 'setMargins',
-      'px': _marginsPx,
-    });
-  }
-
-  Future<void> _followInternalLink(final String href) async {
-    // href may be 'file.html', 'file.html#frag', 'dir/file.html'.
-    final withoutFragment = href.split('#');
-    final path = withoutFragment[0];
-    final fragment = withoutFragment.length > 1 ? withoutFragment[1] : '';
-    if (path.isEmpty) {
-      if (fragment.isNotEmpty) {
-        await bridge.send(<String, Object?>{'action': 'goToAnchor', 'id': fragment});
-      }
-      return;
-    }
-    final target = _resolveRelativePath(path);
-    if (target == null) {
-      return;
-    }
-    await _loadFile(target, initialAnchor: fragment.isEmpty ? null : fragment);
   }
 
   /// Broadcast stream of selections (for dictionary lookups).
@@ -458,6 +651,325 @@ class ViewerController extends ChangeNotifier {
           end: event.end,
         ),
       );
+
+  /// Clears the active selection.
+  Future<void> clearSelection() =>
+      _send(const <String, Object?>{'action': 'clearSelection'});
+
+  // --- settings ---
+
+  /// Applies a new theme to the visible page (and to preloaded ones
+  /// when they activate).
+  Future<void> setTheme(final ViewerTheme theme) async {
+    _theme = theme;
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setVars', 'vars': theme.cssVars()});
+    await _send(<String, Object?>{
+      'action': 'setOverrideColors',
+      'enabled': theme.overrideBookColors,
+    });
+  }
+
+  /// Changes the base font size (px) and relayouts keeping position.
+  Future<void> setFontSize(final int px) async {
+    if (px < 9 || px > 48) {
+      return;
+    }
+    _fontSizePx = px;
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setFontSize', 'px': px});
+  }
+
+  /// Changes the page margins (px) and relayouts keeping position.
+  Future<void> setMargins(final int px) async {
+    if (px < 0 || px > 96) {
+      return;
+    }
+    _marginsPx = px;
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setMargins', 'px': px});
+  }
+
+  /// Switches between paged and continuous scroll layouts.
+  Future<void> setLayoutMode(final ViewerLayoutMode mode) async {
+    _layoutMode = mode;
+    notifyListeners();
+    await _send(<String, Object?>{
+      'action': 'setLayoutMode',
+      'scroll': mode == ViewerLayoutMode.scroll,
+    });
+  }
+
+  /// Sets columns per screen (0 = auto for wide screens).
+  Future<void> setColumnsPerScreen(final int columns) async {
+    if (columns < 0 || columns > 4) {
+      return;
+    }
+    _columnsPerScreen = columns;
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setColumns', 'n': columns});
+  }
+
+  /// Toggles the reader chrome visibility.
+  void toggleChrome() {
+    _chromeVisible = !_chromeVisible;
+    notifyListeners();
+  }
+
+  // --- internals ---
+
+  Future<void> _send(final Map<String, Object?> message) =>
+      _sendTo(_active, message);
+
+  Future<void> _sendTo(
+    final int slot,
+    final Map<String, Object?> message,
+  ) async {
+    if (slot >= _engines.length) {
+      return;
+    }
+    await _engines[slot].evaluateJavaScript(
+      ViewerBridge.javaScriptFor(message),
+    );
+  }
+
+  Future<void> _navigate(
+    final int target,
+    final _PendingNavigation pending,
+  ) async {
+    final server = _server;
+    if (server == null) {
+      return;
+    }
+    final index = target.clamp(0, server.itemCount - 1);
+    final other = 1 - _active;
+
+    if (_loadedFile[other] == index && _engineReady[other]) {
+      // Fast path: the spare engine already shows the target (the
+      // preloader did its job) — position it and swap instantly.
+      await _applyPending(other, pending);
+      _activate(other);
+      return;
+    }
+    _pending[other] = pending;
+    _loadedFile[other] = index;
+    _engineReady[other] = false;
+    _swapOnReadySlot = other;
+    await _engines[other].loadUrl(server.urlForItem(index));
+  }
+
+  Future<void> _applyPending(
+    final int slot,
+    final _PendingNavigation pending,
+  ) async {
+    if (pending.offset != null) {
+      await _sendTo(slot, <String, Object?>{
+        'action': 'goToOffset',
+        'offset': pending.offset,
+      });
+    } else if (pending.anchor != null) {
+      await _sendTo(
+        slot,
+        <String, Object?>{'action': 'goToAnchor', 'id': pending.anchor},
+      );
+    } else if (pending.atEnd) {
+      await _sendTo(slot, const <String, Object?>{'action': 'goToEnd'});
+    }
+    final selection = pending.selection;
+    if (selection != null) {
+      await _sendTo(slot, <String, Object?>{
+        'action': 'setSelection',
+        'start': selection.$1,
+        'end': selection.$2,
+      });
+      await _sendTo(slot, <String, Object?>{
+        'action': 'goToOffset',
+        'offset': selection.$1,
+      });
+    }
+  }
+
+  void _activate(final int slot) {
+    _active = slot;
+    _position =
+        ViewerPosition(fileIndex: _loadedFile[slot] ?? 0, charOffset: 0);
+    notifyListeners();
+    _schedulePreload();
+  }
+
+  void _schedulePreload() {
+    _preloadTimer?.cancel();
+    _preloadTimer = Timer(const Duration(milliseconds: 500), _preloadNext);
+  }
+
+  Future<void> _preloadNext() async {
+    if (_disposed) {
+      return;
+    }
+    final server = _server;
+    if (server == null || !server.isRunning || _engines.length < 2) {
+      return;
+    }
+    final current = _loadedFile[_active];
+    if (current == null) {
+      return;
+    }
+    final next = current + 1;
+    if (next >= server.itemCount) {
+      return;
+    }
+    final other = 1 - _active;
+    if (_loadedFile[other] == next) {
+      return; // already preloaded
+    }
+    _pending[other] = const _PendingNavigation();
+    _loadedFile[other] = next;
+    _engineReady[other] = false;
+    try {
+      await _engines[other].loadUrl(server.urlForItem(next));
+    } on Object {
+      // Preload failures (disposed, stopped server) are non-fatal;
+      // boundary navigation retries through the slow path.
+    }
+  }
+
+  Future<void> _onEvent(final ViewerEvent event) async {
+    switch (event) {
+      case ReadyEvent():
+        final slot = event.source;
+        if (slot < _engineReady.length) {
+          _engineReady[slot] = true;
+        }
+        await _applySettingsTo(slot);
+        final pending = _pending[slot];
+        _pending[slot] = null;
+        if (pending != null) {
+          await _applyPending(slot, pending);
+        }
+        final fileIndex =
+            slot < _loadedFile.length ? _loadedFile[slot] : null;
+        if (fileIndex != null) {
+          await _applyHighlightsToEngine(slot, fileIndex);
+        }
+        if (_swapOnReadySlot == slot) {
+          _swapOnReadySlot = null;
+          _activate(slot);
+        } else if (slot == _active) {
+          _schedulePreload();
+        }
+      case PositionEvent():
+        if (event.source != _active) {
+          return;
+        }
+        _position = _position.copyWith(
+          charOffset: event.offset,
+          column: event.column,
+          columns: event.columns,
+        );
+        notifyListeners();
+      case BoundaryEvent():
+        if (event.source != _active) {
+          return;
+        }
+        final target = _position.fileIndex + event.direction;
+        if (target >= 0 && target < (server?.itemCount ?? 0)) {
+          await _navigate(
+            target,
+            event.direction < 0
+                ? const _PendingNavigation(atEnd: true)
+                : const _PendingNavigation(),
+          );
+        }
+      case ChromeToggleEvent():
+        if (event.source == _active) {
+          toggleChrome();
+        }
+      case LinkTapEvent link:
+        if (event.source != _active) {
+          return;
+        }
+        if (link.external) {
+          final handler = onExternalLink;
+          if (handler != null) {
+            handler(link.href);
+          } else if (kDebugMode) {
+            debugPrint('eLivre viewer: external link ignored: ${link.href}');
+          }
+        } else {
+          await _followInternalLink(link.href);
+        }
+      case SelectionEvent selection:
+        if (event.source != _active) {
+          return;
+        }
+        _lastSelection = selection.text.isEmpty
+            ? null
+            : ViewerSelection(
+                fileIndex: _position.fileIndex,
+                text: selection.text,
+                start: selection.start,
+                end: selection.end,
+              );
+        notifyListeners();
+      case HighlightTapEvent tap:
+        if (event.source != _active) {
+          return;
+        }
+        for (final highlight in _highlights) {
+          if (highlight.id == tap.id) {
+            _highlightTaps.add(highlight);
+            return;
+          }
+        }
+    }
+  }
+
+  Future<void> _applySettingsTo(final int slot) async {
+    await _sendTo(slot, <String, Object?>{
+      'action': 'setVars',
+      'vars': _theme.cssVars(),
+    });
+    await _sendTo(slot, <String, Object?>{
+      'action': 'setOverrideColors',
+      'enabled': _theme.overrideBookColors,
+    });
+    await _sendTo(
+      slot,
+      <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx},
+    );
+    await _sendTo(
+      slot,
+      <String, Object?>{'action': 'setMargins', 'px': _marginsPx},
+    );
+    await _sendTo(slot, <String, Object?>{
+      'action': 'setLayoutMode',
+      'scroll': _layoutMode == ViewerLayoutMode.scroll,
+    });
+    await _sendTo(
+      slot,
+      <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen},
+    );
+  }
+
+  Future<void> _followInternalLink(final String href) async {
+    final withoutFragment = href.split('#');
+    final path = withoutFragment[0];
+    final fragment = withoutFragment.length > 1 ? withoutFragment[1] : '';
+    if (path.isEmpty) {
+      if (fragment.isNotEmpty) {
+        await _send(<String, Object?>{'action': 'goToAnchor', 'id': fragment});
+      }
+      return;
+    }
+    final target = _resolveRelativePath(path);
+    if (target == null) {
+      return;
+    }
+    await _navigate(
+      target,
+      _PendingNavigation(anchor: fragment.isEmpty ? null : fragment),
+    );
+  }
 
   (int, String)? _resolveNavTarget(final String content) {
     if (content.isEmpty) {
@@ -489,7 +1001,6 @@ class ViewerController extends ChangeNotifier {
         return i;
       }
     }
-    // Basename fallback (EPUB nav hrefs may differ from spine paths).
     final base = normalized.split('/').last;
     if (base.isEmpty) {
       return null;

@@ -3,7 +3,6 @@ import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:e_livre_viewer/src/controller/viewer_position.dart';
 import 'package:e_livre_viewer/src/widgets/reader_shell.dart';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 /// Renders a parsed [Book] as a Calibre-style paginated reader.
 ///
@@ -12,8 +11,12 @@ import 'package:webview_flutter/webview_flutter.dart';
 /// ELivreView(book: book);
 /// ```
 ///
-/// Pass your own [controller] to drive the reader (positions, search,
-/// themes) from the outside; otherwise the view creates and owns one.
+/// The reader keeps two webviews: the visible one and a spare that
+/// preloads the next file, so chapter transitions are instant.
+///
+/// Pass your own [controller] to drive the reader (positions,
+/// bookmarks, highlights, search, themes) from the outside;
+/// otherwise the view creates and owns one.
 class ELivreView extends StatefulWidget {
   /// Creates the reader view.
   const ELivreView({
@@ -22,6 +25,7 @@ class ELivreView extends StatefulWidget {
     this.initialPosition,
     this.onPositionChanged,
     this.onSelection,
+    this.onExternalLink,
     super.key,
   });
 
@@ -42,14 +46,17 @@ class ELivreView extends StatefulWidget {
   /// Called when the user selects text (dictionary hook).
   final ValueChanged<ViewerSelection>? onSelection;
 
+  /// Called when the user taps an external http(s) link.
+  final ValueChanged<String>? onExternalLink;
+
   @override
   State<ELivreView> createState() => _ELivreViewState();
 }
 
 class _ELivreViewState extends State<ELivreView> {
   ViewerController? _ownedController;
-  late final Future<WebViewController> _startFuture;
-  bool _listening = false;
+  late final Future<void> _startFuture;
+  bool _wired = false;
 
   ViewerController get _controller =>
       widget.controller ?? (_ownedController ??= ViewerController(widget.book));
@@ -60,27 +67,29 @@ class _ELivreViewState extends State<ELivreView> {
     _startFuture = _boot();
   }
 
-  Future<WebViewController> _boot() async {
+  Future<void> _boot() async {
     final controller = _controller;
-    final webview = await controller.start();
+    if (widget.onExternalLink != null) {
+      controller.onExternalLink = widget.onExternalLink;
+    }
+    await controller.start();
     if (widget.initialPosition != null) {
       await controller.goToSerializedPosition(widget.initialPosition!);
     }
-    if (!_listening &&
+    if (!_wired &&
         (widget.onPositionChanged != null || widget.onSelection != null)) {
-      _listening = true;
+      _wired = true;
       if (widget.onPositionChanged != null) {
         controller.addListener(_notifyPosition);
       }
       if (widget.onSelection != null) {
-        controller.selectionEvents.listen((final selection) {
+        controller.selectionEvents.listen((selection) {
           if (mounted) {
             widget.onSelection?.call(selection);
           }
         });
       }
     }
-    return webview;
   }
 
   void _notifyPosition() {
@@ -98,7 +107,7 @@ class _ELivreViewState extends State<ELivreView> {
 
   @override
   Widget build(final BuildContext context) {
-    return FutureBuilder<WebViewController>(
+    return FutureBuilder<void>(
       future: _startFuture,
       builder: (final context, final snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -110,7 +119,26 @@ class _ELivreViewState extends State<ELivreView> {
         if (snapshot.hasError) {
           return Center(child: Text('Failed to open book: ${snapshot.error}'));
         }
-        return ReaderShell(controller: _controller);
+        final controller = _controller;
+        return AnimatedBuilder(
+          animation: controller,
+          builder: (final context, final _) {
+            final engines = controller.engines;
+            final active = controller.activeEngineIndex;
+            final below = 1 - active;
+            return Stack(
+              children: [
+                // Both engines stay in the tree; the active one paints
+                // on top. The spare shows the preloaded file beneath.
+                if (engines.length > below)
+                  Positioned.fill(child: engines[below].buildWidget()),
+                if (engines.length > active)
+                  Positioned.fill(child: engines[active].buildWidget()),
+                Positioned.fill(child: ReaderShell(controller: controller)),
+              ],
+            );
+          },
+        );
       },
     );
   }

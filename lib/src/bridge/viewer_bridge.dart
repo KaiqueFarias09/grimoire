@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:webview_flutter/webview_flutter.dart';
-
 /// Events flowing from the viewer JS to Dart.
+///
+/// [source] identifies the webview slot that produced the event (0 or
+/// 1 — the reader keeps two webviews and preloads into the spare one).
 sealed class ViewerEvent {
-  const ViewerEvent();
+  const ViewerEvent({this.source = 0});
+
+  final int source;
 }
 
 /// The page finished booting (fires once per loaded file).
 class ReadyEvent extends ViewerEvent {
-  const ReadyEvent({required this.chars, required this.columns});
+  ReadyEvent({required this.chars, required this.columns, super.source});
 
   final int chars;
   final int columns;
@@ -18,12 +21,13 @@ class ReadyEvent extends ViewerEvent {
 
 /// The visible column / position changed.
 class PositionEvent extends ViewerEvent {
-  const PositionEvent({
+  PositionEvent({
     required this.column,
     required this.columns,
     required this.offset,
     required this.chars,
     required this.frac,
+    super.source,
   });
 
   final int column;
@@ -35,7 +39,7 @@ class PositionEvent extends ViewerEvent {
 
 /// A page turn hit the start/end of the current file.
 class BoundaryEvent extends ViewerEvent {
-  const BoundaryEvent({required this.direction});
+  BoundaryEvent({required this.direction, super.source});
 
   /// `1` for forward, `-1` for backward.
   final int direction;
@@ -43,10 +47,11 @@ class BoundaryEvent extends ViewerEvent {
 
 /// The text selection changed (empty [text] means cleared).
 class SelectionEvent extends ViewerEvent {
-  const SelectionEvent({
+  SelectionEvent({
     required this.text,
     required this.start,
     required this.end,
+    super.source,
   });
 
   final String text;
@@ -56,22 +61,29 @@ class SelectionEvent extends ViewerEvent {
 
 /// A link was tapped (external http links are reported, not opened).
 class LinkTapEvent extends ViewerEvent {
-  const LinkTapEvent({required this.href, required this.external});
+  LinkTapEvent({required this.href, required this.external, super.source});
 
   final String href;
   final bool external;
 }
 
-/// The center tap zone asked the host to toggle the chrome.
-class ChromeToggleEvent extends ViewerEvent {
-  const ChromeToggleEvent();
+/// A highlight was tapped by the user.
+class HighlightTapEvent extends ViewerEvent {
+  HighlightTapEvent({required this.id, super.source});
+
+  final String id;
 }
 
-/// Typed bridge between the viewer JS and Dart.
+/// The center tap zone asked the host to toggle the chrome.
+class ChromeToggleEvent extends ViewerEvent {
+  ChromeToggleEvent({super.source});
+}
+
+/// Codec + event stream for the viewer bridge.
 ///
-/// Incoming messages arrive through the `ELivreBridge` JavaScript
-/// channel ([acceptRaw]); outgoing messages call `window.__elivre`
-/// via [WebViewController.runJavaScript].
+/// Keeps no webview reference: engines receive messages through
+/// [accept] and the controller sends commands straight through its
+/// engines (`bridge.javaScriptFor` builds the expression).
 class ViewerBridge {
   final StreamController<ViewerEvent> _events =
       StreamController<ViewerEvent>.broadcast();
@@ -79,57 +91,54 @@ class ViewerBridge {
   /// Stream of typed viewer events.
   Stream<ViewerEvent> get events => _events.stream;
 
-  WebViewController? _controller;
-  bool _attached = false;
-
-  /// Wires the bridge to a live webview.
-  void attach(final WebViewController controller) {
-    _controller = controller;
-    _attached = true;
-  }
-
-  /// Whether [attach] was called.
-  bool get isAttached => _attached;
-
-  /// Parses a raw JSON message from the JavaScript channel.
-  void acceptRaw(final String raw) {
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
+  /// Accepts a raw message from a JavaScript channel: a JSON string
+  /// (webview_flutter) or an already-decoded map (inappwebview).
+  void accept(final Object payload, {final int source = 0}) {
+    Map<String, dynamic>? decoded;
+    if (payload is String) {
+      try {
+        final parsed = jsonDecode(payload);
+        if (parsed is Map<String, dynamic>) {
+          decoded = parsed;
+        }
+      } on FormatException {
         return;
       }
-      final event = _decode(decoded);
-      if (event != null) {
-        _events.add(event);
-      }
-    } on FormatException {
-      // Ignore malformed payloads.
+    } else if (payload is Map) {
+      decoded = payload.cast<String, dynamic>();
+    }
+    if (decoded == null) {
+      return;
+    }
+    final event = _decode(decoded, source);
+    if (event != null) {
+      _events.add(event);
     }
   }
 
-  /// Sends an action message to the current page.
-  Future<void> send(final Map<String, Object?> message) async {
-    final controller = _controller;
-    if (controller == null) {
-      return;
-    }
+  /// Builds the JavaScript expression delivering [message] to the
+  /// page controller.
+  static String javaScriptFor(final Map<String, Object?> message) {
     final payload = jsonEncode(message);
-    await controller.runJavaScript('window.__elivre && window.__elivre($payload)');
+    return 'window.__elivre && window.__elivre($payload)';
   }
 
   /// Closes the event stream.
   Future<void> dispose() async {
     await _events.close();
-    _controller = null;
   }
 
-  static ViewerEvent? _decode(final Map<String, dynamic> map) {
+  static ViewerEvent? _decode(
+    final Map<String, dynamic> map,
+    final int source,
+  ) {
     final type = map['type'];
     switch (type) {
       case 'ready':
         return ReadyEvent(
           chars: _asInt(map['chars']),
           columns: _asInt(map['columns']),
+          source: source,
         );
       case 'positionChanged':
         return PositionEvent(
@@ -138,23 +147,34 @@ class ViewerBridge {
           offset: _asInt(map['offset']),
           chars: _asInt(map['chars']),
           frac: _asDouble(map['frac']),
+          source: source,
         );
       case 'fileBoundary':
         final direction = _asInt(map['direction']);
-        return BoundaryEvent(direction: direction >= 0 ? 1 : -1);
+        return BoundaryEvent(
+          direction: direction >= 0 ? 1 : -1,
+          source: source,
+        );
       case 'selectionChanged':
         return SelectionEvent(
           text: map['text'] is String ? map['text'] as String : '',
           start: _asInt(map['start']),
           end: _asInt(map['end']),
+          source: source,
         );
       case 'linkTap':
         return LinkTapEvent(
           href: map['href'] is String ? map['href'] as String : '',
           external: map['external'] == true,
+          source: source,
+        );
+      case 'highlightTap':
+        return HighlightTapEvent(
+          id: map['id'] is String ? map['id'] as String : '',
+          source: source,
         );
       case 'chromeToggle':
-        return const ChromeToggleEvent();
+        return ChromeToggleEvent(source: source);
       default:
         return null;
     }
