@@ -1,0 +1,52 @@
+/* eLivre viewer base styles, injected into every served page. */
+
+:root {
+  --elv-bg: #ffffff;
+  --elv-fg: #101010;
+  --elv-link: #0563c1;
+  --elv-selection-bg: rgba(5, 99, 193, 0.25);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--elv-bg);
+}
+
+body {
+  color: var(--elv-fg);
+  -webkit-text-size-adjust: 100%;
+}
+
+a, a:link, a:visited {
+  color: var(--elv-link);
+}
+
+::selection {
+  background: var(--elv-selection-bg);
+}
+
+.elv-paged {
+  overflow: hidden;
+}
+
+/* Comic / image-only pages: fit a single page per screen. */
+body.elv-comic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+body.elv-comic img {
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+}
+
+/* Optional strong color override applied by setOverrideBookColors. */
+body.elv-override-colors * {
+  color: var(--elv-fg) !important;
+  background-color: var(--elv-bg) !important;
+  border-color: var(--elv-fg) !important;
+}
