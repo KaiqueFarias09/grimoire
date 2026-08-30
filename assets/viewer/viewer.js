@@ -1037,6 +1037,18 @@
     }
   }
 
+  // Parity: calibre src/pyj/range_utils.pyj:150-157 (wrap_range) —
+  // surroundContents fails when the range crosses element boundaries;
+  // extract+insert never does.
+  function wrapRange(range, wrapper) {
+    try {
+      range.surroundContents(wrapper);
+    } catch (error) {
+      wrapper.appendChild(range.extractContents());
+      range.insertNode(wrapper);
+    }
+  }
+
   function applyHighlight(item) {
     var start = item.start;
     var end = item.end;
@@ -1057,21 +1069,31 @@
         consumed = nodeEnd;
         continue;
       }
-      try {
-        var range = document.createRange();
-        range.setStart(node, withinStart);
-        range.setEnd(node, withinEnd);
-        var span = document.createElement('span');
-        span.setAttribute('data-elv-hl', item.id);
-        span.className = 'elv-hl elv-hl-' + (item.style || 'yellow');
-        range.surroundContents(span);
-        spans.push(span);
-      } catch (error) {
-        // Range crossing element boundaries: skip this chunk.
+      var range = document.createRange();
+      range.setStart(node, withinStart);
+      range.setEnd(node, withinEnd);
+      if (range.collapsed) {
+        // Adjacent highlights leave collapsed ranges here; wrapping
+        // them would make the next overlap detection misfire
+        // (Calibre range_utils.pyj:175-180).
+        consumed = nodeEnd;
+        continue;
       }
+      var span = document.createElement('span');
+      span.setAttribute('data-elv-hl', item.id);
+      span.className = 'elv-hl elv-hl-' + (item.style || 'yellow');
+      wrapRange(range, span);
+      spans.push(span);
       consumed = nodeEnd;
     }
     if (spans.length) {
+      // Parity: calibre range_utils.pyj:232-235 — surroundContents can
+      // leave empty text nodes around the wrapper, which would desync
+      // the character-offset model.
+      var ancestor = spans[0].parentNode;
+      if (ancestor && ancestor.normalize) {
+        ancestor.normalize();
+      }
       state.highlights[item.id] = spans;
     }
   }
