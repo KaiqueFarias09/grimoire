@@ -39,6 +39,9 @@ abstract class ViewerEngine {
 /// Creates the engines used by a reader.
 abstract class ViewerEngineFactory {
   /// Creates the two engine slots wired to [onMessage].
+  /// Creates one engine for the page-count measurer (slot >= 2).
+  ViewerEngine createEngine(final int slot, final void Function(Object message, int source) onMessage);
+
   List<ViewerEngine> createPair(
     final void Function(Object message, int source) onMessage,
   );

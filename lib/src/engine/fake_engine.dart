@@ -53,6 +53,13 @@ class FakeViewerEngineFactory extends ViewerEngineFactory {
   final List<FakeViewerEngine> engines = <FakeViewerEngine>[];
 
   @override
+  @override
+  ViewerEngine createEngine(
+    final int slot,
+    final void Function(Object message, int source) onMessage,
+  ) =>
+      FakeViewerEngine(slot: slot, onMessage: onMessage);
+
   List<ViewerEngine> createPair(
     final void Function(Object message, int source) onMessage,
   ) {

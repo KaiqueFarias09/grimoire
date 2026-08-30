@@ -83,6 +83,13 @@ class InAppWebViewEngine extends ViewerEngine {
 /// platforms (Windows, Linux).
 class InAppWebViewEngineFactory extends ViewerEngineFactory {
   @override
+  @override
+  ViewerEngine createEngine(
+    final int slot,
+    final void Function(Object message, int source) onMessage,
+  ) =>
+      InAppWebViewEngine(slot: slot, onMessage: onMessage);
+
   List<ViewerEngine> createPair(
     final void Function(Object message, int source) onMessage,
   ) {

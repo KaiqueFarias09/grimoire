@@ -55,6 +55,13 @@ class WebviewFlutterEngine extends ViewerEngine {
 /// Factory producing [WebviewFlutterEngine] pairs.
 class WebviewFlutterEngineFactory extends ViewerEngineFactory {
   @override
+  @override
+  ViewerEngine createEngine(
+    final int slot,
+    final void Function(Object message, int source) onMessage,
+  ) =>
+      WebviewFlutterEngine(slot: slot, onMessage: onMessage);
+
   List<ViewerEngine> createPair(
     final void Function(Object message, int source) onMessage,
   ) {
