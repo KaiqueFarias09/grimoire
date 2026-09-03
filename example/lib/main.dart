@@ -80,7 +80,7 @@ class _LibraryPageState extends State<LibraryPage> {
     final bytes = Uint8List.fromList(
         (await rootBundle.load(fixture.asset)).buffer.asUint8List());
     try {
-      final book = await EBook.openFromBytes(bytes);
+      final book = await BookReader.openFromBytes(bytes);
       if (!context.mounted) {
         return;
       }
