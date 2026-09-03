@@ -7,6 +7,7 @@ environment:
   sdk: ">=3.1.0 <4.0.0"
 
 dependencies:
+  e_livre: ^3.2.0
   e_livre_viewer:
     path: ../
   flutter:
@@ -16,6 +17,11 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   flutter_test:
     sdk: flutter
+
+# Keep the example on the same unpublished eLivre checkout as the library.
+dependency_overrides:
+  e_livre:
+    path: ../../eLivre
 
 flutter:
   uses-material-design: true

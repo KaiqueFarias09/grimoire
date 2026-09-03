@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
-import 'package:e_livre_viewer/src/engine/fake_engine.dart';
+import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/test_book.dart';
@@ -11,8 +12,16 @@ Book _comicBook() {
     cover: BinaryFile.empty(),
     metadata: const BookMetadata(format: BookFormat.cbz, title: 'C'),
     pages: [
-      BinaryFile(content: Uint8List.fromList([1]), name: 'p1.png', type: 'png', path: 'p1.png'),
-      BinaryFile(content: Uint8List.fromList([2]), name: 'p2.png', type: 'png', path: 'p2.png'),
+      BinaryFile(
+          content: Uint8List.fromList([1]),
+          name: 'p1.png',
+          type: 'png',
+          path: 'p1.png'),
+      BinaryFile(
+          content: Uint8List.fromList([2]),
+          name: 'p2.png',
+          type: 'png',
+          path: 'p2.png'),
     ],
     format: BookFormat.cbz,
   );
@@ -49,16 +58,27 @@ void main() {
     test('json rejects malformed payloads', () {
       expect(ViewerHighlight.fromJson({}), isNull);
       expect(
-        ViewerHighlight.fromJson({'id': 'x', 'fileIndex': 0, 'start': 0,
-            'end': 1, 'text': 'a', 'style': 'bogus'}),
+        ViewerHighlight.fromJson({
+          'id': 'x',
+          'fileIndex': 0,
+          'start': 0,
+          'end': 1,
+          'text': 'a',
+          'style': 'bogus'
+        }),
         isNull,
       );
     });
 
     test('relocateHighlight finds exact matches', () {
       const highlight = ViewerHighlight(
-        id: 'x', fileIndex: 0, start: 2, end: 5,
-        text: 'llo', before: 'he', after: ' wo',
+        id: 'x',
+        fileIndex: 0,
+        start: 2,
+        end: 5,
+        text: 'llo',
+        before: 'he',
+        after: ' wo',
         style: ViewerHighlightStyle.green,
         createdAtIso: '',
       );
@@ -70,8 +90,13 @@ void main() {
 
     test('relocateHighlight drifts when offsets shift', () {
       const highlight = ViewerHighlight(
-        id: 'x', fileIndex: 0, start: 5, end: 8,
-        text: 'llo', before: '', after: '',
+        id: 'x',
+        fileIndex: 0,
+        start: 5,
+        end: 8,
+        text: 'llo',
+        before: '',
+        after: '',
         style: ViewerHighlightStyle.blue,
         createdAtIso: '',
       );
@@ -84,8 +109,13 @@ void main() {
 
     test('relocateHighlight returns null when text is gone', () {
       const highlight = ViewerHighlight(
-        id: 'x', fileIndex: 0, start: 0, end: 3,
-        text: 'gone', before: '', after: '',
+        id: 'x',
+        fileIndex: 0,
+        start: 0,
+        end: 3,
+        text: 'gone',
+        before: '',
+        after: '',
         style: ViewerHighlightStyle.underline,
         createdAtIso: '',
       );
@@ -237,4 +267,3 @@ void main() {
 }
 
 // A minimal dark theme for the test.
-

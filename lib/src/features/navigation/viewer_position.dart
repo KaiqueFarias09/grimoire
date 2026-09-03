@@ -1,5 +1,5 @@
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/utils/document_text.dart';
+import 'package:e_livre_viewer/src/features/search/document_text.dart';
 
 /// A reading position: file (by reading-order index) plus the
 /// character offset inside the file's text model.
@@ -61,8 +61,7 @@ class ViewerPosition {
   }
 
   @override
-  String toString() =>
-      'ViewerPosition(file: $fileIndex, offset: $charOffset, '
+  String toString() => 'ViewerPosition(file: $fileIndex, offset: $charOffset, '
       'page: ${column + 1}/$columns)';
 }
 
@@ -117,8 +116,7 @@ class ReadingState {
     }
     final index = position.fileIndex.clamp(0, lengths.length - 1);
     final length = lengths[index] <= 0 ? 1 : lengths[index];
-    final fraction =
-        (position.charOffset / length).clamp(0.0, 1.0).toDouble();
+    final fraction = (position.charOffset / length).clamp(0.0, 1.0).toDouble();
     return (lengthBefore(index) + lengths[index] * fraction) / totalLength;
   }
 }

@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/utils/document_text.dart';
+import 'package:e_livre_viewer/src/features/search/document_text.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

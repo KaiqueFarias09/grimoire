@@ -23,7 +23,8 @@ class BookServer {
       : _assetLoader = assetLoader ?? _rootBundleLoader;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
-    final data = await rootBundle.load('packages/e_livre_viewer/assets/viewer/$name');
+    final data =
+        await rootBundle.load('packages/e_livre_viewer/assets/viewer/$name');
     return data.buffer.asUint8List();
   }
 
@@ -207,14 +208,14 @@ class BookServer {
         'initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
         '<link rel="stylesheet" href="/__viewer__/viewer.css"/>'
         '<script defer src="/__viewer__/viewer.js"></script>';
-    final headOpen = RegExp(r'<head[^>]*>', caseSensitive: false)
-        .firstMatch(html);
+    final headOpen =
+        RegExp(r'<head[^>]*>', caseSensitive: false).firstMatch(html);
     if (headOpen != null) {
       final at = headOpen.end;
       return html.substring(0, at) + injection + html.substring(at);
     }
-    final htmlOpen = RegExp(r'<html[^>]*>', caseSensitive: false)
-        .firstMatch(html);
+    final htmlOpen =
+        RegExp(r'<html[^>]*>', caseSensitive: false).firstMatch(html);
     if (htmlOpen != null) {
       final at = htmlOpen.end;
       return '${html.substring(0, at)}<head>$injection</head>'

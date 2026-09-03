@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -76,8 +77,8 @@ class _LibraryPageState extends State<LibraryPage> {
     final _Fixture fixture,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final bytes =
-        Uint8List.fromList((await rootBundle.load(fixture.asset)).buffer.asUint8List());
+    final bytes = Uint8List.fromList(
+        (await rootBundle.load(fixture.asset)).buffer.asUint8List());
     try {
       final book = await EBook.openFromBytes(bytes);
       if (!context.mounted) {

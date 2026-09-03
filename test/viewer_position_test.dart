@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/controller/viewer_position.dart';
+import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/test_book.dart';

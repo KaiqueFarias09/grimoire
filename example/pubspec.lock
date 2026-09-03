@@ -58,7 +58,7 @@ packages:
     source: hosted
     version: "3.0.7"
   e_livre:
-    dependency: transitive
+    dependency: "direct main"
     description:
       path: "../../eLivre"
       relative: true

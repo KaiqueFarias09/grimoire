@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/utils/annot_merge.dart';
+import 'package:e_livre_viewer/src/features/annotations/annot_merge.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Parity test for the Calibre annotation merge. The fixture is the
@@ -44,8 +44,7 @@ void main() {
     expect(merged.map((final x) => x.id).toList(), ['10', '2', '30', '3']);
   });
 
-  test('highlight case (uuid as the group key) matches the bookmark case',
-      () {
+  test('highlight case (uuid as the group key) matches the bookmark case', () {
     final a = [
       annot(key: 'one', id: '1', year: 20, cfiNumber: 2),
       annot(key: 'two', id: '2', year: 20, cfiNumber: 4),

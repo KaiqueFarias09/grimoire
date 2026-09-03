@@ -178,8 +178,7 @@ void main() {
     expect(book(scrollOffset: 20).previousScreenLocation(), 0);
   });
 
-  test('next screen reports -1 when a partial tail is all that is left',
-      () {
+  test('next screen reports -1 when a partial tail is all that is left', () {
     // Parity: calibre paged_mode.pyj:457-459 — "Only blank, dummy
     // pages left" (that rule needs cps > 1; with cps == 1 the partial
     // column rule "can't scroll partial columns" applies instead).
@@ -197,24 +196,24 @@ void main() {
     // 401 - 0 >= colSize, so a full screen IS scrollable.
     expect(b.nextScreenLocation(), 401);
     // From there, the remainder (207px) is smaller than a column:
-    expect(PagedMirror(
-      scrollWidth: (420 * 2.4).floor(),
-      screenInline: 400,
-      colSize: 400,
-      gap: 20,
-      colCount: 3,
-      scrollOffset: 401,
-    ).nextScreenLocation(), -1);
+    expect(
+        PagedMirror(
+          scrollWidth: (420 * 2.4).floor(),
+          screenInline: 400,
+          colSize: 400,
+          gap: 20,
+          colCount: 3,
+          scrollOffset: 401,
+        ).nextScreenLocation(),
+        -1);
   });
 
   test('full-screen layouts never scroll', () {
     // Parity: calibre paged_mode.pyj:447, 466, 481, 501 — cover pages.
     expect(book(scrollOffset: 0, fullScreen: true).nextColLocation(), -1);
-    expect(
-        book(scrollOffset: 100, fullScreen: true).previousColLocation(), -1);
+    expect(book(scrollOffset: 100, fullScreen: true).previousColLocation(), -1);
     expect(book(scrollOffset: 0, fullScreen: true).nextScreenLocation(), -1);
     expect(
-        book(scrollOffset: 100, fullScreen: true).previousScreenLocation(),
-        -1);
+        book(scrollOffset: 100, fullScreen: true).previousScreenLocation(), -1);
   });
 }

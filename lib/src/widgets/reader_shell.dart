@@ -1,5 +1,5 @@
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/theme/viewer_theme.dart';
+import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:e_livre_viewer/src/widgets/bookmarks_sheet.dart';
 import 'package:e_livre_viewer/src/widgets/search_overlay.dart';
 import 'package:e_livre_viewer/src/widgets/toc_sheet.dart';
@@ -239,10 +239,26 @@ class _SelectionToolbar extends StatelessWidget {
   final ViewerController controller;
 
   static const List<(Icon, ViewerHighlightStyle, String)> _styles = [
-    (Icon(Icons.highlight, color: Color(0xFFB58900)), ViewerHighlightStyle.yellow, 'Yellow'),
-    (Icon(Icons.highlight, color: Color(0xFF2AA198)), ViewerHighlightStyle.green, 'Green'),
-    (Icon(Icons.highlight, color: Color(0xFF268BD2)), ViewerHighlightStyle.blue, 'Blue'),
-    (Icon(Icons.format_underlined), ViewerHighlightStyle.underline, 'Underline'),
+    (
+      Icon(Icons.highlight, color: Color(0xFFB58900)),
+      ViewerHighlightStyle.yellow,
+      'Yellow'
+    ),
+    (
+      Icon(Icons.highlight, color: Color(0xFF2AA198)),
+      ViewerHighlightStyle.green,
+      'Green'
+    ),
+    (
+      Icon(Icons.highlight, color: Color(0xFF268BD2)),
+      ViewerHighlightStyle.blue,
+      'Blue'
+    ),
+    (
+      Icon(Icons.format_underlined),
+      ViewerHighlightStyle.underline,
+      'Underline'
+    ),
   ];
 
   @override

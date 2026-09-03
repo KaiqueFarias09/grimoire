@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:xml/xml.dart';
 
-import 'document_text.dart';
+import '../search/document_text.dart';
 
 /// EPUB CFI (Canonical Fragment Identifier) for a single XHTML file.
 ///
@@ -62,7 +62,7 @@ class EpubCfi {
     final idAssertion = RegExp(
       r'\[((?:\^.|[^\]])*)\]$',
     ).firstMatch(body);
-    var id;
+    String? id;
     if (idAssertion != null) {
       id = unescapeFromCfi(idAssertion.group(1)!);
       body = body.substring(0, idAssertion.start);
@@ -83,7 +83,7 @@ class EpubCfi {
     return EpubCfi(
       steps: steps,
       charOffset: charOffset,
-      idAssertion: id is String ? id : null,
+      idAssertion: id,
     );
   }
 
@@ -199,7 +199,6 @@ class EpubCfiDocument {
       }
       var index = 0;
       var seen = 0;
-      XmlNode? previous;
       for (final child in parent.children) {
         if (_skips(child)) {
           continue;
@@ -209,7 +208,6 @@ class EpubCfiDocument {
           index = seen;
           break;
         }
-        previous = child;
       }
       if (index == 0) {
         break;
@@ -228,8 +226,7 @@ class EpubCfiDocument {
   bool _isBody(final XmlNode node) =>
       node is XmlElement && node.name.local.toLowerCase() == 'body';
 
-  bool _skips(final XmlNode node) =>
-      node is XmlText && node.value.isEmpty;
+  bool _skips(final XmlNode node) => node is XmlText && node.value.isEmpty;
 
   /// CFI of the character at [offset] (like the JS encode from a text
   /// node plus offset). The id assertion comes from the nearest
@@ -241,9 +238,8 @@ class EpubCfiDocument {
     }
     final steps = _stepsFor(node);
     String? id;
-    XmlElement? element = node.parent is XmlElement
-        ? node.parent as XmlElement
-        : null;
+    XmlElement? element =
+        node.parent is XmlElement ? node.parent as XmlElement : null;
     while (element != null && !_isBody(element)) {
       final idAttr = element.attributes.where(
         (final a) => a.name.local.toLowerCase() == 'id',
@@ -252,9 +248,8 @@ class EpubCfiDocument {
         id = idAttr.first.value;
         break;
       }
-      element = element.parent is XmlElement
-          ? element.parent as XmlElement
-          : null;
+      element =
+          element.parent is XmlElement ? element.parent as XmlElement : null;
     }
     return EpubCfi(
       steps: steps,
@@ -278,8 +273,7 @@ class EpubCfiDocument {
       final step = cfi.steps[i];
       final isText = step.isOdd;
       final childIndex = isText ? (step + 1) ~/ 2 : step ~/ 2;
-      final children =
-          current.children.where((final c) => !_skips(c)).toList();
+      final children = current.children.where((final c) => !_skips(c)).toList();
       if (childIndex < 1 || childIndex > children.length) {
         return null;
       }

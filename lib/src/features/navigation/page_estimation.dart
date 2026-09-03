@@ -16,10 +16,9 @@ import 'dart:math' as math;
   required final int activeColumns,
   required final int activeColumn,
 }) {
-  final activeChars =
-      activeFileIndex >= 0 && activeFileIndex < fileChars.length
-          ? fileChars[activeFileIndex]
-          : 0;
+  final activeChars = activeFileIndex >= 0 && activeFileIndex < fileChars.length
+      ? fileChars[activeFileIndex]
+      : 0;
   final density = activeColumns <= 0
       ? 1500.0
       : math.max(1.0, activeChars / math.max(1, activeColumns));
@@ -32,12 +31,13 @@ import 'dart:math' as math;
   for (var i = 0; i < activeFileIndex && i < counts.length; i++) {
     before += counts[i];
   }
-  final inFilePages = activeFileIndex < counts.length
-      ? counts[activeFileIndex]
-      : 1;
-  final page = math.min(
-    total,
-    before + math.min(math.max(0, activeColumn) + 1, inFilePages),
-  ).toInt();
+  final inFilePages =
+      activeFileIndex < counts.length ? counts[activeFileIndex] : 1;
+  final page = math
+      .min(
+        total,
+        before + math.min(math.max(0, activeColumn) + 1, inFilePages),
+      )
+      .toInt();
   return (math.max(1, page), math.max(1, total), counts);
 }

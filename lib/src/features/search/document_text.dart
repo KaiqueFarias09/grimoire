@@ -31,8 +31,8 @@ String documentText(final String html) {
       .replaceAll(RegExp(r'<![^>]*>'), '')
       .replaceAll(RegExp(r'<[^>]*>'), '')
       .replaceAllMapped(_entityPattern, (final match) {
-        return decodeEntity(match.group(1)!) ?? match.group(0)!;
-      });
+    return decodeEntity(match.group(1)!) ?? match.group(0)!;
+  });
 }
 
 final RegExp _entityPattern =

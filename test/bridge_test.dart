@@ -1,5 +1,4 @@
-
-import 'package:e_livre_viewer/src/bridge/viewer_bridge.dart';
+import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

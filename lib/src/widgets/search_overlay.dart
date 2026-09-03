@@ -113,7 +113,8 @@ class _SearchOverlayState extends State<SearchOverlay> {
                   }
                   return ListView.separated(
                     itemCount: results.length,
-                    separatorBuilder: (final _, final __) => const Divider(height: 1),
+                    separatorBuilder: (final _, final __) =>
+                        const Divider(height: 1),
                     itemBuilder: (final context, final index) {
                       final result = results[index];
                       return ListTile(

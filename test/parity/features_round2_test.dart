@@ -37,10 +37,10 @@ void main() {
   test('annotations order by file then character offset', () {
     // Parity: calibre annotations.pyj sort_annot_list — reading order.
     final annotations = [
-      _Annot(1, 40),
-      _Annot(0, 10),
-      _Annot(1, 5),
-      _Annot(0, 90),
+      const _Annot(1, 40),
+      const _Annot(0, 10),
+      const _Annot(1, 5),
+      const _Annot(0, 90),
     ]..sort((final a, final b) {
         final byFile = a.file.compareTo(b.file);
         return byFile != 0 ? byFile : a.start.compareTo(b.start);
@@ -74,7 +74,14 @@ void main() {
       'search_net',
       'clear',
     ];
-    const ours = ['copy', 'lookup', 'highlight', 'remove', 'searchNet', 'clear'];
+    const ours = [
+      'copy',
+      'lookup',
+      'highlight',
+      'remove',
+      'searchNet',
+      'clear'
+    ];
     expect(ours.length, calibreDefaults.length);
     expect(ours.first, 'copy');
     expect(ours.last, 'clear');

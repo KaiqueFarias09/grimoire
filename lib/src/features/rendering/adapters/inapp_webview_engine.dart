@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:e_livre_viewer/src/engine/viewer_engine.dart';
+import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -83,13 +83,13 @@ class InAppWebViewEngine extends ViewerEngine {
 /// platforms (Windows, Linux).
 class InAppWebViewEngineFactory extends ViewerEngineFactory {
   @override
-  @override
   ViewerEngine createEngine(
     final int slot,
     final void Function(Object message, int source) onMessage,
   ) =>
       InAppWebViewEngine(slot: slot, onMessage: onMessage);
 
+  @override
   List<ViewerEngine> createPair(
     final void Function(Object message, int source) onMessage,
   ) {

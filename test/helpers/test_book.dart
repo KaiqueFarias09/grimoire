@@ -55,11 +55,20 @@ EpubBook buildTestBook() {
         ),
       ],
       css: [
-        TextFile(name: 'style.css', type: 'css', path: 'style.css', content: 'p{}'),
+        TextFile(
+            name: 'style.css', type: 'css', path: 'style.css', content: 'p{}'),
       ],
       html: [
-        TextFile(name: 'chapter1.html', type: 'html', path: 'chapter1.html', content: chapter1),
-        TextFile(name: 'chapter2.html', type: 'html', path: 'chapter2.html', content: chapter2),
+        TextFile(
+            name: 'chapter1.html',
+            type: 'html',
+            path: 'chapter1.html',
+            content: chapter1),
+        TextFile(
+            name: 'chapter2.html',
+            type: 'html',
+            path: 'chapter2.html',
+            content: chapter2),
       ],
       fonts: const [],
       others: const [],
@@ -72,8 +81,14 @@ EpubBook buildTestBook() {
       metadata: metadata,
       manifest: Epub2Manifest(
         items: [
-          ManifestItem(path: 'chapter1.html', id: 'c1', mediaType: 'application/xhtml+xml'),
-          ManifestItem(path: 'chapter2.html', id: 'c2', mediaType: 'application/xhtml+xml'),
+          ManifestItem(
+              path: 'chapter1.html',
+              id: 'c1',
+              mediaType: 'application/xhtml+xml'),
+          ManifestItem(
+              path: 'chapter2.html',
+              id: 'c2',
+              mediaType: 'application/xhtml+xml'),
         ],
       ),
       spine: Spine(tocId: null, items: const ['c1', 'c2']),

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:e_livre_viewer/src/server/book_server.dart';
+import 'package:e_livre_viewer/src/features/serving/book_server.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/test_book.dart';
@@ -82,7 +82,8 @@ void main() {
 
   test('serves viewer assets', () async {
     final server = BookServer(
-      assetLoader: (final name) async => Uint8List.fromList('/* $name */'.codeUnits),
+      assetLoader: (final name) async =>
+          Uint8List.fromList('/* $name */'.codeUnits),
     );
     await server.start(buildTestBook());
     addTearDown(server.stop);
@@ -101,7 +102,8 @@ void main() {
     await server.start(buildTestBook());
     addTearDown(server.stop);
 
-    final response = await _get(server.baseUrl.replace(path: '/book/nope.html'));
+    final response =
+        await _get(server.baseUrl.replace(path: '/book/nope.html'));
     expect(response.statusCode, 404);
   });
 

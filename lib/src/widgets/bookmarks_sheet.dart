@@ -13,8 +13,7 @@ Future<void> showBookmarksSheet(
     builder: (final sheetContext) => DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.6,
-      builder: (final sheetContext, final scrollController) =>
-          BookmarksSheet(
+      builder: (final sheetContext, final scrollController) => BookmarksSheet(
         controller: controller,
         scrollController: scrollController,
         onClose: () => Navigator.of(sheetContext).pop(),

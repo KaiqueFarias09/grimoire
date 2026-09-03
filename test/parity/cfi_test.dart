@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/utils/epub_cfi.dart';
+import 'package:e_livre_viewer/src/features/annotations/epub_cfi.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Parity tests ported from calibre

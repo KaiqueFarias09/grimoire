@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:e_livre_viewer/src/engine/viewer_engine.dart';
+import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:flutter/widgets.dart';
 
 /// A fake engine for tests: records loaded URLs and evaluated
@@ -53,13 +53,13 @@ class FakeViewerEngineFactory extends ViewerEngineFactory {
   final List<FakeViewerEngine> engines = <FakeViewerEngine>[];
 
   @override
-  @override
   ViewerEngine createEngine(
     final int slot,
     final void Function(Object message, int source) onMessage,
   ) =>
       FakeViewerEngine(slot: slot, onMessage: onMessage);
 
+  @override
   List<ViewerEngine> createPair(
     final void Function(Object message, int source) onMessage,
   ) {

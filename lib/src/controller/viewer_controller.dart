@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/bridge/viewer_bridge.dart';
-import 'package:e_livre_viewer/src/controller/viewer_position.dart';
-import 'package:e_livre_viewer/src/engine/viewer_engine.dart';
-import 'package:e_livre_viewer/src/server/book_server.dart';
-import 'package:e_livre_viewer/src/theme/viewer_theme.dart';
-import 'package:e_livre_viewer/src/utils/document_text.dart';
-import 'package:e_livre_viewer/src/utils/epub_cfi.dart';
+import 'package:e_livre_viewer/src/features/annotations/epub_cfi.dart';
+import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
+import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
+import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
+import 'package:e_livre_viewer/src/features/rendering/composition/viewer_engine_selector.dart';
+import 'package:e_livre_viewer/src/features/search/document_text.dart';
+import 'package:e_livre_viewer/src/features/serving/book_server.dart';
+import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'dart:ui' show Rect;
@@ -237,8 +238,7 @@ class ViewerBookmark {
       ViewerBookmark(
         id: json['id'] is String ? json['id'] as String : '',
         title: json['title'] is String ? json['title'] as String : '',
-        position:
-            json['position'] is String ? json['position'] as String : '',
+        position: json['position'] is String ? json['position'] as String : '',
         createdAtIso:
             json['createdAt'] is String ? json['createdAt'] as String : '',
         note: json['note'] is String ? json['note'] as String : null,
@@ -309,8 +309,7 @@ class ViewerController extends ChangeNotifier {
         _marginsPx = marginsPx,
         _layoutMode = layoutMode,
         _columnsPerScreen = columnsPerScreen,
-        _engineFactory =
-            engineFactory ?? ViewerEngineFactory.forCurrentPlatform() {
+        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
     readingState = ReadingState.of(book);
     _subscription = bridge.events.listen(_onEvent);
   }
@@ -344,8 +343,7 @@ class ViewerController extends ChangeNotifier {
 
   /// Where the reader left each file, so backward chapter turns can
   /// restore the exact column (Calibre forward_scroll_data).
-  final Map<int, _FileExitState> _exitStateByFile =
-      <int, _FileExitState>{};
+  final Map<int, _FileExitState> _exitStateByFile = <int, _FileExitState>{};
 
   // --- book-wide page measurement (Opção 2: medição lazy com cache) ---
 
@@ -395,8 +393,7 @@ class ViewerController extends ChangeNotifier {
 
   /// Reports the logical size of the hosting widget to the viewer.
   void setLogicalViewport(final double width, final double height) {
-    if (_logicalViewportWidth == width &&
-        _logicalViewportHeight == height) {
+    if (_logicalViewportWidth == width && _logicalViewportHeight == height) {
       return;
     }
     _logicalViewportWidth = width;
@@ -443,13 +440,12 @@ class ViewerController extends ChangeNotifier {
   void Function(String query)? onSearchNet;
 
   /// Calibre default template (session.pyj net_search_url).
-  static const String defaultNetSearchUrl =
-      'https://google.com/search?q={q}';
+  static const String defaultNetSearchUrl = 'https://google.com/search?q={q}';
 
   String _netSearchUrl = defaultNetSearchUrl;
   String? _fontFamily;
-  bool _justify = false;
-  bool _hyphenate = false;
+  final bool _justify = false;
+  final bool _hyphenate = false;
   int _searchCursor = -1;
 
   /// Calibre formatting of a web search for the selected text.
@@ -495,9 +491,6 @@ class ViewerController extends ChangeNotifier {
 
   /// Which engine slot is visible.
   int get activeEngineIndex => _active;
-
-  /// The running [BookServer], available after [start].
-  BookServer? get server => _server;
 
   /// The last text selection, when active (drives the highlight
   /// toolbar).
@@ -652,7 +645,8 @@ class ViewerController extends ChangeNotifier {
       start: selection.start,
       end: selection.end,
       text: selection.text,
-      before: _contextAround(selection.fileIndex, selection.start, before: true),
+      before:
+          _contextAround(selection.fileIndex, selection.start, before: true),
       after: _contextAround(selection.fileIndex, selection.end, before: false),
       style: style,
       createdAtIso: DateTime.now().toIso8601String(),
@@ -881,7 +875,8 @@ class ViewerController extends ChangeNotifier {
   Future<void> setTheme(final ViewerTheme theme) async {
     _theme = theme;
     notifyListeners();
-    await _send(<String, Object?>{'action': 'setVars', 'vars': theme.cssVars()});
+    await _send(
+        <String, Object?>{'action': 'setVars', 'vars': theme.cssVars()});
     await _send(<String, Object?>{
       'action': 'setOverrideColors',
       'enabled': theme.overrideBookColors,
@@ -1051,19 +1046,20 @@ class ViewerController extends ChangeNotifier {
       final at = _highlights.indexWhere((final h) => h.id == incoming.id);
       if (at < 0) {
         _highlights.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) > 0) {
+      } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) >
+          0) {
         _highlights[at] = incoming;
       }
     }
     for (final incoming in incomingBookmarks) {
       final at = _bookmarks.indexWhere(
         (final b) =>
-            b.title == incoming.title ||
-            b.position == incoming.position,
+            b.title == incoming.title || b.position == incoming.position,
       );
       if (at < 0) {
         _bookmarks.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) > 0) {
+      } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) >
+          0) {
         _bookmarks[at] = incoming;
       }
     }
@@ -1230,8 +1226,7 @@ class ViewerController extends ChangeNotifier {
         if (pending != null) {
           await _applyPending(slot, pending);
         }
-        final fileIndex =
-            slot < _loadedFile.length ? _loadedFile[slot] : null;
+        final fileIndex = slot < _loadedFile.length ? _loadedFile[slot] : null;
         if (fileIndex != null) {
           await _applyHighlightsToEngine(slot, fileIndex);
         }
@@ -1259,7 +1254,7 @@ class ViewerController extends ChangeNotifier {
         }
         final fromFile = _position.fileIndex;
         final target = fromFile + event.direction;
-        if (target >= 0 && target < (server?.itemCount ?? 0)) {
+        if (target >= 0 && target < (_server?.itemCount ?? 0)) {
           final _PendingNavigation pending;
           if (event.direction < 0) {
             final exit = _exitStateByFile[target];
@@ -1398,8 +1393,7 @@ class ViewerController extends ChangeNotifier {
       return;
     }
     _layoutSignature = signature;
-    _pageCacheKey =
-        '${bookTitleFingerprint()}/$signature';
+    _pageCacheKey = '${bookTitleFingerprint()}/$signature';
     final cached = _pageCacheByKey[_pageCacheKey];
     _measuredColumns = cached != null
         ? [...cached]
@@ -1417,9 +1411,7 @@ class ViewerController extends ChangeNotifier {
 
   /// (measured count, total items) for progress UI.
   (int, int) get pageMeasureProgress {
-    final measured = _measuredColumns
-        .where((final c) => c != null)
-        .length;
+    final measured = _measuredColumns.where((final c) => c != null).length;
     return (measured, _measuredColumns.length);
   }
 
@@ -1440,7 +1432,12 @@ class ViewerController extends ChangeNotifier {
         _measuredColumns.every((final c) => c != null);
     final page = math.min(
       total,
-      before + math.min(_position.column + 1, counts.isEmpty ? 1 : counts[math.min(_position.fileIndex, counts.length - 1)]),
+      before +
+          math.min(
+              _position.column + 1,
+              counts.isEmpty
+                  ? 1
+                  : counts[math.min(_position.fileIndex, counts.length - 1)]),
     );
     return (math.max(1, page).toInt(), math.max(1, total), allMeasured);
   }
@@ -1448,8 +1445,10 @@ class ViewerController extends ChangeNotifier {
   int _estimatePagesFor(final int fileIndex) {
     final chars = _documentTextOf(fileIndex).length;
     final density = currentPageIsMeasured
-        ? math.max(1, _documentTextOf(_position.fileIndex).length /
-            math.max(1, _measuredColumns[_position.fileIndex]!))
+        ? math.max(
+            1,
+            _documentTextOf(_position.fileIndex).length /
+                math.max(1, _measuredColumns[_position.fileIndex]!))
         : 1500.0;
     return chars <= 0 ? 1 : math.max(1, (chars / density).ceil());
   }
@@ -1496,8 +1495,7 @@ class ViewerController extends ChangeNotifier {
             final decoded = jsonDecode(raw);
             if (decoded is List) {
               _measuredColumns = <int?>[
-                for (final item in decoded)
-                  item is int ? item : null,
+                for (final item in decoded) item is int ? item : null,
               ];
               while (_measuredColumns.length < book.readingOrder.length) {
                 _measuredColumns.add(null);
@@ -1548,7 +1546,7 @@ class ViewerController extends ChangeNotifier {
     }
     _measureCursor = next;
     try {
-      await engine.loadUrl(server!.urlForItem(next));
+      await engine.loadUrl(_server!.urlForItem(next));
     } on Object {
       _measureCursor = -1;
     }
@@ -1638,9 +1636,7 @@ class ViewerController extends ChangeNotifier {
     }
     // Find the file whose text space contains it: try the current file
     // first, then scan (the steps are file-local).
-    for (var fileIndex = 0;
-        fileIndex < book.readingOrder.length;
-        fileIndex++) {
+    for (var fileIndex = 0; fileIndex < book.readingOrder.length; fileIndex++) {
       if (!book.readingOrder[fileIndex].isHtml) {
         continue;
       }
@@ -1659,7 +1655,7 @@ class ViewerController extends ChangeNotifier {
   /// Next reading-order section (chapter), Calibre's next_section.
   Future<void> nextChapter() async {
     final target = _position.fileIndex + 1;
-    if (target < (server?.itemCount ?? 0)) {
+    if (target < (_server?.itemCount ?? 0)) {
       await _navigate(target, const _PendingNavigation());
     }
   }

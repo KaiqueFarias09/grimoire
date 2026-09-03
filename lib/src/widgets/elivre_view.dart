@@ -1,7 +1,7 @@
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/bridge/viewer_bridge.dart';
+import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/controller/viewer_position.dart';
+import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:e_livre_viewer/src/widgets/reader_shell.dart';
 import 'dart:async';
 
@@ -94,7 +94,7 @@ class _ELivreViewState extends State<ELivreView> {
     }
     await controller.start();
     unawaited(
-      controller.ready.then((_) {
+      controller.ready.then((final _) {
         if (mounted) {
           widget.onReady?.call();
         }
@@ -157,10 +157,10 @@ class _ELivreViewState extends State<ELivreView> {
                 fit: BoxFit.contain,
                 errorBuilder: (final context, final error, final stack) =>
                     const Icon(
-                      Icons.broken_image,
-                      size: 48,
-                      color: Colors.white70,
-                    ),
+                  Icons.broken_image,
+                  size: 48,
+                  color: Colors.white70,
+                ),
               ),
             ),
           ),

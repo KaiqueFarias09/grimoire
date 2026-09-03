@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/engine/viewer_engine.dart';
+import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -55,13 +55,13 @@ class WebviewFlutterEngine extends ViewerEngine {
 /// Factory producing [WebviewFlutterEngine] pairs.
 class WebviewFlutterEngineFactory extends ViewerEngineFactory {
   @override
-  @override
   ViewerEngine createEngine(
     final int slot,
     final void Function(Object message, int source) onMessage,
   ) =>
       WebviewFlutterEngine(slot: slot, onMessage: onMessage);
 
+  @override
   List<ViewerEngine> createPair(
     final void Function(Object message, int source) onMessage,
   ) {

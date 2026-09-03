@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/theme/viewer_theme.dart';
+import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,8 +12,10 @@ void main() {
   });
 
   test('system follows brightness', () {
-    expect(ViewerTheme.system(Brightness.dark).background, ViewerTheme.dark.background);
-    expect(ViewerTheme.system(Brightness.light).background, ViewerTheme.light.background);
+    expect(ViewerTheme.system(Brightness.dark).background,
+        ViewerTheme.dark.background);
+    expect(ViewerTheme.system(Brightness.light).background,
+        ViewerTheme.light.background);
   });
 
   test('copyWith keeps untouched fields', () {
