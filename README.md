@@ -60,6 +60,18 @@ controller.defaultHighlightColor = ViewerHighlightColor.purple;
 final highlight = await controller.addHighlightFromSelection();
 print(highlight?.locator.serialize()); // ('eLv1:0:12', 'eLv1:0:31')
 
+// Progress without polling, plus chapter titles and reading time:
+controller.pageChanges.listen(
+  (change) => saveProgress(change.position.serialize(), change.chapterTitle),
+);
+controller.readingSessions.listen((session) => trackTime(session.duration));
+
+// Jump history (TOC, links, footnotes, search):
+if (controller.canGoBack) await controller.goBack();
+
+// Footnotes as popups instead of page jumps:
+controller.footnoteMode = ViewerFootnoteMode.popup;
+
 // Search:
 final results = await controller.search('white rabbit');
 await controller.goToSearchResult(results.first);

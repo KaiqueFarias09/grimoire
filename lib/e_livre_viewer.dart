@@ -26,6 +26,9 @@ export 'src/controller/viewer_controller.dart'
         ViewerHighlightDecoration,
         ViewerBookmark,
         ViewerLayoutMode,
+        ViewerFootnoteMode,
+        ViewerPageChange,
+        ReadingSessionEvent,
         BookPageCountMode;
 export 'src/features/navigation/viewer_position.dart'
     show ViewerLocator, ViewerPosition, ReadingState;

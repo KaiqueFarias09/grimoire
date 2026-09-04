@@ -128,9 +128,13 @@ class _ELivreViewState extends State<ELivreView> {
       }
     });
     _footnoteSub = controller.footnoteTapEvents.listen((final event) {
-      if (mounted) {
-        widget.onFootnoteTap?.call(event);
+      if (!mounted) {
+        return;
       }
+      if (event.text != null && !controller.useHostChrome) {
+        _showFootnotePopup(event);
+      }
+      widget.onFootnoteTap?.call(event);
     });
     if (widget.initialPosition != null) {
       await controller.goToSerializedPosition(widget.initialPosition!);
@@ -148,6 +152,24 @@ class _ELivreViewState extends State<ELivreView> {
         });
       }
     }
+  }
+
+  void _showFootnotePopup(final FootnoteTapEvent event) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (final sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.5,
+        maxChildSize: 0.85,
+        builder: (final sheetContext, final scrollController) => _FootnoteSheet(
+          event: event,
+          scrollController: scrollController,
+          onClose: () => Navigator.of(sheetContext).pop(),
+        ),
+      ),
+    );
   }
 
   void _notifyPosition() {
@@ -245,6 +267,41 @@ class _ELivreViewState extends State<ELivreView> {
           },
         );
       },
+    );
+  }
+}
+
+/// Built-in popup for footnote bodies in footnote popup mode.
+class _FootnoteSheet extends StatelessWidget {
+  const _FootnoteSheet({required this.event, required this.scrollController, this.onClose});
+
+  final FootnoteTapEvent event;
+  final ScrollController scrollController;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(final BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 8, 8),
+          child: Row(
+            children: [
+              Expanded(child: Text('Footnote', style: theme.textTheme.titleMedium)),
+              IconButton(icon: const Icon(Icons.close), onPressed: onClose),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: theme.colorScheme.outlineVariant),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(20),
+            child: SelectableText(event.text!, style: theme.textTheme.bodyMedium),
+          ),
+        ),
+      ],
     );
   }
 }

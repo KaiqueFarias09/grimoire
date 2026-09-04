@@ -83,9 +83,17 @@ class ViewImageEvent extends ViewerEvent {
 
 /// The reader tapped a link recognized as a footnote reference.
 class FootnoteTapEvent extends ViewerEvent {
-  FootnoteTapEvent({required this.href, super.source});
+  FootnoteTapEvent({required this.href, this.html, this.text, super.source});
 
   final String href;
+
+  /// The footnote body's raw HTML, resolved by the controller in
+  /// footnote popup mode; null in navigate mode or when the body
+  /// could not be resolved.
+  final String? html;
+
+  /// The footnote body as plain text (popup mode only).
+  final String? text;
 }
 
 /// The text selection changed (empty [text] means cleared).
@@ -133,8 +141,7 @@ class ChromeToggleEvent extends ViewerEvent {
 /// [accept] and the controller sends commands straight through its
 /// engines (`bridge.javaScriptFor` builds the expression).
 class ViewerBridge {
-  final StreamController<ViewerEvent> _events =
-      StreamController<ViewerEvent>.broadcast();
+  final StreamController<ViewerEvent> _events = StreamController<ViewerEvent>.broadcast();
 
   /// Stream of typed viewer events.
   Stream<ViewerEvent> get events => _events.stream;
@@ -176,10 +183,7 @@ class ViewerBridge {
     await _events.close();
   }
 
-  static ViewerEvent? _decode(
-    final Map<String, dynamic> map,
-    final int source,
-  ) {
+  static ViewerEvent? _decode(final Map<String, dynamic> map, final int source) {
     final type = map['type'];
     switch (type) {
       case 'ready':

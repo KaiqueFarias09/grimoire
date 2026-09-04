@@ -2,6 +2,30 @@
 
 ### Added
 
+- **Chapter-title API**: `chapterTitleFor(fileIndex)` and
+  `currentChapterTitle` map reading-order indexes to their covering
+  TOC section title (built once from the book's navigation, empty
+  labels skipped). Hosts stop fuzzy-matching hrefs themselves.
+- **Page-change events**: `controller.pageChanges` fires when the
+  location moves to another page, chapter, or whole-percent progress,
+  carrying the position, book-wide progress and chapter title. Hosts
+  persist progress from this stream instead of polling.
+- **Reading-session events**: `controller.readingSessions` emits
+  active-reading segments (`startedAt`/`endedAt`/`duration`) for time
+  tracking. Segments open on the first reading event and close after
+  `readingIdleTimeout` (default 45s, adjustable), at a five-minute
+  segment cap, or on dispose.
+- **Footnote popup mode**: `footnoteMode =
+  ViewerFootnoteMode.popup` keeps the reader on the page; footnote
+  taps resolve the target element's body from the book HTML and emit
+  `FootnoteTapEvent` with `html` and `text` fields. The built-in
+  shell shows a popup sheet; hosts with custom chrome get the content
+  on the event. Unresolvable targets fall back to navigation.
+- **Back/forward history**: explicit jumps (TOC, internal links,
+  footnotes, search, highlights, CFI, shortcuts) create history;
+  `goBack`/`goForward` traverse it and `canGoBack`/`canGoForward`
+  report availability. Page turns and chapter boundary turns never
+  create history (Calibre's back/forward semantics).
 - **Typography controls**: `setFontFamily` (null restores the book's
   own fonts), `setJustify` and `setHyphenate`, plus matching getters
   and constructor parameters. Changes relayout keeping position, feed

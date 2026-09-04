@@ -409,6 +409,140 @@ void main() {
       controller.toggleChrome();
       expect(controller.chromeVisible, isTrue);
     });
+
+    test('chapter titles map files to TOC sections', () {
+      expect(controller.chapterTitleFor(0), 'Chapter One');
+      expect(controller.chapterTitleFor(1), 'Chapter Two');
+      expect(controller.chapterTitleFor(99), isNull);
+      expect(controller.chapterTitleFor(-1), isNull);
+      expect(controller.currentChapterTitle, 'Chapter One');
+    });
+
+    test('page changes fire on moves and carry chapter titles', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      final changes = <ViewerPageChange>[];
+      final sub = controller.pageChanges.listen(changes.add);
+      addTearDown(sub.cancel);
+
+      factory.engines[controller.activeEngineIndex].postMessage({
+        'type': 'positionChanged',
+        'column': 1,
+        'columns': 8,
+        'offset': 20,
+        'chars': 44,
+        'frac': 0.25,
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(changes, hasLength(1));
+      expect(changes.first.position.column, 1);
+      expect(changes.first.progress, inInclusiveRange(0, 1));
+      expect(changes.first.chapterTitle, 'Chapter One');
+
+      // The same location reported again does not re-fire.
+      factory.engines[controller.activeEngineIndex].postMessage({
+        'type': 'positionChanged',
+        'column': 1,
+        'columns': 8,
+        'offset': 20,
+        'chars': 44,
+        'frac': 0.25,
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(changes, hasLength(1));
+    });
+
+    test('reading sessions close after the idle timeout', () async {
+      controller.readingIdleTimeout = const Duration(milliseconds: 80);
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      final sessions = <ReadingSessionEvent>[];
+      final sub = controller.readingSessions.listen(sessions.add);
+      addTearDown(sub.cancel);
+
+      factory.engines[controller.activeEngineIndex].postMessage({
+        'type': 'positionChanged',
+        'column': 0,
+        'columns': 4,
+        'offset': 5,
+        'chars': 44,
+        'frac': 0.1,
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      factory.engines[controller.activeEngineIndex].postMessage({
+        'type': 'positionChanged',
+        'column': 0,
+        'columns': 4,
+        'offset': 6,
+        'chars': 44,
+        'frac': 0.15,
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(sessions, hasLength(1));
+      expect(sessions.first.duration, greaterThan(Duration.zero));
+    });
+
+    test('footnote popup mode resolves content without navigating', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      controller.footnoteMode = ViewerFootnoteMode.popup;
+
+      final events = <FootnoteTapEvent>[];
+      final sub = controller.footnoteTapEvents.listen(events.add);
+      addTearDown(sub.cancel);
+      final engine = factory.engines[controller.activeEngineIndex];
+      final loadsBefore = engine.loadedUrls.length;
+
+      engine.postMessage({'type': 'footnoteTap', 'href': 'chapter1.html#p1'});
+      await Future<void>.delayed(Duration.zero);
+      expect(events, hasLength(1));
+      expect(events.first.text, 'Chapter one text here.');
+      expect(events.first.html, contains('<p id="p1">'));
+      expect(engine.loadedUrls.length, loadsBefore);
+    });
+
+    test('footnote navigate mode follows the link without content', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      final events = <FootnoteTapEvent>[];
+      final sub = controller.footnoteTapEvents.listen(events.add);
+      addTearDown(sub.cancel);
+
+      factory.engines[controller.activeEngineIndex].postMessage({
+        'type': 'footnoteTap',
+        'href': 'chapter1.html#p1',
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(events, hasLength(1));
+      expect(events.first.text, isNull);
+      expect(events.first.html, isNull);
+    });
+
+    test('jumps record history; back and forward restore them', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(controller.canGoBack, isFalse);
+
+      await controller.goToNavPoint(controller.book.navigation.navPoints[1]);
+      expect(controller.position.fileIndex, 1);
+      expect(controller.canGoBack, isTrue);
+      expect(controller.canGoForward, isFalse);
+
+      await controller.goBack();
+      expect(controller.position.fileIndex, 0);
+      expect(controller.canGoForward, isTrue);
+
+      await controller.goForward();
+      expect(controller.position.fileIndex, 1);
+
+      // Another jump from here drops the forward tail.
+      await controller.goToNavPoint(controller.book.navigation.navPoints[0]);
+      expect(controller.position.fileIndex, 0);
+      expect(controller.canGoForward, isFalse);
+    });
   });
 }
 

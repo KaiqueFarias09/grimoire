@@ -40,6 +40,17 @@ enum ViewerLayoutMode {
   scroll,
 }
 
+/// What tapping a footnote reference does.
+enum ViewerFootnoteMode {
+  /// Follows the link to the footnote target (default).
+  navigate,
+
+  /// Stays on the page and emits [FootnoteTapEvent] with the resolved
+  /// footnote body (the built-in shell shows it as a popup sheet);
+  /// falls back to navigating when the body cannot be resolved.
+  popup,
+}
+
 /// How a highlight draws over the text. Orthogonal to
 /// [ViewerHighlightColor]: a wavy underline in green is a valid
 /// combination (Calibre's kind/decoration split).
@@ -413,6 +424,44 @@ class ViewerSelection {
   ViewerLocator get locator => ViewerLocator(fileIndex: fileIndex, start: start, end: end);
 }
 
+/// A page turn: the visible location moved to another page (paged
+/// mode), chapter (any mode), or whole-percent progress (scroll
+/// mode). Persist reading progress from here instead of polling.
+@immutable
+class ViewerPageChange {
+  /// Creates a page change.
+  const ViewerPageChange({required this.position, required this.progress, this.chapterTitle});
+
+  /// The new reading location.
+  final ViewerPosition position;
+
+  /// Book-wide progress `0..1` at the new location.
+  final double progress;
+
+  /// TOC section covering the new location, when the book's
+  /// navigation has a titled entry for it.
+  final String? chapterTitle;
+}
+
+/// One stretch of active reading, for time tracking and Insights. A
+/// segment opens on the first reading event and closes after
+/// [ViewerController.readingIdleTimeout] without one, when a segment
+/// exceeds the internal cap, or when the controller is disposed.
+@immutable
+class ReadingSessionEvent {
+  /// Creates a reading session segment.
+  const ReadingSessionEvent({required this.startedAt, required this.endedAt});
+
+  /// When the segment opened.
+  final DateTime startedAt;
+
+  /// When the last reading event of the segment arrived.
+  final DateTime endedAt;
+
+  /// Active reading time in the segment.
+  Duration get duration => endedAt.difference(startedAt);
+}
+
 /// Drives the reader: two preloading webview engines, the book
 /// server, positions, bookmarks, highlights, search and settings.
 class ViewerController extends ChangeNotifier {
@@ -439,6 +488,7 @@ class ViewerController extends ChangeNotifier {
        _hyphenate = hyphenate,
        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
     readingState = ReadingState.of(book);
+    _buildChapterTitles();
     _subscription = bridge.events.listen(_onEvent);
   }
 
@@ -508,6 +558,20 @@ class ViewerController extends ChangeNotifier {
   bool _useHostChrome = false;
   bool _started = false;
   bool _disposed = false;
+  ViewerFootnoteMode _footnoteMode = ViewerFootnoteMode.navigate;
+  final StreamController<ViewerPageChange> _pageChanges =
+      StreamController<ViewerPageChange>.broadcast();
+  final StreamController<ReadingSessionEvent> _readingSessions =
+      StreamController<ReadingSessionEvent>.broadcast();
+  Duration _readingIdleTimeout = const Duration(seconds: 45);
+  static const Duration _maxReadingSegment = Duration(minutes: 5);
+  Timer? _sessionIdleTimer;
+  DateTime? _sessionStart;
+  DateTime? _lastActivity;
+  int _lastEmittedPagePercent = -1;
+  final List<_HistoryEntry> _history = <_HistoryEntry>[];
+  int _historyIndex = -1;
+  Map<int, String> _chapterTitlesByFile = const <int, String>{};
 
   ViewerTheme _theme;
   int _fontSizePx;
@@ -684,6 +748,290 @@ class ViewerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Page turns: fires when the reading location moves to another
+  /// page (paged mode), chapter (any mode), or whole-percent progress
+  /// (scroll mode). Persist reading progress from here instead of
+  /// polling [progress].
+  Stream<ViewerPageChange> get pageChanges => _pageChanges.stream;
+
+  /// Active reading segments for time tracking and Insights. A
+  /// segment opens on the first reading event and closes after
+  /// [readingIdleTimeout] without one, when it exceeds the internal
+  /// segment cap, or on [dispose].
+  Stream<ReadingSessionEvent> get readingSessions => _readingSessions.stream;
+
+  /// How long reading stays active after the last reading event.
+  Duration get readingIdleTimeout => _readingIdleTimeout;
+
+  set readingIdleTimeout(final Duration timeout) {
+    if (timeout <= Duration.zero) {
+      return;
+    }
+    _readingIdleTimeout = timeout;
+  }
+
+  /// What tapping a footnote reference does. Default:
+  /// [ViewerFootnoteMode.navigate].
+  ViewerFootnoteMode get footnoteMode => _footnoteMode;
+
+  set footnoteMode(final ViewerFootnoteMode mode) {
+    if (mode == _footnoteMode) {
+      return;
+    }
+    _footnoteMode = mode;
+    notifyListeners();
+  }
+
+  /// The TOC section title covering [fileIndex], or null when the
+  /// book's navigation has no titled entry for it.
+  String? chapterTitleFor(final int fileIndex) {
+    if (fileIndex < 0 || fileIndex >= book.readingOrder.length) {
+      return null;
+    }
+    return _chapterTitlesByFile[fileIndex];
+  }
+
+  /// The TOC section title covering the current position.
+  String? get currentChapterTitle => chapterTitleFor(_position.fileIndex);
+
+  /// Whether [goBack] can return to an earlier jump point. Page turns
+  /// never create history; explicit jumps (TOC, links, footnotes,
+  /// search, highlights, CFI) do.
+  bool get canGoBack => _historyIndex > 0;
+
+  /// Whether [goForward] can re-apply a jump undone by [goBack].
+  bool get canGoForward => _historyIndex < _history.length - 1;
+
+  /// Returns to the previous jump point (Calibre's back).
+  Future<void> goBack() async {
+    if (_historyIndex <= 0) {
+      return;
+    }
+    _historyIndex--;
+    notifyListeners();
+    final entry = _history[_historyIndex];
+    await _navigate(entry.fileIndex, entry.pending);
+  }
+
+  /// Re-applies the next jump point undone by [goBack] (Calibre's
+  /// forward).
+  Future<void> goForward() async {
+    if (_historyIndex >= _history.length - 1) {
+      return;
+    }
+    _historyIndex++;
+    notifyListeners();
+    final entry = _history[_historyIndex];
+    await _navigate(entry.fileIndex, entry.pending);
+  }
+
+  // --- jump history, page changes and reading sessions (internals) ---
+
+  /// Marks the pre-jump position: drops any forward tail (a new jump
+  /// after [goBack] discards forward history) and records where the
+  /// user was, paging included, when it differs from the tail.
+  void _beginJump() {
+    while (_history.length > _historyIndex + 1) {
+      _history.removeLast();
+    }
+    if (_historyIndex >= 0 && _historyEntryMatchesCurrent(_history[_historyIndex])) {
+      return;
+    }
+    _history.add(
+      _HistoryEntry(_position.fileIndex, _PendingNavigation(offset: _position.charOffset)),
+    );
+    _historyIndex = _history.length - 1;
+  }
+
+  /// Marks the jump destination once navigation is committed.
+  void _completeJump(final int target, final _PendingNavigation pending) {
+    _history.add(_HistoryEntry(target, pending));
+    _historyIndex = _history.length - 1;
+    notifyListeners();
+  }
+
+  bool _historyEntryMatchesCurrent(final _HistoryEntry entry) =>
+      entry.fileIndex == _position.fileIndex &&
+      entry.pending.offset != null &&
+      entry.pending.offset == _position.charOffset;
+
+  void _noteReadingActivity() {
+    final now = DateTime.now();
+    final start = _sessionStart;
+    if (start != null && now.difference(start) >= _maxReadingSegment) {
+      _emitReadingSession(now);
+    }
+    _lastActivity = now;
+    _sessionStart ??= now;
+    _sessionIdleTimer?.cancel();
+    _sessionIdleTimer = Timer(_readingIdleTimeout, () {
+      _emitReadingSession(DateTime.now());
+    });
+  }
+
+  /// Closes the open segment when [now] is at least
+  /// [_readingIdleTimeout] past the last activity.
+  void _emitReadingSession(final DateTime now) {
+    final start = _sessionStart;
+    final last = _lastActivity;
+    if (start == null || last == null) {
+      return;
+    }
+    if (now.difference(last) < _readingIdleTimeout) {
+      return;
+    }
+    _sessionStart = null;
+    _lastActivity = null;
+    if (!_readingSessions.isClosed) {
+      _readingSessions.add(ReadingSessionEvent(startedAt: start, endedAt: last));
+    }
+  }
+
+  void _emitPageChangeIfMoved(final int previousFile, final int previousColumn) {
+    final percent = (progress * 100).round();
+    final moved =
+        previousFile != _position.fileIndex ||
+        previousColumn != _position.column ||
+        percent != _lastEmittedPagePercent;
+    if (!moved) {
+      return;
+    }
+    _lastEmittedPagePercent = percent;
+    if (!_pageChanges.isClosed) {
+      _pageChanges.add(
+        ViewerPageChange(
+          position: _position,
+          progress: progress,
+          chapterTitle: currentChapterTitle,
+        ),
+      );
+    }
+  }
+
+  /// Maps reading-order indexes to their covering TOC section title.
+  void _buildChapterTitles() {
+    final entries = <(int, int, String)>[]; // (fileIndex, tocOrder, title)
+    var tocOrder = 0;
+    void walk(final List<NavPoint> points) {
+      for (final point in points) {
+        final title = documentText(point.label).replaceAll(RegExp(r'\s+'), ' ').trim();
+        final target = _resolveNavTarget(point.content);
+        if (title.isNotEmpty && target != null) {
+          entries.add((target.$1, tocOrder, title));
+        }
+        tocOrder++;
+        walk(point.subNavPoints);
+      }
+    }
+
+    walk(book.navigation.navPoints);
+    if (entries.isEmpty) {
+      return;
+    }
+    entries.sort((final a, final b) {
+      final byFile = a.$1.compareTo(b.$1);
+      return byFile != 0 ? byFile : a.$2.compareTo(b.$2);
+    });
+    final map = <int, String>{};
+    var entry = 0;
+    for (var fileIndex = 0; fileIndex < book.readingOrder.length; fileIndex++) {
+      while (entry + 1 < entries.length && entries[entry + 1].$1 <= fileIndex) {
+        entry++;
+      }
+      if (entries[entry].$1 <= fileIndex) {
+        map[fileIndex] = entries[entry].$3;
+      }
+    }
+    _chapterTitlesByFile = map;
+  }
+
+  /// Resolves a footnote href to its (raw html, plain text) body, or
+  /// null when the target cannot be found.
+  (String, String)? _resolveFootnote(final String href) {
+    final parts = href.split('#');
+    final path = parts[0];
+    final fragment = parts.length > 1 ? parts[1] : '';
+    if (path.isEmpty || fragment.isEmpty) {
+      return null;
+    }
+    final fileIndex = _resolveRelativePath(path);
+    if (fileIndex == null) {
+      return null;
+    }
+    final htmlByPath = <String, String>{
+      for (final file in book.files.html) file.path: file.content,
+    };
+    final content = htmlByPath[book.readingOrder[fileIndex].name];
+    if (content == null) {
+      return null;
+    }
+    final element = _extractAnchorHtml(content, fragment);
+    if (element == null) {
+      return null;
+    }
+    final text = documentText(element).replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    return (element, text);
+  }
+
+  static const Set<String> _voidHtmlTags = {
+    'area',
+    'base',
+    'br',
+    'col',
+    'embed',
+    'hr',
+    'img',
+    'input',
+    'link',
+    'meta',
+    'param',
+    'source',
+    'track',
+    'wbr',
+  };
+
+  /// Extracts the element carrying `id="[fragment]"` from raw HTML,
+  /// balancing tags of the same name (tolerant of messy books).
+  String? _extractAnchorHtml(final String html, final String fragment) {
+    final idPattern = RegExp('id\\s*=\\s*[\'"]${RegExp.escape(fragment)}[\'"]');
+    final idMatch = idPattern.firstMatch(html);
+    if (idMatch == null) {
+      return null;
+    }
+    final tagStart = html.lastIndexOf('<', idMatch.start);
+    if (tagStart < 0) {
+      return null;
+    }
+    final nameMatch = RegExp(r'<\s*([a-zA-Z][a-zA-Z0-9:-]*)').firstMatch(html.substring(tagStart));
+    if (nameMatch == null) {
+      return null;
+    }
+    final tag = nameMatch.group(1)!.toLowerCase();
+    final openEnd = html.indexOf('>', idMatch.start);
+    if (openEnd < 0) {
+      return null;
+    }
+    if (_voidHtmlTags.contains(tag) || html[openEnd - 1] == '/') {
+      return html.substring(tagStart, openEnd + 1);
+    }
+    final sameTag = RegExp('<(/?)\\s*$tag\\b[^>]*?(/)?>', caseSensitive: false);
+    var depth = 1;
+    for (final match in sameTag.allMatches(html, openEnd + 1)) {
+      if (match.group(2) == '/') {
+        continue; // self-closing
+      }
+      depth += match.group(1)!.isEmpty ? 1 : -1;
+      if (depth == 0) {
+        return html.substring(tagStart, match.end);
+      }
+    }
+    // Unbalanced markup: take everything after the opening tag.
+    return html.substring(tagStart);
+  }
+
   /// Starts the book server and the engines, loading the first file.
   Future<void> start() async {
     if (_started) {
@@ -713,7 +1061,15 @@ class ViewerController extends ChangeNotifier {
     _disposed = true;
     _subscription?.cancel();
     _preloadTimer?.cancel();
+    _sessionIdleTimer?.cancel();
+    final start = _sessionStart;
+    final last = _lastActivity;
+    if (start != null && last != null && !_readingSessions.isClosed) {
+      _readingSessions.add(ReadingSessionEvent(startedAt: start, endedAt: last));
+    }
     _highlightTaps.close();
+    _pageChanges.close();
+    _readingSessions.close();
     bridge.dispose();
     for (final engine in _engines) {
       engine.dispose();
@@ -737,7 +1093,10 @@ class ViewerController extends ChangeNotifier {
       return;
     }
     final (fileIndex, anchor) = target;
-    await _navigate(fileIndex, _PendingNavigation(anchor: anchor.isEmpty ? null : anchor));
+    _beginJump();
+    final pending = _PendingNavigation(anchor: anchor.isEmpty ? null : anchor);
+    await _navigate(fileIndex, pending);
+    _completeJump(fileIndex, pending);
     _chromeVisible = false;
     notifyListeners();
   }
@@ -753,7 +1112,10 @@ class ViewerController extends ChangeNotifier {
 
   /// Navigates to [position].
   Future<void> goToPosition(final ViewerPosition position) {
-    return _navigate(position.fileIndex, _PendingNavigation(offset: position.charOffset));
+    _beginJump();
+    final pending = _PendingNavigation(offset: position.charOffset);
+    _completeJump(position.fileIndex, pending);
+    return _navigate(position.fileIndex, pending);
   }
 
   // --- bookmarks ---
@@ -849,10 +1211,10 @@ class ViewerController extends ChangeNotifier {
 
   /// Jumps to a highlight and flashes its selection.
   Future<void> goToHighlight(final ViewerHighlight highlight) {
-    return _navigate(
-      highlight.fileIndex,
-      _PendingNavigation(selection: (highlight.start, highlight.end)),
-    );
+    _beginJump();
+    final pending = _PendingNavigation(selection: (highlight.start, highlight.end));
+    _completeJump(highlight.fileIndex, pending);
+    return _navigate(highlight.fileIndex, pending);
   }
 
   /// Relocates a persisted highlight against the current text of its
@@ -956,7 +1318,10 @@ class ViewerController extends ChangeNotifier {
 
   /// Navigates to and highlights a search result.
   Future<void> goToSearchResult(final ViewerSearchResult result) {
-    return _navigate(result.fileIndex, _PendingNavigation(selection: (result.start, result.end)));
+    _beginJump();
+    final pending = _PendingNavigation(selection: (result.start, result.end));
+    _completeJump(result.fileIndex, pending);
+    return _navigate(result.fileIndex, pending);
   }
 
   final StreamController<String> _imagePopups = StreamController<String>.broadcast();
@@ -1395,12 +1760,16 @@ class ViewerController extends ChangeNotifier {
         if (event.source != _active) {
           return;
         }
+        final previousFile = _position.fileIndex;
+        final previousColumn = _position.column;
         _position = _position.copyWith(
           charOffset: event.offset,
           column: event.column,
           columns: event.columns,
         );
         _fileFraction = event.frac;
+        _noteReadingActivity();
+        _emitPageChangeIfMoved(previousFile, previousColumn);
         notifyListeners();
         _scheduleMeasure();
       case BoundaryEvent():
@@ -1444,6 +1813,20 @@ class ViewerController extends ChangeNotifier {
         }
       case FootnoteTapEvent footnote:
         if (event.source == _active) {
+          if (_footnoteMode == ViewerFootnoteMode.popup) {
+            final content = _resolveFootnote(footnote.href);
+            if (content != null) {
+              _footnoteTaps.add(
+                FootnoteTapEvent(
+                  href: footnote.href,
+                  source: footnote.source,
+                  html: content.$1,
+                  text: content.$2,
+                ),
+              );
+              break;
+            }
+          }
           _footnoteTaps.add(footnote);
           await _followInternalLink(footnote.href);
         }
@@ -1775,7 +2158,10 @@ class ViewerController extends ChangeNotifier {
       }
       final offset = _cfiDocFor(fileIndex).offsetForCfi(parsed);
       if (offset != null) {
-        await _navigate(fileIndex, _PendingNavigation(offset: offset));
+        _beginJump();
+        final pending = _PendingNavigation(offset: offset);
+        _completeJump(fileIndex, pending);
+        await _navigate(fileIndex, pending);
         return true;
       }
     }
@@ -1815,14 +2201,20 @@ class ViewerController extends ChangeNotifier {
   Future<void> _handleShortcut(final String name) async {
     switch (name) {
       case 'bookStart':
-        await _navigate(0, const _PendingNavigation());
+        _beginJump();
+        const startPending = _PendingNavigation();
+        _completeJump(0, startPending);
+        await _navigate(0, startPending);
         _refreshPageCacheKey();
         _scheduleMeasure();
         if (!_readyCompleter.isCompleted) {
           _readyCompleter.complete();
         }
       case 'bookEnd':
-        await _navigate(book.readingOrder.length - 1, const _PendingNavigation(atEnd: true));
+        _beginJump();
+        const endPending = _PendingNavigation(atEnd: true);
+        _completeJump(book.readingOrder.length - 1, endPending);
+        await _navigate(book.readingOrder.length - 1, endPending);
       case 'moreColumns':
         await setColumnsPerScreen(math.min(4, _columnsPerScreen + 1));
       case 'fewerColumns':
@@ -1840,6 +2232,9 @@ class ViewerController extends ChangeNotifier {
     final fragment = withoutFragment.length > 1 ? withoutFragment[1] : '';
     if (path.isEmpty) {
       if (fragment.isNotEmpty) {
+        _beginJump();
+        final pending = _PendingNavigation(anchor: fragment);
+        _completeJump(_position.fileIndex, pending);
         await _send(<String, Object?>{'action': 'goToAnchor', 'id': fragment});
       }
       return;
@@ -1848,7 +2243,10 @@ class ViewerController extends ChangeNotifier {
     if (target == null) {
       return;
     }
-    await _navigate(target, _PendingNavigation(anchor: fragment.isEmpty ? null : fragment));
+    _beginJump();
+    final pending = _PendingNavigation(anchor: fragment.isEmpty ? null : fragment);
+    await _navigate(target, pending);
+    _completeJump(target, pending);
   }
 
   (int, String)? _resolveNavTarget(final String content) {
@@ -1904,6 +2302,15 @@ class _FileExitState {
 
   final int column;
   final int colsPerScreen;
+}
+
+/// One back/forward history location: a reading-order index plus the
+/// pending navigation that restores it exactly (offset or anchor).
+class _HistoryEntry {
+  const _HistoryEntry(this.fileIndex, this.pending);
+
+  final int fileIndex;
+  final _PendingNavigation pending;
 }
 
 class _PendingNavigation {
