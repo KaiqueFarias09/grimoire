@@ -2,6 +2,19 @@
 
 ### Added
 
+- **Annotation browser**: the bookmarks sheet is now a full
+  annotations browser — highlights grouped by chapter, color and
+  decoration filters, text search over highlights and notes, sort by
+  location or creation date, inline note editing, and one-tap export
+  to the clipboard as Markdown, HTML or plain text.
+- **Annotation export API** (zero dependencies): build a
+  `ViewerExportModel` from the controller (filters, sorting and
+  chapter grouping applied at build time), then render with
+  `toMarkdown()`, `toHtml()` or `toPlainText()`. Every output part
+  (chapter headings, highlights, notes, location links, bookmarks,
+  front matter, CSS) can be overridden with callbacks, or hosts can
+  walk the pure-data model and render anything themselves. Location
+  links support CFI, `eLv1` or both.
 - **Chapter-title API**: `chapterTitleFor(fileIndex)` and
   `currentChapterTitle` map reading-order indexes to their covering
   TOC section title (built once from the book's navigation, empty

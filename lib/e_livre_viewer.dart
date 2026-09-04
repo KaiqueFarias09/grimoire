@@ -16,6 +16,20 @@ export 'src/features/bridge/viewer_bridge.dart'
         ShortcutEvent,
         ViewImageEvent,
         FootnoteTapEvent;
+export 'src/features/annotations/export_html.dart'
+    show ViewerHtmlExportOptions, ViewerHtmlPartFormatter;
+export 'src/features/annotations/export_markdown.dart'
+    show ViewerMarkdownExportOptions, ViewerMarkdownPartFormatter;
+export 'src/features/annotations/export_model.dart'
+    show
+        ViewerExportModel,
+        ViewerExportChapter,
+        ViewerExportItem,
+        ViewerExportBookmark,
+        ViewerExportItemKind,
+        ViewerExportOptions,
+        ViewerExportSort,
+        ViewerExportLocationLinks;
 export 'src/controller/viewer_controller.dart'
     show
         ViewerController,

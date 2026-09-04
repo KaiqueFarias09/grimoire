@@ -1,6 +1,6 @@
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
-import 'package:e_livre_viewer/src/widgets/bookmarks_sheet.dart';
+import 'package:e_livre_viewer/src/widgets/annotations_sheet.dart';
 import 'package:e_livre_viewer/src/widgets/search_overlay.dart';
 import 'package:e_livre_viewer/src/widgets/toc_sheet.dart';
 import 'package:flutter/material.dart';
@@ -103,9 +103,9 @@ class _TopBar extends StatelessWidget {
                 onPressed: () => showSearchOverlay(context, controller),
               ),
               IconButton(
-                tooltip: 'Bookmarks and highlights',
+                tooltip: 'Annotations',
                 icon: const Icon(Icons.bookmarks_outlined),
-                onPressed: () => showBookmarksSheet(context, controller),
+                onPressed: () => showAnnotationsSheet(context, controller),
               ),
               _ThemeButton(controller: controller),
             ],
