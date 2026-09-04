@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
+import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -162,7 +163,7 @@ void main() {
     File('${cache.path}/tex-mml-svg.js').writeAsStringSync('// component');
     Directory('${cache.path}/tex').createSync(recursive: true);
     File('${cache.path}/tex/mhchem.js').writeAsStringSync('// mhchem');
-    server.mathJaxDirectory = cache;
+    server.mathJaxSource = MathJaxSource(cachePath: cache.path, scriptBase: '/__mathjax__');
 
     final component = await _get(server.baseUrl.replace(path: '/__mathjax__/tex-mml-svg.js'));
     expect(component.statusCode, 200);

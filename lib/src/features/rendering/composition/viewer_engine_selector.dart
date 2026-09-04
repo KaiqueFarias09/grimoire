@@ -1,22 +1,8 @@
-import 'dart:io' show Platform;
-
-import 'package:e_livre_viewer/src/features/rendering/adapters/inapp_webview_engine.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/webview_flutter_engine.dart';
-import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
-
 /// Selects the platform adapter at the composition boundary.
 ///
-/// [ViewerEngine] remains a platform-neutral contract. Applications may
-/// provide their own [desktopFactory] or inject a complete factory into
-/// [ViewerController] for testing and host-specific webview choices.
-ViewerEngineFactory selectViewerEngineFactory({
-  final bool? isWindows,
-  final bool? isLinux,
-  final ViewerEngineFactory? desktopFactory,
-}) {
-  final desktop = (isWindows ?? Platform.isWindows) || (isLinux ?? Platform.isLinux);
-  if (desktop) {
-    return desktopFactory ?? InAppWebViewEngineFactory();
-  }
-  return WebviewFlutterEngineFactory();
-}
+/// The IO variant routes mobile to `webview_flutter` and desktop to
+/// `flutter_inappwebview`; the web variant renders a native iframe.
+/// Conditional export picks the variant.
+library;
+
+export 'viewer_engine_selector_web.dart' if (dart.library.io) 'viewer_engine_selector_io.dart';

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Directory;
 import 'dart:math' as math;
 
 import 'package:e_livre/e_livre.dart';
@@ -579,7 +578,6 @@ class ViewerController extends ChangeNotifier {
   Map<int, String> _chapterTitlesByFile = const <int, String>{};
   MathJaxLoader _mathJaxLoader;
   bool _mathJaxEnabled = true;
-  Directory? _mathJaxCacheDirectory;
 
   ViewerTheme _theme;
   int _fontSizePx;
@@ -776,12 +774,10 @@ class ViewerController extends ChangeNotifier {
 
   /// Where the MathJax download cache lives (default: the system temp
   /// directory). Set before [start]; hosts wanting a durable cache
-  /// point it at an app-cache subdirectory.
-  Directory? get mathJaxCacheDirectory => _mathJaxCacheDirectory;
-
-  set mathJaxCacheDirectory(final Directory? directory) {
-    _mathJaxCacheDirectory = directory;
-  }
+  /// point it at an app-cache subdirectory. On the web there is no
+  /// cache; hosts wanting a mirror inject a MathJaxLoader with a
+  /// custom baseUrl instead.
+  String? mathJaxCachePath;
 
   /// Page turns: fires when the reading location moves to another
   /// page (paged mode), chapter (any mode), or whole-percent progress
@@ -1077,7 +1073,6 @@ class ViewerController extends ChangeNotifier {
     final server = BookServer();
     await server.start(book);
     _server = server;
-    server.mathJaxDirectory = _mathJaxCacheDirectory;
     if (_mathJaxEnabled &&
         book.files.html.any((final f) => f.content.toLowerCase().contains('<math'))) {
       // Nothing downloads unless a book actually has math.
@@ -1305,10 +1300,8 @@ class ViewerController extends ChangeNotifier {
   /// the next session.
   Future<void> _ensureMathJax() async {
     try {
-      final dir = await _mathJaxLoader.ensureAvailable(
-        cacheRoot: _mathJaxCacheDirectory ?? Directory.systemTemp,
-      );
-      _server?.mathJaxDirectory = dir;
+      final source = await _mathJaxLoader.ensureAvailable(cachePath: mathJaxCachePath);
+      _server?.mathJaxSource = source;
       notifyListeners();
     } on Object {
       // Offline or CDN unreachable: native MathML applies meanwhile.
@@ -2246,8 +2239,15 @@ class ViewerController extends ChangeNotifier {
         ? [...cached]
         : <int?>[for (var i = 0; i < book.readingOrder.length; i++) null];
     _pageCacheLoaded = true;
-    notifyListeners();
-    _scheduleMeasure();
+    // This can run inside a LayoutBuilder callback (the host reports
+    // its viewport during layout); notify outside the build phase.
+    scheduleMicrotask(() {
+      if (_disposed) {
+        return;
+      }
+      notifyListeners();
+      _scheduleMeasure();
+    });
   }
 
   /// Stable per-book part of the cache key.

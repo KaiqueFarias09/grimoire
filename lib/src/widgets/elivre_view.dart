@@ -275,14 +275,22 @@ class _ELivreViewState extends State<ELivreView> {
                     child: LayoutBuilder(
                       builder: (final context, final constraints) {
                         controller.setLogicalViewport(constraints.maxWidth, constraints.maxHeight);
+                        // The announcement must be positioned: a
+                        // zero-size non-positioned child collapses the
+                        // stack, and a zero-size platform view never
+                        // attaches on the web.
                         return Stack(
                           children: [
                             // Screen readers announce page turns
                             // (TalkBack/VoiceOver live region).
-                            Semantics(
-                              liveRegion: true,
-                              label: _pageAnnouncement,
-                              child: const SizedBox.shrink(),
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Semantics(
+                                  liveRegion: true,
+                                  label: _pageAnnouncement,
+                                  child: const SizedBox.shrink(),
+                                ),
+                              ),
                             ),
                             // Inactive engine below (preloaded content), active on
                             // top, reader chrome overlays everything.

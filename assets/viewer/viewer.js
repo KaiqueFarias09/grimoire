@@ -46,6 +46,12 @@
     }
     if (window[CHANNEL] && window[CHANNEL].postMessage) {
       window[CHANNEL].postMessage(JSON.stringify(message));
+      return;
+    }
+    // Flutter web: same-origin iframe, the host listens on the
+    // parent window and routes by event.source.
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(message, '*');
     }
   }
 

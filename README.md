@@ -6,13 +6,15 @@ A Calibre-style ebook reader widget for Flutter, built on
 layouts, themes, highlights, bookmarks, in-book search and a
 text-selection hook for dictionary lookups.
 
-Platforms: **Android, iOS, macOS** (webview_flutter) and **Windows,
-Linux** (flutter_inappwebview, auto-selected).
+Platforms: **Android, iOS, macOS** (webview_flutter), **Windows,
+Linux** (flutter_inappwebview, auto-selected) and **Web** (a native
+same-origin iframe through the SDK, no webview plugin).
 
 The architecture mirrors the Calibre E-book viewer: books are parsed
-to render-ready HTML by eLivre, served from memory over a loopback
-HTTP server, rendered in dual WebViews (one visible + one preloading
-the next chapter for instant transitions) and paginated with a CSS
+to render-ready HTML by eLivre, hosted in memory (loopback HTTP
+server on native platforms, same-origin blob URLs on the web),
+rendered in dual webviews (one visible + one preloading the next
+chapter for instant transitions) and paginated with a CSS
 multi-column layer using the same math Calibre uses.
 
 ## Usage
