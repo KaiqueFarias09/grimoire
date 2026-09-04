@@ -32,6 +32,7 @@ class ELivreView extends StatefulWidget {
     this.onReady,
     this.onViewImage,
     this.onFootnoteTap,
+    this.showShell = true,
     super.key,
   });
 
@@ -65,6 +66,12 @@ class ELivreView extends StatefulWidget {
   /// Called when the reader taps a footnote reference (after the
   /// navigation to the footnote target already happened).
   final ValueChanged<FootnoteTapEvent>? onFootnoteTap;
+
+  /// Whether to render the built-in reader chrome ([ReaderShell]).
+  /// Host apps that provide their own chrome (toolbars, TOC,
+  /// notebook) set this to false and drive everything through the
+  /// [controller].
+  final bool showShell;
 
   @override
   State<ELivreView> createState() => _ELivreViewState();
@@ -226,9 +233,10 @@ class _ELivreViewState extends State<ELivreView> {
                           Positioned.fill(child: engines[below].buildWidget()),
                         if (engines.length > active)
                           Positioned.fill(child: engines[active].buildWidget()),
-                        Positioned.fill(
-                          child: ReaderShell(controller: controller),
-                        ),
+                        if (widget.showShell)
+                          Positioned.fill(
+                            child: ReaderShell(controller: controller),
+                          ),
                       ],
                     );
                   },
