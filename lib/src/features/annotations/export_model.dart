@@ -207,9 +207,7 @@ class ViewerExportModel {
         : const <ViewerHighlight>[];
     _sort(highlights, options.sort);
 
-    final bookmarks = options.includeBookmarks
-        ? [...controller.bookmarks]
-        : <ViewerBookmark>[];
+    final bookmarks = options.includeBookmarks ? [...controller.bookmarks] : <ViewerBookmark>[];
     if (options.sort == ViewerExportSort.recentlyCreated) {
       bookmarks.sort(
         (final a, final b) => _createdAt(b.createdAtIso).compareTo(_createdAt(a.createdAtIso)),

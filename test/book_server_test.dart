@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -119,6 +120,56 @@ void main() {
 
     expect(server.itemCount, 2);
     expect(server.urlForItem(1).path, endsWith('/book/chapter2.html'));
+  });
+
+  test('math pages get the MathJax injection, plain pages do not', () async {
+    final mathBook = buildTestBook();
+    final first = mathBook.files.html[0];
+    mathBook.files.html[0] = TextFile(
+      name: first.name,
+      type: first.type,
+      path: first.path,
+      content: '<html><body><p><math><mi>x</mi></math></p></body></html>',
+    );
+    final server = BookServer(
+      assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+    );
+    await server.start(mathBook);
+    addTearDown(server.stop);
+
+    final mathPage = await _get(server.urlForPath('chapter1.html'));
+    final mathHtml = await _body(mathPage);
+    expect(mathHtml, contains('window.MathJax='));
+    expect(mathHtml, contains('/__mathjax__/tex-mml-svg.js'));
+
+    final plainPage = await _get(server.urlForPath('chapter2.html'));
+    expect(await _body(plainPage), isNot(contains('window.MathJax=')));
+  });
+
+  test('__mathjax__ serves the cache with a whitelist', () async {
+    final server = BookServer(
+      assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+    );
+    await server.start(buildTestBook());
+    addTearDown(server.stop);
+
+    // Not downloaded yet -> 404, pages fall back to native MathML.
+    final missing = await _get(server.baseUrl.replace(path: '/__mathjax__/tex-mml-svg.js'));
+    expect(missing.statusCode, 404);
+
+    final cache = await Directory.systemTemp.createTemp('mathjax-cache');
+    addTearDown(() => cache.delete(recursive: true));
+    File('${cache.path}/tex-mml-svg.js').writeAsStringSync('// component');
+    Directory('${cache.path}/tex').createSync(recursive: true);
+    File('${cache.path}/tex/mhchem.js').writeAsStringSync('// mhchem');
+    server.mathJaxDirectory = cache;
+
+    final component = await _get(server.baseUrl.replace(path: '/__mathjax__/tex-mml-svg.js'));
+    expect(component.statusCode, 200);
+    expect(component.headers.contentType?.mimeType, 'application/javascript');
+
+    final traversal = await _get(server.baseUrl.replace(path: '/__mathjax__/nope.js'));
+    expect(traversal.statusCode, 404);
   });
 
   test('injectViewer handles html without a head', () {

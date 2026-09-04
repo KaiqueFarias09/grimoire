@@ -1212,6 +1212,13 @@
 
   // --- narration marks (read-aloud / media overlays) ---
 
+  // MathJax typesetting re-flows the columns; the injected page
+  // config calls this once the startup promise settles.
+  window.__elivreMathJaxDone = function () {
+    relayoutKeepingPosition();
+    reportPosition();
+  };
+
   // Marks the [start, end) range as the narration focus. The word
   // sub-range (wordStart..wordEnd) is optional and renders stronger.
   // Taps on these spans are NOT intercepted: page turns keep working

@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Directory;
 import 'dart:math' as math;
 
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
+import 'package:e_livre_viewer/src/features/mathjax/mathjax_loader.dart';
 import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:e_livre_viewer/src/features/rendering/composition/viewer_engine_selector.dart';
@@ -478,6 +480,7 @@ class ViewerController extends ChangeNotifier {
     final bool hyphenate = false,
     this.onExternalLink,
     final ViewerEngineFactory? engineFactory,
+    final MathJaxLoader? mathJaxLoader,
   }) : _theme = theme,
        _fontSizePx = fontSizePx,
        _marginsPx = marginsPx,
@@ -486,6 +489,7 @@ class ViewerController extends ChangeNotifier {
        _fontFamily = fontFamily,
        _justify = justify,
        _hyphenate = hyphenate,
+       _mathJaxLoader = mathJaxLoader ?? MathJaxLoader(),
        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
     readingState = ReadingState.of(book);
     _buildChapterTitles();
@@ -572,6 +576,9 @@ class ViewerController extends ChangeNotifier {
   final List<_HistoryEntry> _history = <_HistoryEntry>[];
   int _historyIndex = -1;
   Map<int, String> _chapterTitlesByFile = const <int, String>{};
+  MathJaxLoader _mathJaxLoader;
+  bool _mathJaxEnabled = true;
+  Directory? _mathJaxCacheDirectory;
 
   ViewerTheme _theme;
   int _fontSizePx;
@@ -746,6 +753,27 @@ class ViewerController extends ChangeNotifier {
       _chromeVisible = false;
     }
     notifyListeners();
+  }
+
+  /// Whether books containing MathML get MathJax rendering (downloaded
+  /// lazily on first use; nothing bundled). Default: true.
+  bool get mathJaxEnabled => _mathJaxEnabled;
+
+  set mathJaxEnabled(final bool enabled) {
+    if (enabled == _mathJaxEnabled) {
+      return;
+    }
+    _mathJaxEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Where the MathJax download cache lives (default: the system temp
+  /// directory). Set before [start]; hosts wanting a durable cache
+  /// point it at an app-cache subdirectory.
+  Directory? get mathJaxCacheDirectory => _mathJaxCacheDirectory;
+
+  set mathJaxCacheDirectory(final Directory? directory) {
+    _mathJaxCacheDirectory = directory;
   }
 
   /// Page turns: fires when the reading location moves to another
@@ -1042,6 +1070,12 @@ class ViewerController extends ChangeNotifier {
     final server = BookServer();
     await server.start(book);
     _server = server;
+    server.mathJaxDirectory = _mathJaxCacheDirectory;
+    if (_mathJaxEnabled &&
+        book.files.html.any((final f) => f.content.toLowerCase().contains('<math'))) {
+      // Nothing downloads unless a book actually has math.
+      unawaited(_ensureMathJax());
+    }
 
     _engines = _engineFactory.createPair(
       (final message, final source) => bridge.accept(message, source: source),
@@ -1253,6 +1287,25 @@ class ViewerController extends ChangeNotifier {
       }
     }
     return '';
+  }
+
+  /// The canonical character space of [fileIndex]'s content, or ''
+  /// when the file is not HTML. Narration segments against this.
+  String documentTextFor(final int fileIndex) => _documentTextOf(fileIndex);
+
+  /// Lazy-downloads the MathJax cache and wires it into the book
+  /// server. Failures degrade to native MathML rendering and retry on
+  /// the next session.
+  Future<void> _ensureMathJax() async {
+    try {
+      final dir = await _mathJaxLoader.ensureAvailable(
+        cacheRoot: _mathJaxCacheDirectory ?? Directory.systemTemp,
+      );
+      _server?.mathJaxDirectory = dir;
+      notifyListeners();
+    } on Object {
+      // Offline or CDN unreachable: native MathML applies meanwhile.
+    }
   }
 
   Future<void> _applyHighlightsToEngine(final int slot, final int fileIndex) async {
@@ -1865,6 +1918,14 @@ class ViewerController extends ChangeNotifier {
           }
           _footnoteTaps.add(footnote);
           await _followInternalLink(footnote.href);
+        }
+      case MathJaxReadyEvent():
+        if (event.source == _active) {
+          // Typesetting re-flowed the columns: real page counts are
+          // only measurable now.
+          _refreshPageCacheKey();
+          _scheduleMeasure();
+          notifyListeners();
         }
       case LinkTapEvent link:
         if (event.source != _active) {

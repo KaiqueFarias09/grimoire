@@ -130,6 +130,12 @@ class HighlightTapEvent extends ViewerEvent {
   final String id;
 }
 
+/// MathJax finished typesetting the loaded page; column layout may
+/// have changed, so the reader re-flows and re-measures.
+class MathJaxReadyEvent extends ViewerEvent {
+  MathJaxReadyEvent({required super.source});
+}
+
 /// The center tap zone asked the host to toggle the chrome.
 class ChromeToggleEvent extends ViewerEvent {
   ChromeToggleEvent({super.source});
@@ -252,6 +258,8 @@ class ViewerBridge {
           href: map['href'] is String ? map['href'] as String : '',
           source: source,
         );
+      case 'mathjaxReady':
+        return MathJaxReadyEvent(source: source);
       case 'shortcut':
         return ShortcutEvent(
           name: map['name'] is String ? map['name'] as String : '',

@@ -15,7 +15,9 @@ export 'src/features/bridge/viewer_bridge.dart'
         FontSizeBumpEvent,
         ShortcutEvent,
         ViewImageEvent,
-        FootnoteTapEvent;
+        FootnoteTapEvent,
+        MathJaxReadyEvent;
+export 'src/features/mathjax/mathjax_loader.dart' show MathJaxLoader;
 export 'src/features/annotations/export_html.dart'
     show ViewerHtmlExportOptions, ViewerHtmlPartFormatter;
 export 'src/features/annotations/export_markdown.dart'

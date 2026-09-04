@@ -34,6 +34,15 @@ class BookServer {
   final Map<String, Uint8List> _assets = <String, Uint8List>{};
   List<ReadingOrderItem> _order = const <ReadingOrderItem>[];
 
+  /// Directory holding the downloaded MathJax cache. When null (not
+  /// downloaded yet, or the book has no math), `/__mathjax__/`
+  /// returns 404 and pages fall back to native MathML rendering.
+  Directory? mathJaxDirectory;
+
+  /// Whether [content] is a MathML document (Calibre's sniff).
+  static bool containsMath(final String content) =>
+      content.toLowerCase().contains('<math');
+
   /// Base URL of the server (e.g. `http://localhost:41234`).
   Uri get baseUrl {
     final server = _httpServer;
@@ -110,6 +119,9 @@ class BookServer {
       if (path.startsWith('__page__/')) {
         return _syntheticPage(int.tryParse(path.substring('__page__/'.length)));
       }
+      if (path.startsWith('__mathjax__/')) {
+        return _serveMathJax(path.substring('__mathjax__/'.length));
+      }
       if (path.startsWith('book/')) {
         return _serveBookFile(request, Uri.decodeComponent(path.substring('book/'.length)));
       }
@@ -139,7 +151,12 @@ class BookServer {
     }
     if (content is String) {
       if (_isHtmlName(rawPath)) {
-        return shelf.Response.ok(_injectViewer(content), headers: _htmlHeaders);
+        final html = _injectViewer(content);
+        // Calibre's heuristic: only math pages pay for MathJax.
+        return shelf.Response.ok(
+          containsMath(content) ? _injectMathJax(html) : html,
+          headers: _htmlHeaders,
+        );
       }
       return shelf.Response.ok(
         content,
@@ -252,6 +269,69 @@ class BookServer {
         'initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
         '<link rel="stylesheet" href="/__viewer__/viewer.css"/>'
         '<script defer src="/__viewer__/viewer.js"></script>';
+    final headOpen = RegExp(r'<head[^>]*>', caseSensitive: false).firstMatch(html);
+    if (headOpen != null) {
+      final at = headOpen.end;
+      return html.substring(0, at) + injection + html.substring(at);
+    }
+    final htmlOpen = RegExp(r'<html[^>]*>', caseSensitive: false).firstMatch(html);
+    if (htmlOpen != null) {
+      final at = htmlOpen.end;
+      return '${html.substring(0, at)}<head>$injection</head>'
+          '${html.substring(at)}';
+    }
+    return '<!DOCTYPE html><html><head>$injection</head>'
+        '<body>$html</body></html>';
+  }
+
+  /// Files the `/__mathjax__/` route may serve.
+  static const Set<String> _mathJaxWhitelist = {
+    'tex-mml-svg.js',
+    'tex/mhchem.js',
+  };
+
+  shelf.Response _serveMathJax(final String relative) {
+    final dir = mathJaxDirectory;
+    if (dir == null || !_mathJaxWhitelist.contains(relative)) {
+      return shelf.Response.notFound('No MathJax file: $relative');
+    }
+    final file = File('${dir.path}/$relative');
+    if (!file.existsSync()) {
+      return shelf.Response.notFound('No MathJax file: $relative');
+    }
+    return shelf.Response.ok(
+      file.readAsBytesSync(),
+      headers: {'Content-Type': 'application/javascript'},
+    );
+  }
+
+  /// Calibre-parity MathJax boot: SVG output, mhchem for chemistry,
+  /// menus off, and a `mathjaxReady` bridge message once typesetting
+  /// settles so the reader can re-flow pagination. A single retry
+  /// re-adds the script in case the cache finished downloading after
+  /// the page had already loaded.
+  String _injectMathJax(final String html) {
+    const injection = '<script>'
+        'window.MathJax={'
+        'loader:{load:["[tex]/mhchem"]},'
+        'tex:{packages:{"[+]":["mhchem"]}},'
+        'svg:{fontCache:"global"},'
+        'options:{enableMenu:false},'
+        'startup:{pageReady:function(){'
+        'return MathJax.startup.promise.then(function(){'
+        'if(window.__elivreMathJaxDone){window.__elivreMathJaxDone();}'
+        'if(window.__elivre){window.__elivre({type:"mathjaxReady"});}'
+        '});}}};'
+        '</script>'
+        '<script defer src="/__mathjax__/tex-mml-svg.js"></script>'
+        '<script>'
+        'setTimeout(function(){'
+        'if(!(window.MathJax&&window.MathJax.typeset)){'
+        'var s=document.createElement("script");'
+        's.defer=true;s.src="/__mathjax__/tex-mml-svg.js";'
+        'document.head.appendChild(s);}'
+        '},2500);'
+        '</script>';
     final headOpen = RegExp(r'<head[^>]*>', caseSensitive: false).firstMatch(html);
     if (headOpen != null) {
       final at = headOpen.end;
