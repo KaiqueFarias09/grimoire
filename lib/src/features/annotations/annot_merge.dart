@@ -52,9 +52,7 @@ class CalibreAnnot {
   for (final annot in all) {
     if (seen.add(annot.key)) {
       final candidates = groups[annot.key]!;
-      if (!changed &&
-          candidates.length > 1 &&
-          candidates[0].timestamp != candidates[1].timestamp) {
+      if (!changed && candidates.length > 1 && candidates[0].timestamp != candidates[1].timestamp) {
         changed = true;
       }
       ans.add(candidates[0]);

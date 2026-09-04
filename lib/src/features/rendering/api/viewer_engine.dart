@@ -41,7 +41,5 @@ abstract class ViewerEngineFactory {
     final void Function(Object message, int source) onMessage,
   );
 
-  List<ViewerEngine> createPair(
-    final void Function(Object message, int source) onMessage,
-  );
+  List<ViewerEngine> createPair(final void Function(Object message, int source) onMessage);
 }

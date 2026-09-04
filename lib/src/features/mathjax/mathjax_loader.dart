@@ -10,17 +10,14 @@ import 'dart:typed_data';
 class MathJaxLoader {
   /// Creates a loader. [baseUrl] overrides the CDN (mirrors/offline
   /// pre-seeding); [fetch] replaces the HTTP layer in tests.
-  MathJaxLoader({
-    this.baseUrl = defaultBaseUrl,
-    final Future<Uint8List> Function(Uri url)? fetch,
-  }) : _fetch = fetch;
+  MathJaxLoader({this.baseUrl = defaultBaseUrl, final Future<Uint8List> Function(Uri url)? fetch})
+    : _fetch = fetch;
 
   /// Pinned MathJax version.
   static const String version = '3.2.2';
 
   /// CDN serving the combined ES5 components.
-  static const String defaultBaseUrl =
-      'https://cdn.jsdelivr.net/npm/mathjax@$version/es5';
+  static const String defaultBaseUrl = 'https://cdn.jsdelivr.net/npm/mathjax@$version/es5';
 
   /// The combined component: TeX + MathML input, SVG output.
   static const String componentPath = 'tex-mml-svg.js';
@@ -54,9 +51,7 @@ class MathJaxLoader {
         continue;
       }
       await file.parent.create(recursive: true);
-      final bytes = await (this._fetch ?? _defaultFetch)(
-        Uri.parse('$baseUrl/$relative'),
-      );
+      final bytes = await (this._fetch ?? _defaultFetch)(Uri.parse('$baseUrl/$relative'));
       await file.writeAsBytes(bytes, flush: true);
     }
     marker.writeAsStringSync(version, flush: true);

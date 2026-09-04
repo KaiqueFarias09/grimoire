@@ -13,9 +13,7 @@ void main() {
     expect(results, hasLength(1));
     final hit = results.first;
     expect(hit.fileIndex, 0);
-    final text = documentText(
-      controller.book.files.html.first.content,
-    );
+    final text = documentText(controller.book.files.html.first.content);
     expect(text.substring(hit.start, hit.end).toLowerCase(), 'more words');
     expect(hit.excerpt, contains('search'));
   });

@@ -56,13 +56,10 @@ class FakeViewerEngineFactory extends ViewerEngineFactory {
   ViewerEngine createEngine(
     final int slot,
     final void Function(Object message, int source) onMessage,
-  ) =>
-      FakeViewerEngine(slot: slot, onMessage: onMessage);
+  ) => FakeViewerEngine(slot: slot, onMessage: onMessage);
 
   @override
-  List<ViewerEngine> createPair(
-    final void Function(Object message, int source) onMessage,
-  ) {
+  List<ViewerEngine> createPair(final void Function(Object message, int source) onMessage) {
     final pair = <FakeViewerEngine>[
       FakeViewerEngine(slot: 0, onMessage: onMessage),
       FakeViewerEngine(slot: 1, onMessage: onMessage),

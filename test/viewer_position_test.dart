@@ -27,15 +27,10 @@ void main() {
     expect(state.totalLength, state.lengths[0] + state.lengths[1]);
 
     // Start of book.
-    expect(
-      state.progressOf(const ViewerPosition(fileIndex: 0, charOffset: 0)),
-      0.0,
-    );
+    expect(state.progressOf(const ViewerPosition(fileIndex: 0, charOffset: 0)), 0.0);
     // End of book.
     expect(
-      state.progressOf(
-        ViewerPosition(fileIndex: 1, charOffset: state.lengths[1]),
-      ),
+      state.progressOf(ViewerPosition(fileIndex: 1, charOffset: state.lengths[1])),
       closeTo(1.0, 0.0001),
     );
     // Halfway through the second file:
@@ -43,10 +38,7 @@ void main() {
     final mid = state.lengths[1] ~/ 2;
     expect(
       state.progressOf(ViewerPosition(fileIndex: 1, charOffset: mid)),
-      closeTo(
-        (state.lengths[0] + mid) / state.totalLength,
-        0.001,
-      ),
+      closeTo((state.lengths[0] + mid) / state.totalLength, 0.001),
     );
   });
 

@@ -23,12 +23,7 @@ void main() {
 
   // Mirrors viewer.js: columnAt() with the tail clamp.
   // Parity: calibre src/pyj/read_book/paged_mode.pyj:106-113.
-  int columnAt(
-    final int x,
-    final int colSize,
-    final int gap, {
-    required final int scrollWidth,
-  }) {
+  int columnAt(final int x, final int colSize, final int gap, {required final int scrollWidth}) {
     final colAndGap = colSize + gap;
     var pos = x;
     if (pos >= scrollWidth - colAndGap) {
@@ -102,8 +97,7 @@ void main() {
         final (colSize, gap) = layout(screen, n, 20);
         expect((screen + gap) % n, 0, reason: 'screen=$screen n=$n');
         if (colSize > 80) {
-          expect(colSize * n + (n - 1) * gap, screen,
-              reason: 'screen=$screen n=$n');
+          expect(colSize * n + (n - 1) * gap, screen, reason: 'screen=$screen n=$n');
         }
       }
     }

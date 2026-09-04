@@ -23,21 +23,16 @@ import 'dart:math' as math;
       ? 1500.0
       : math.max(1.0, activeChars / math.max(1, activeColumns));
   final counts = <int>[
-    for (final chars in fileChars)
-      chars <= 0 ? 1 : math.max(1, (chars / density).ceil()),
+    for (final chars in fileChars) chars <= 0 ? 1 : math.max(1, (chars / density).ceil()),
   ];
   final total = counts.fold(0, (final a, final b) => a + b);
   var before = 0;
   for (var i = 0; i < activeFileIndex && i < counts.length; i++) {
     before += counts[i];
   }
-  final inFilePages =
-      activeFileIndex < counts.length ? counts[activeFileIndex] : 1;
+  final inFilePages = activeFileIndex < counts.length ? counts[activeFileIndex] : 1;
   final page = math
-      .min(
-        total,
-        before + math.min(math.max(0, activeColumn) + 1, inFilePages),
-      )
+      .min(total, before + math.min(math.max(0, activeColumn) + 1, inFilePages))
       .toInt();
   return (math.max(1, page), math.max(1, total), counts);
 }

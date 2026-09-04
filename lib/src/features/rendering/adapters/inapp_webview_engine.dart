@@ -50,8 +50,7 @@ class InAppWebViewEngine extends ViewerEngine {
       },
       shouldOverrideUrlLoading: (final controller, final action) async {
         final url = action.request.url?.toString() ?? '';
-        if (url.startsWith('http://localhost:') ||
-            url.startsWith('http://127.0.0.1:')) {
+        if (url.startsWith('http://localhost:') || url.startsWith('http://127.0.0.1:')) {
           return NavigationActionPolicy.ALLOW;
         }
         return NavigationActionPolicy.CANCEL;
@@ -62,9 +61,7 @@ class InAppWebViewEngine extends ViewerEngine {
   @override
   Future<void> loadUrl(final Uri url) async {
     await _created.future;
-    await _controller?.loadUrl(
-      urlRequest: URLRequest(url: WebUri(url.toString())),
-    );
+    await _controller?.loadUrl(urlRequest: URLRequest(url: WebUri(url.toString())));
   }
 
   @override
@@ -86,13 +83,10 @@ class InAppWebViewEngineFactory extends ViewerEngineFactory {
   ViewerEngine createEngine(
     final int slot,
     final void Function(Object message, int source) onMessage,
-  ) =>
-      InAppWebViewEngine(slot: slot, onMessage: onMessage);
+  ) => InAppWebViewEngine(slot: slot, onMessage: onMessage);
 
   @override
-  List<ViewerEngine> createPair(
-    final void Function(Object message, int source) onMessage,
-  ) {
+  List<ViewerEngine> createPair(final void Function(Object message, int source) onMessage) {
     return <ViewerEngine>[
       InAppWebViewEngine(slot: 0, onMessage: onMessage),
       InAppWebViewEngine(slot: 1, onMessage: onMessage),

@@ -9,20 +9,16 @@ CalibreAnnot annot({
   required final String id,
   required final int year,
   required final int cfiNumber,
-}) =>
-    CalibreAnnot(
-      key: key,
-      id: id,
-      // '20{year}-06-29T03:21:48.895323+00:00' in the Calibre fixture.
-      timestamp: DateTime.utc(2000 + year, 6, 29, 3, 21, 48).add(
-        const Duration(microseconds: 895323),
-      ),
-      position: cfiNumber,
-    );
+}) => CalibreAnnot(
+  key: key,
+  id: id,
+  // '20{year}-06-29T03:21:48.895323+00:00' in the Calibre fixture.
+  timestamp: DateTime.utc(2000 + year, 6, 29, 3, 21, 48).add(const Duration(microseconds: 895323)),
+  position: cfiNumber,
+);
 
 void main() {
-  test(
-      'merging_annotations: bookmark case returns [10, 2, 30, 3] '
+  test('merging_annotations: bookmark case returns [10, 2, 30, 3] '
       '(parity with calibre test_annotations.pyj)', () {
     final a = [
       annot(key: 'one', id: '1', year: 20, cfiNumber: 2),

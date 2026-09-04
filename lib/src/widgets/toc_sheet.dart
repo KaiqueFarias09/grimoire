@@ -3,10 +3,7 @@ import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:flutter/material.dart';
 
 /// Opens the table of contents as a bottom sheet.
-Future<void> showTocSheet(
-  final BuildContext context,
-  final ViewerController controller,
-) {
+Future<void> showTocSheet(final BuildContext context, final ViewerController controller) {
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -52,13 +49,12 @@ class TocSheet extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
           child: Row(
             children: [
-              Expanded(
-                child: Text(
-                  'Contents',
-                  style: theme.textTheme.titleMedium,
-                ),
+              Expanded(child: Text('Contents', style: theme.textTheme.titleMedium)),
+              IconButton(
+                tooltip: 'Close contents',
+                icon: const Icon(Icons.close),
+                onPressed: onClose,
               ),
-              IconButton(icon: const Icon(Icons.close), onPressed: onClose),
             ],
           ),
         ),
@@ -70,17 +66,8 @@ class TocSheet extends StatelessWidget {
               final entry = points[index];
               return ListTile(
                 dense: true,
-                contentPadding: EdgeInsets.fromLTRB(
-                  20.0 + entry.depth * 16,
-                  0,
-                  20,
-                  0,
-                ),
-                title: Text(
-                  entry.point.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                contentPadding: EdgeInsets.fromLTRB(20.0 + entry.depth * 16, 0, 20, 0),
+                title: Text(entry.point.label, maxLines: 2, overflow: TextOverflow.ellipsis),
                 onTap: () {
                   Navigator.of(context).maybePop();
                   controller.goToNavPoint(entry.point);
@@ -93,10 +80,7 @@ class TocSheet extends StatelessWidget {
     );
   }
 
-  static List<_TocEntry> _flatten(
-    final List<NavPoint> points, {
-    final int depth = 0,
-  }) {
+  static List<_TocEntry> _flatten(final List<NavPoint> points, {final int depth = 0}) {
     final entries = <_TocEntry>[];
     for (final point in points) {
       entries.add(_TocEntry(point, depth));

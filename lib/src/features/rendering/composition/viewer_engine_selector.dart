@@ -14,8 +14,7 @@ ViewerEngineFactory selectViewerEngineFactory({
   final bool? isLinux,
   final ViewerEngineFactory? desktopFactory,
 }) {
-  final desktop =
-      (isWindows ?? Platform.isWindows) || (isLinux ?? Platform.isLinux);
+  final desktop = (isWindows ?? Platform.isWindows) || (isLinux ?? Platform.isLinux);
   if (desktop) {
     return desktopFactory ?? InAppWebViewEngineFactory();
   }

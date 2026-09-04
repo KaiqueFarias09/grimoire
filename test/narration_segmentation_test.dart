@@ -6,10 +6,12 @@ void main() {
     test('plain sentences split on terminators', () {
       const text = 'One sentence here. And another one! A question? Done.';
       final segments = segmentText(text);
-      expect(
-        segments.map((s) => s.slice(text)).toList(),
-        ['One sentence here.', 'And another one!', 'A question?', 'Done.'],
-      );
+      expect(segments.map((s) => s.slice(text)).toList(), [
+        'One sentence here.',
+        'And another one!',
+        'A question?',
+        'Done.',
+      ]);
     });
 
     test('offsets address the original string exactly', () {

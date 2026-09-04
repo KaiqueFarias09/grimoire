@@ -25,11 +25,7 @@ void main() {
     expect(unescapeFromCfi(escapeForCfi('^^')), '^^');
     expect(escapeForCfi(';'), '^;');
     expect(escapeForCfi('[]()'), r'^[^]^(^)');
-    final cfi = EpubCfi.simple(
-      steps: [2, 4, 2],
-      charOffset: 1,
-      idAssertion: r'we^ird[id];',
-    );
+    final cfi = EpubCfi.simple(steps: [2, 4, 2], charOffset: 1, idAssertion: r'we^ird[id];');
     final serialized = cfi.encode();
     expect(serialized, r'epubcfi(/2/4/2:1[we^^ird^[id^]^;])');
     final parsed = EpubCfi.parse(serialized);
@@ -54,26 +50,17 @@ void main() {
     // through the sibling structure.
     final insideThree = d.indexOfText('three')!;
     final cfiThree = d.cfiForOffset(insideThree);
-    expect(
-      d.offsetForCfi(EpubCfi.parse(cfiThree.encode())),
-      insideThree,
-    );
+    expect(d.offsetForCfi(EpubCfi.parse(cfiThree.encode())), insideThree);
 
     // A nested wrapper div: steps count inside the wrapper as well.
     final insideNested = d.indexOfText('nested text here')!;
     final cfiNested = d.cfiForOffset(insideNested);
     expect(cfiNested.encode(), startsWith('epubcfi(/'));
-    expect(
-      d.offsetForCfi(EpubCfi.parse(cfiNested.encode())),
-      insideNested,
-    );
+    expect(d.offsetForCfi(EpubCfi.parse(cfiNested.encode())), insideNested);
 
     // Character offsets in the middle of a node decode exactly.
     final mid = insideP1 + 6; // inside "alpha beta"
-    expect(
-      d.offsetForCfi(EpubCfi.parse(d.cfiForOffset(mid).encode())),
-      mid,
-    );
+    expect(d.offsetForCfi(EpubCfi.parse(d.cfiForOffset(mid).encode())), mid);
   });
 
   // Parity: test_cfi.pyj cfi_with_range_wrappers — positions stay
@@ -88,10 +75,7 @@ void main() {
     final cfi = d.cfiForOffset(at);
 
     final d2 = EpubCfiDocument.parse(page);
-    expect(
-      d2.offsetForCfi(EpubCfi.parse(cfi.encode())),
-      at,
-    );
+    expect(d2.offsetForCfi(EpubCfi.parse(cfi.encode())), at);
     expect(d2.cfiForOffset(at).encode(), cfi.encode());
 
     final early = d.cfiForOffset(0);

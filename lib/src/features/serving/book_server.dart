@@ -40,8 +40,7 @@ class BookServer {
   Directory? mathJaxDirectory;
 
   /// Whether [content] is a MathML document (Calibre's sniff).
-  static bool containsMath(final String content) =>
-      content.toLowerCase().contains('<math');
+  static bool containsMath(final String content) => content.toLowerCase().contains('<math');
 
   /// Base URL of the server (e.g. `http://localhost:41234`).
   Uri get baseUrl {
@@ -285,10 +284,7 @@ class BookServer {
   }
 
   /// Files the `/__mathjax__/` route may serve.
-  static const Set<String> _mathJaxWhitelist = {
-    'tex-mml-svg.js',
-    'tex/mhchem.js',
-  };
+  static const Set<String> _mathJaxWhitelist = {'tex-mml-svg.js', 'tex/mhchem.js'};
 
   shelf.Response _serveMathJax(final String relative) {
     final dir = mathJaxDirectory;
@@ -311,7 +307,8 @@ class BookServer {
   /// re-adds the script in case the cache finished downloading after
   /// the page had already loaded.
   String _injectMathJax(final String html) {
-    const injection = '<script>'
+    const injection =
+        '<script>'
         'window.MathJax={'
         'loader:{load:["[tex]/mhchem"]},'
         'tex:{packages:{"[+]":["mhchem"]}},'

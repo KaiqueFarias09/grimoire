@@ -12,10 +12,8 @@ void main() {
   });
 
   test('system follows brightness', () {
-    expect(ViewerTheme.system(Brightness.dark).background,
-        ViewerTheme.dark.background);
-    expect(ViewerTheme.system(Brightness.light).background,
-        ViewerTheme.light.background);
+    expect(ViewerTheme.system(Brightness.dark).background, ViewerTheme.dark.background);
+    expect(ViewerTheme.system(Brightness.light).background, ViewerTheme.light.background);
   });
 
   test('copyWith keeps untouched fields', () {

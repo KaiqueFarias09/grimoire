@@ -7,25 +7,26 @@ import 'package:webview_flutter/webview_flutter.dart';
 class WebviewFlutterEngine extends ViewerEngine {
   /// Creates the engine; the platform webview is created eagerly.
   WebviewFlutterEngine({required super.slot, required super.onMessage}) {
-    _controller = WebViewController.fromPlatformCreationParams(
-      const PlatformWebViewControllerCreationParams(),
-    )
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'ELivreBridge',
-        onMessageReceived: (final message) => onMessage(message.message, slot),
-      )
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: (final request) {
-            // Keep the reader inside the loopback server.
-            return request.url.startsWith('http://localhost:') ||
-                    request.url.startsWith('http://127.0.0.1:')
-                ? NavigationDecision.navigate
-                : NavigationDecision.prevent;
-          },
-        ),
-      );
+    _controller =
+        WebViewController.fromPlatformCreationParams(
+            const PlatformWebViewControllerCreationParams(),
+          )
+          ..setJavaScriptMode(JavaScriptMode.unrestricted)
+          ..addJavaScriptChannel(
+            'ELivreBridge',
+            onMessageReceived: (final message) => onMessage(message.message, slot),
+          )
+          ..setNavigationDelegate(
+            NavigationDelegate(
+              onNavigationRequest: (final request) {
+                // Keep the reader inside the loopback server.
+                return request.url.startsWith('http://localhost:') ||
+                        request.url.startsWith('http://127.0.0.1:')
+                    ? NavigationDecision.navigate
+                    : NavigationDecision.prevent;
+              },
+            ),
+          );
     _created = true;
   }
 
@@ -42,8 +43,7 @@ class WebviewFlutterEngine extends ViewerEngine {
   Future<void> loadUrl(final Uri url) => _controller.loadRequest(url);
 
   @override
-  Future<void> evaluateJavaScript(final String code) =>
-      _controller.runJavaScript(code);
+  Future<void> evaluateJavaScript(final String code) => _controller.runJavaScript(code);
 
   @override
   Future<void> dispose() async {
@@ -58,13 +58,10 @@ class WebviewFlutterEngineFactory extends ViewerEngineFactory {
   ViewerEngine createEngine(
     final int slot,
     final void Function(Object message, int source) onMessage,
-  ) =>
-      WebviewFlutterEngine(slot: slot, onMessage: onMessage);
+  ) => WebviewFlutterEngine(slot: slot, onMessage: onMessage);
 
   @override
-  List<ViewerEngine> createPair(
-    final void Function(Object message, int source) onMessage,
-  ) {
+  List<ViewerEngine> createPair(final void Function(Object message, int source) onMessage) {
     return <ViewerEngine>[
       WebviewFlutterEngine(slot: 0, onMessage: onMessage),
       WebviewFlutterEngine(slot: 1, onMessage: onMessage),

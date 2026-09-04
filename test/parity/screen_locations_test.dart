@@ -98,8 +98,7 @@ class PagedMirror {
     var ans = cc + colAndGap;
     final limit = scrollWidth - screenInline;
     if (ans > limit) {
-      if ((scrollOffset).ceil() < limit &&
-          columnAt(limit) > columnAt(scrollOffset + 10)) {
+      if ((scrollOffset).ceil() < limit && columnAt(limit) > columnAt(scrollOffset + 10)) {
         ans = limit;
       } else {
         ans = -1;
@@ -115,8 +114,7 @@ class PagedMirror {
     final cc = currentColumnLocation();
     var ans = cc - colAndGap;
     if (ans < 0) {
-      if (scrollOffset.floor() > 0 &&
-          columnAt(0) < columnAt(scrollOffset + 10)) {
+      if (scrollOffset.floor() > 0 && columnAt(0) < columnAt(scrollOffset + 10)) {
         ans = 0;
       } else {
         ans = -1;
@@ -134,16 +132,15 @@ void main() {
     required final int scrollOffset,
     final int scrollWidth = 1680,
     final bool fullScreen = false,
-  }) =>
-      PagedMirror(
-        scrollWidth: scrollWidth,
-        screenInline: 400,
-        colSize: 400,
-        gap: 20,
-        colCount: 4,
-        scrollOffset: scrollOffset,
-        isFullScreenLayout: fullScreen,
-      );
+  }) => PagedMirror(
+    scrollWidth: scrollWidth,
+    screenInline: 400,
+    colSize: 400,
+    gap: 20,
+    colCount: 4,
+    scrollOffset: scrollOffset,
+    isFullScreenLayout: fullScreen,
+  );
 
   test('next column steps by colAndGap from the current column start', () {
     // Parity: calibre paged_mode.pyj:479-497 — ans = cc + col_and_gap.
@@ -197,15 +194,16 @@ void main() {
     expect(b.nextScreenLocation(), 401);
     // From there, the remainder (207px) is smaller than a column:
     expect(
-        PagedMirror(
-          scrollWidth: (420 * 2.4).floor(),
-          screenInline: 400,
-          colSize: 400,
-          gap: 20,
-          colCount: 3,
-          scrollOffset: 401,
-        ).nextScreenLocation(),
-        -1);
+      PagedMirror(
+        scrollWidth: (420 * 2.4).floor(),
+        screenInline: 400,
+        colSize: 400,
+        gap: 20,
+        colCount: 3,
+        scrollOffset: 401,
+      ).nextScreenLocation(),
+      -1,
+    );
   });
 
   test('full-screen layouts never scroll', () {
@@ -213,7 +211,6 @@ void main() {
     expect(book(scrollOffset: 0, fullScreen: true).nextColLocation(), -1);
     expect(book(scrollOffset: 100, fullScreen: true).previousColLocation(), -1);
     expect(book(scrollOffset: 0, fullScreen: true).nextScreenLocation(), -1);
-    expect(
-        book(scrollOffset: 100, fullScreen: true).previousScreenLocation(), -1);
+    expect(book(scrollOffset: 100, fullScreen: true).previousScreenLocation(), -1);
   });
 }
