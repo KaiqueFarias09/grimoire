@@ -1272,6 +1272,42 @@ class ViewerController extends ChangeNotifier {
     await _sendTo(slot, <String, Object?>{'action': 'applyHighlights', 'items': items});
   }
 
+  /// Marks [start]..[end] as the narration focus (read-aloud or
+  /// media-overlay playback) and scrolls it into view. The optional
+  /// word sub-range renders stronger, for engines that report word
+  /// boundaries. Marks are library-internal: they never intercept
+  /// taps and are cleared by [clearNarrationMarks].
+  Future<void> markNarrationRange(
+    final int start,
+    final int end, {
+    final int? wordStart,
+    final int? wordEnd,
+  }) async {
+    await _send(<String, Object?>{
+      'action': 'ttsMark',
+      'start': start,
+      'end': end,
+      if (wordStart != null) 'wordStart': wordStart,
+      if (wordEnd != null) 'wordEnd': wordEnd,
+    });
+  }
+
+  /// Removes all narration marks.
+  Future<void> clearNarrationMarks() async {
+    await _send(const <String, Object?>{'action': 'ttsClear'});
+  }
+
+  /// The loopback URL serving the book file at [path] (audio,
+  /// images), or null before [start]. Narration players stream
+  /// overlay audio from here.
+  String? bookServerUrlFor(final String path) {
+    final server = _server;
+    if (server == null) {
+      return null;
+    }
+    return server.urlForPath(path).toString();
+  }
+
   // --- search ---
 
   /// Searches [query] across the book (case-insensitive, tolerant to

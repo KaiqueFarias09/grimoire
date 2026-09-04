@@ -410,6 +410,28 @@ void main() {
       expect(controller.chromeVisible, isTrue);
     });
 
+    test('narration marks reach the engine and clear', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      final engine = factory.engines[controller.activeEngineIndex];
+
+      await controller.markNarrationRange(10, 25, wordStart: 10, wordEnd: 14);
+      expect(engine.scripts.where((final s) => s.contains('ttsMark')), isNotEmpty);
+      expect(engine.scripts.last, contains('"start":10'));
+      expect(engine.scripts.last, contains('"wordEnd":14'));
+
+      await controller.clearNarrationMarks();
+      expect(engine.scripts.where((final s) => s.contains('ttsClear')), isNotEmpty);
+    });
+
+    test('bookServerUrlFor serves book file paths after start', () async {
+      expect(controller.bookServerUrlFor('images/cover.png'), isNull);
+      await controller.start();
+      final url = controller.bookServerUrlFor('images/cover.png');
+      expect(url, isNotNull);
+      expect(url, contains('/book/images/cover.png'));
+    });
+
     test('chapter titles map files to TOC sections', () {
       expect(controller.chapterTitleFor(0), 'Chapter One');
       expect(controller.chapterTitleFor(1), 'Chapter Two');

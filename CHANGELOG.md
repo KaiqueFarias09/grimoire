@@ -2,6 +2,19 @@
 
 ### Added
 
+- **Narration infrastructure** (used by read-aloud and media
+  overlays): `segmentText()` produces sentence segments over the same
+  character space as highlights and positions (abbreviation, initial
+  and decimal guards, CJK terminators, overlong-segment clamping);
+  `markNarrationRange()` / `clearNarrationMarks()` highlight the
+  spoken sentence and word in the page without intercepting taps,
+  scrolling it into view; `bookServerUrlFor(path)` exposes loopback
+  URLs so players can stream book media.
+- **BookServer HTTP Range support**: `bytes=start-end`, `bytes=start-`
+  and `bytes=-suffix` return `206 Partial Content` (binary files
+  advertise `Accept-Ranges`), which audio players require for seeking
+  into overlay clips.
+
 - **Annotation browser**: the bookmarks sheet is now a full
   annotations browser — highlights grouped by chapter, color and
   decoration filters, text search over highlights and notes, sort by

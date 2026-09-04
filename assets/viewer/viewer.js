@@ -1210,6 +1210,67 @@
     delete state.highlights[id];
   }
 
+  // --- narration marks (read-aloud / media overlays) ---
+
+  // Marks the [start, end) range as the narration focus. The word
+  // sub-range (wordStart..wordEnd) is optional and renders stronger.
+  // Taps on these spans are NOT intercepted: page turns keep working
+  // while a sentence is marked.
+  function ttsMark(start, end, wordStart, wordEnd) {
+    ttsClear();
+    wrapOffsets(start, end, 'sentence');
+    if (wordStart != null && wordEnd != null && wordEnd > wordStart) {
+      wrapOffsets(wordStart | 0, wordEnd | 0, 'word');
+    }
+    goToOffset(start);
+  }
+
+  function ttsClear() {
+    var spans = document.querySelectorAll('span[data-elv-tts]');
+    for (var i = spans.length - 1; i >= 0; i--) {
+      unwrapSpan(spans[i]);
+    }
+  }
+
+  // Same node/offset walk as applyHighlight, without ids: the marker
+  // kind is the whole set, cleared together.
+  function wrapOffsets(start, end, kind) {
+    var nodes = textNodes();
+    var consumed = 0;
+    var spans = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var nodeStart = consumed;
+      var nodeEnd = consumed + node.length;
+      consumed = nodeEnd;
+      if (nodeEnd <= start || nodeStart >= end) {
+        continue;
+      }
+      var withinStart = Math.max(0, start - nodeStart);
+      var withinEnd = Math.min(node.length, end - nodeStart);
+      if (withinEnd <= withinStart) {
+        continue;
+      }
+      var range = document.createRange();
+      range.setStart(node, withinStart);
+      range.setEnd(node, withinEnd);
+      if (range.collapsed) {
+        continue;
+      }
+      var span = document.createElement('span');
+      span.setAttribute('data-elv-tts', kind);
+      span.className = kind === 'word' ? 'elv-tts-word' : 'elv-tts';
+      wrapRange(range, span);
+      spans.push(span);
+    }
+    if (spans.length) {
+      var ancestor = spans[0].parentNode;
+      if (ancestor && ancestor.normalize) {
+        ancestor.normalize();
+      }
+    }
+  }
+
   // --- taps and links ---
 
   function onTap(event) {
@@ -1601,6 +1662,12 @@
         break;
       case 'applyHighlights':
         applyHighlights(message.items || []);
+        break;
+      case 'ttsMark':
+        ttsMark(message.start | 0, message.end | 0, message.wordStart, message.wordEnd);
+        break;
+      case 'ttsClear':
+        ttsClear();
         break;
       case 'removeHighlight':
         removeHighlight(String(message.id || ''));

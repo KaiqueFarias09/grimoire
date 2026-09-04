@@ -90,3 +90,8 @@ body.elv-hyphenate {
 /* Highlights: colors and decorations are set inline per span by
    viewer.js from the annotation's theme-aware palette. */
 .elv-hl { border-radius: 2px; }
+
+/* Narration marks (read-aloud / media overlays): neutral overlays
+   that read on both light and dark themes. */
+.elv-tts { background-color: rgba(128, 128, 128, 0.30); }
+.elv-tts-word { background-color: rgba(128, 128, 128, 0.55); border-radius: 2px; }

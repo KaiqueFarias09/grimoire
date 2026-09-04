@@ -20,11 +20,10 @@ class BookServer {
   /// Creates a server for later [start]. [assetLoader] serves the
   /// bundled viewer assets (injectable for tests).
   BookServer({final Future<Uint8List> Function(String name)? assetLoader})
-      : _assetLoader = assetLoader ?? _rootBundleLoader;
+    : _assetLoader = assetLoader ?? _rootBundleLoader;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
-    final data =
-        await rootBundle.load('packages/e_livre_viewer/assets/viewer/$name');
+    final data = await rootBundle.load('packages/e_livre_viewer/assets/viewer/$name');
     return data.buffer.asUint8List();
   }
 
@@ -69,12 +68,7 @@ class BookServer {
         .addMiddleware(shelf.logRequests(logger: _silentLogger))
         .addHandler(_handle);
 
-    _httpServer = await shelf_io.serve(
-      handler,
-      InternetAddress.loopbackIPv4,
-      0,
-      shared: false,
-    );
+    _httpServer = await shelf_io.serve(handler, InternetAddress.loopbackIPv4, 0, shared: false);
   }
 
   /// Stops the server and releases the port.
@@ -96,16 +90,11 @@ class BookServer {
   }
 
   /// URL of a raw book file path (e.g. for image src resolution).
-  Uri urlForPath(final String path) =>
-      baseUrl.replace(path: '/book/${_encodePath(path)}');
+  Uri urlForPath(final String path) => baseUrl.replace(path: '/book/${_encodePath(path)}');
 
-  static String _encodePath(final String path) =>
-      Uri.encodeComponent(path).replaceAll('%2F', '/');
+  static String _encodePath(final String path) => Uri.encodeComponent(path).replaceAll('%2F', '/');
 
-  static void _silentLogger(
-    final String message,
-    final bool isError,
-  ) {} // keep the console clean
+  static void _silentLogger(final String message, final bool isError) {} // keep the console clean
 
   Future<shelf.Response> _handle(final shelf.Request request) async {
     final path = request.url.path;
@@ -116,18 +105,13 @@ class BookServer {
       if (path == '__viewer__/viewer.js' || path == '__viewer__/viewer.css') {
         final name = path.split('/').last;
         final bytes = _assets[name] ??= await _assetLoader(name);
-        return shelf.Response.ok(
-          bytes,
-          headers: {'Content-Type': _mimeOf(name)},
-        );
+        return shelf.Response.ok(bytes, headers: {'Content-Type': _mimeOf(name)});
       }
       if (path.startsWith('__page__/')) {
         return _syntheticPage(int.tryParse(path.substring('__page__/'.length)));
       }
       if (path.startsWith('book/')) {
-        return _serveBookFile(
-          Uri.decodeComponent(path.substring('book/'.length)),
-        );
+        return _serveBookFile(request, Uri.decodeComponent(path.substring('book/'.length)));
       }
       return shelf.Response.notFound('Unknown route: /$path');
     } catch (error) {
@@ -145,35 +129,94 @@ class BookServer {
       '<!DOCTYPE html><html><head><title></title></head>'
       '<body class="elv-comic"><img src="$src" alt=""/></body></html>',
     );
-    return shelf.Response.ok(
-      html,
-      headers: _htmlHeaders,
-    );
+    return shelf.Response.ok(html, headers: _htmlHeaders);
   }
 
-  shelf.Response _serveBookFile(final String rawPath) {
+  shelf.Response _serveBookFile(final shelf.Request request, final String rawPath) {
     final content = _lookup(rawPath);
     if (content == null) {
       return shelf.Response.notFound('No book file: $rawPath');
     }
     if (content is String) {
       if (_isHtmlName(rawPath)) {
-        return shelf.Response.ok(
-          _injectViewer(content),
-          headers: _htmlHeaders,
-        );
+        return shelf.Response.ok(_injectViewer(content), headers: _htmlHeaders);
       }
       return shelf.Response.ok(
         content,
-        headers: {
-          'Content-Type': '${_mimeOf(rawPath)}; charset=utf-8',
-        },
+        headers: {'Content-Type': '${_mimeOf(rawPath)}; charset=utf-8'},
       );
     }
-    return shelf.Response.ok(
-      content,
-      headers: {'Content-Type': _mimeOf(rawPath)},
+    // Binary assets (audio, images): players seek with byte ranges.
+    return _serveBinary(request, rawPath, content as Uint8List);
+  }
+
+  shelf.Response _serveBinary(
+    final shelf.Request request,
+    final String rawPath,
+    final Uint8List content,
+  ) {
+    final contentType = _mimeOf(rawPath);
+    // HEAD: shelf drops the body on the wire but keeps the headers,
+    // so serving the full content is correct.
+    if (request.method == 'HEAD') {
+      return shelf.Response.ok(
+        content,
+        headers: {'Content-Type': contentType, 'Accept-Ranges': 'bytes'},
+      );
+    }
+    final rangeHeader = request.headers[HttpHeaders.rangeHeader];
+    if (rangeHeader == null) {
+      return shelf.Response.ok(
+        content,
+        headers: {'Content-Type': contentType, 'Accept-Ranges': 'bytes'},
+      );
+    }
+    final range = _parseByteRange(rangeHeader, content.length);
+    if (range == null) {
+      return shelf.Response(
+        HttpStatus.requestedRangeNotSatisfiable,
+        headers: {'Content-Range': 'bytes */${content.length}', 'Accept-Ranges': 'bytes'},
+      );
+    }
+    return shelf.Response(
+      HttpStatus.partialContent,
+      body: content.sublist(range.start, range.end + 1),
+      headers: {
+        'Content-Type': contentType,
+        'Content-Range': 'bytes ${range.start}-${range.end}/${content.length}',
+        'Accept-Ranges': 'bytes',
+      },
     );
+  }
+
+  /// Parses `bytes=start-end`, `bytes=start-` and `bytes=-suffix`.
+  /// Returns null when the header is malformed or entirely out of
+  /// bounds.
+  static ({int start, int end})? _parseByteRange(final String header, final int total) {
+    final match = _rangePattern.firstMatch(header.trim());
+    if (match == null || total == 0) {
+      return null;
+    }
+    final startText = match.group(1);
+    final endText = match.group(2);
+    if (startText == null || startText.isEmpty) {
+      // Suffix form (bytes=-N): last N bytes.
+      final suffix = int.tryParse(endText ?? '') ?? 0;
+      if (suffix <= 0) {
+        return null;
+      }
+      final length = suffix.clamp(1, total);
+      return (start: total - length, end: total - 1);
+    }
+    final start = int.tryParse(startText);
+    if (start == null || start >= total) {
+      return null;
+    }
+    final parsedEnd = endText == null || endText.isEmpty ? total - 1 : int.tryParse(endText);
+    if (parsedEnd == null || parsedEnd < start) {
+      return null;
+    }
+    return (start: start, end: parsedEnd.clamp(start, total - 1));
   }
 
   Object? _lookup(final String rawPath) {
@@ -204,18 +247,17 @@ class BookServer {
   String injectViewer(final String html) => _injectViewer(html);
 
   String _injectViewer(final String html) {
-    const injection = '<meta name="viewport" content="width=device-width, '
+    const injection =
+        '<meta name="viewport" content="width=device-width, '
         'initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
         '<link rel="stylesheet" href="/__viewer__/viewer.css"/>'
         '<script defer src="/__viewer__/viewer.js"></script>';
-    final headOpen =
-        RegExp(r'<head[^>]*>', caseSensitive: false).firstMatch(html);
+    final headOpen = RegExp(r'<head[^>]*>', caseSensitive: false).firstMatch(html);
     if (headOpen != null) {
       final at = headOpen.end;
       return html.substring(0, at) + injection + html.substring(at);
     }
-    final htmlOpen =
-        RegExp(r'<html[^>]*>', caseSensitive: false).firstMatch(html);
+    final htmlOpen = RegExp(r'<html[^>]*>', caseSensitive: false).firstMatch(html);
     if (htmlOpen != null) {
       final at = htmlOpen.end;
       return '${html.substring(0, at)}<head>$injection</head>'
@@ -229,6 +271,8 @@ class BookServer {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-store',
   };
+
+  static final RegExp _rangePattern = RegExp(r'bytes=(\d*)-(\d*)$');
 
   static bool _isHtmlName(final String path) {
     final lower = path.toLowerCase();
