@@ -1,4 +1,5 @@
 import 'package:e_livre/e_livre.dart';
+import 'package:flutter/foundation.dart';
 
 /// A reading position: file (by reading-order index) plus the
 /// character offset inside the file's text model.
@@ -24,10 +25,7 @@ class ViewerPosition {
     if (fileIndex == null || charOffset == null || fileIndex < 0) {
       return null;
     }
-    return ViewerPosition(
-      fileIndex: fileIndex,
-      charOffset: charOffset < 0 ? 0 : charOffset,
-    );
+    return ViewerPosition(fileIndex: fileIndex, charOffset: charOffset < 0 ? 0 : charOffset);
   }
 
   /// Index into `book.readingOrder`.
@@ -60,8 +58,73 @@ class ViewerPosition {
   }
 
   @override
-  String toString() => 'ViewerPosition(file: $fileIndex, offset: $charOffset, '
+  String toString() =>
+      'ViewerPosition(file: $fileIndex, offset: $charOffset, '
       'page: ${column + 1}/$columns)';
+}
+
+/// A character range in one file's canonical text space, with wire
+/// serialization for host persistence.
+///
+/// Offsets address the same [documentText] space as e_livre's search
+/// matches and CFI anchors; the `eLv1` strings are the viewer's
+/// stable persistence format.
+@immutable
+class ViewerLocator {
+  /// Creates a locator range.
+  const ViewerLocator({required this.fileIndex, required this.start, required this.end});
+
+  /// Restores a range from a (start, end) locator pair ([serialize]).
+  /// Both must parse as positions of the same file with
+  /// `start < end`.
+  static ViewerLocator? parse(final String startLocator, [final String? endLocator]) {
+    final start = ViewerPosition.deserialize(startLocator);
+    final end = endLocator == null ? null : ViewerPosition.deserialize(endLocator);
+    if (start == null || end == null) {
+      return null;
+    }
+    if (start.fileIndex != end.fileIndex || start.charOffset >= end.charOffset) {
+      return null;
+    }
+    return ViewerLocator(fileIndex: start.fileIndex, start: start.charOffset, end: end.charOffset);
+  }
+
+  /// Reading-order index of the file.
+  final int fileIndex;
+
+  /// First character of the range (documentText space).
+  final int start;
+
+  /// One past the last character (documentText space).
+  final int end;
+
+  /// The range's start position.
+  ViewerPosition get startPosition => ViewerPosition(fileIndex: fileIndex, charOffset: start);
+
+  /// The range's end position.
+  ViewerPosition get endPosition => ViewerPosition(fileIndex: fileIndex, charOffset: end);
+
+  /// The range's start locator.
+  String get startSerialized => startPosition.serialize();
+
+  /// The range's end locator.
+  String get endSerialized => endPosition.serialize();
+
+  /// Locator pair for host persistence.
+  (String, String) serialize() => (startSerialized, endSerialized);
+
+  @override
+  bool operator ==(final Object other) =>
+      other is ViewerLocator &&
+      other.fileIndex == fileIndex &&
+      other.start == start &&
+      other.end == end;
+
+  @override
+  int get hashCode => Object.hash(fileIndex, start, end);
+
+  @override
+  String toString() => 'ViewerLocator(file: $fileIndex, $start..$end)';
 }
 
 /// Per-book reading state used to compute global progress.

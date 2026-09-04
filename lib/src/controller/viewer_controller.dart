@@ -11,7 +11,7 @@ import 'package:e_livre_viewer/src/features/serving/book_server.dart';
 import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'dart:ui' show Rect;
+import 'dart:ui' show Color, Rect;
 
 /// How the reader lays out pages.
 /// How much CPU the reader may spend measuring real book-wide page
@@ -40,34 +40,143 @@ enum ViewerLayoutMode {
   scroll,
 }
 
-/// Highlight styles (Calibre palette).
-enum ViewerHighlightStyle {
-  /// Yellow marker.
-  yellow('yellow'),
+/// How a highlight draws over the text. Orthogonal to
+/// [ViewerHighlightColor]: a wavy underline in green is a valid
+/// combination (Calibre's kind/decoration split).
+enum ViewerHighlightDecoration {
+  /// Marker behind the text (Calibre's `color` kind).
+  background('background'),
 
-  /// Green marker.
-  green('green'),
+  /// Straight underline.
+  underline('underline'),
 
-  /// Blue marker.
-  blue('blue'),
+  /// Line through the text.
+  strikeout('strikeout'),
 
-  /// Underline only.
-  underline('underline');
+  /// Wavy underline (Calibre's proofreading decoration).
+  wavy('wavy');
 
-  const ViewerHighlightStyle(this.wireName);
+  const ViewerHighlightDecoration(this.wireName);
 
   /// The name sent to the viewer JS and persisted in JSON.
   final String wireName;
 
   /// Parses the wire name (persisted JSON).
-  static ViewerHighlightStyle? fromWireName(final String? name) {
-    for (final style in values) {
-      if (style.wireName == name) {
-        return style;
+  static ViewerHighlightDecoration? fromWireName(final String? name) {
+    for (final decoration in values) {
+      if (decoration.wireName == name) {
+        return decoration;
       }
     }
     return null;
   }
+}
+
+/// A highlight color with one value per theme brightness, so a color
+/// picked against a light page stays readable on a dark page
+/// (Calibre's builtin_colors_light/dark model).
+@immutable
+class ViewerHighlightColor {
+  /// Creates a color; both values should be opaque.
+  const ViewerHighlightColor({required this.light, required this.dark});
+
+  /// Value over light page backgrounds.
+  final Color light;
+
+  /// Value over dark page backgrounds.
+  final Color dark;
+
+  /// Yellow marker. Parity: calibre/constants.py builtin_colors_light
+  /// /builtin_colors_dark.
+  static const ViewerHighlightColor yellow = ViewerHighlightColor(
+    light: Color(0xFFFFEB6B),
+    dark: Color(0xFF906E00),
+  );
+
+  /// Green marker.
+  static const ViewerHighlightColor green = ViewerHighlightColor(
+    light: Color(0xFFC0ED72),
+    dark: Color(0xFF306F50),
+  );
+
+  /// Blue marker.
+  static const ViewerHighlightColor blue = ViewerHighlightColor(
+    light: Color(0xFFADD8FF),
+    dark: Color(0xFF265589),
+  );
+
+  /// Pink marker (Calibre key `red`).
+  static const ViewerHighlightColor pink = ViewerHighlightColor(
+    light: Color(0xFFFFB0CA),
+    dark: Color(0xFFA23E5A),
+  );
+
+  /// Purple marker.
+  static const ViewerHighlightColor purple = ViewerHighlightColor(
+    light: Color(0xFFD9B2FF),
+    dark: Color(0xFF505088),
+  );
+
+  /// Proofreader red Calibre uses for its wavy/strikeout decorations
+  /// (CSS keyword `red`).
+  static const ViewerHighlightColor red = ViewerHighlightColor(
+    light: Color(0xFFFF0000),
+    dark: Color(0xFFFF0000),
+  );
+
+  /// The five Calibre marker colors, in palette order.
+  static const List<ViewerHighlightColor> palette = [yellow, green, blue, pink, purple];
+
+  /// Picks the half matching the page background brightness.
+  Color resolve(final Color pageBackground) =>
+      pageBackground.computeLuminance() < 0.5 ? dark : light;
+
+  /// Restores from JSON ([toJson]).
+  static ViewerHighlightColor? fromJson(final Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final light = _parseHex(json['light']);
+    final dark = _parseHex(json['dark']);
+    if (light == null || dark == null) {
+      return null;
+    }
+    return ViewerHighlightColor(light: light, dark: dark);
+  }
+
+  /// JSON for host persistence.
+  Map<String, String> toJson() => <String, String>{'light': lightHex, 'dark': darkHex};
+
+  /// '#rrggbb' of [light] (bridge payload and JSON).
+  String get lightHex => _hex(light);
+
+  /// '#rrggbb' of [dark] (bridge payload and JSON).
+  String get darkHex => _hex(dark);
+
+  static Color? _parseHex(final Object? value) {
+    if (value is! String) {
+      return null;
+    }
+    final raw = value.replaceFirst('#', '');
+    if (raw.length != 6) {
+      return null;
+    }
+    final rgb = int.tryParse(raw, radix: 16);
+    if (rgb == null) {
+      return null;
+    }
+    return Color(0xFF000000 | rgb);
+  }
+
+  static String _hex(final Color color) =>
+      '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+
+  @override
+  bool operator ==(final Object other) =>
+      other is ViewerHighlightColor && other.light == light && other.dark == dark;
+
+  @override
+  int get hashCode => Object.hash(light, dark);
 }
 
 /// A persistent highlight: a character range in the file's text
@@ -83,7 +192,8 @@ class ViewerHighlight {
     required this.text,
     required this.before,
     required this.after,
-    required this.style,
+    required this.color,
+    this.decoration = ViewerHighlightDecoration.background,
     required this.createdAtIso,
     this.note,
     this.cfi,
@@ -96,13 +206,15 @@ class ViewerHighlight {
     final start = json['start'];
     final end = json['end'];
     final text = json['text'];
-    final style = ViewerHighlightStyle.fromWireName(json['style'] as String?);
+    final color = ViewerHighlightColor.fromJson(json['color']);
+    final decoration = ViewerHighlightDecoration.fromWireName(json['decoration'] as String?);
     if (id is! String ||
         fileIndex is! int ||
         start is! int ||
         end is! int ||
         text is! String ||
-        style == null) {
+        color == null ||
+        decoration == null) {
       return null;
     }
     return ViewerHighlight(
@@ -113,10 +225,11 @@ class ViewerHighlight {
       text: text,
       before: json['before'] is String ? json['before'] as String : '',
       after: json['after'] is String ? json['after'] as String : '',
-      style: style,
-      createdAtIso:
-          json['createdAt'] is String ? json['createdAt'] as String : '',
+      color: color,
+      decoration: decoration,
+      createdAtIso: json['createdAt'] is String ? json['createdAt'] as String : '',
       note: json['note'] is String ? json['note'] as String : null,
+      cfi: json['cfi'] is String ? json['cfi'] as String : null,
     );
   }
 
@@ -135,14 +248,20 @@ class ViewerHighlight {
   /// The highlighted text (for display and fuzzy relocation).
   final String text;
 
+  /// The highlighted range as a serializable locator.
+  ViewerLocator get locator => ViewerLocator(fileIndex: fileIndex, start: start, end: end);
+
   /// Context before the highlight (fuzzy relocation).
   final String before;
 
   /// Context after the highlight (fuzzy relocation).
   final String after;
 
-  /// Marker style.
-  final ViewerHighlightStyle style;
+  /// Marker color (one value per theme brightness).
+  final ViewerHighlightColor color;
+
+  /// How the marker draws over the text.
+  final ViewerHighlightDecoration decoration;
 
   /// Optional note.
   final String? note;
@@ -156,23 +275,26 @@ class ViewerHighlight {
 
   /// JSON for host persistence.
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'fileIndex': fileIndex,
-        'start': start,
-        'end': end,
-        'text': text,
-        'before': before,
-        'after': after,
-        'style': style.wireName,
-        'note': note,
-        'createdAt': createdAtIso,
-      };
+    'id': id,
+    'fileIndex': fileIndex,
+    'start': start,
+    'end': end,
+    'text': text,
+    'before': before,
+    'after': after,
+    'decoration': decoration.wireName,
+    'color': color.toJson(),
+    'note': note,
+    'createdAt': createdAtIso,
+    if (cfi != null) 'cfi': cfi,
+  };
 
   ViewerHighlight copyWith({
     final int? start,
     final int? end,
     final String? note,
-    final ViewerHighlightStyle? style,
+    final ViewerHighlightColor? color,
+    final ViewerHighlightDecoration? decoration,
   }) {
     return ViewerHighlight(
       id: id,
@@ -182,9 +304,11 @@ class ViewerHighlight {
       text: text,
       before: before,
       after: after,
-      style: style ?? this.style,
+      color: color ?? this.color,
+      decoration: decoration ?? this.decoration,
       createdAtIso: createdAtIso,
       note: note ?? this.note,
+      cfi: cfi,
     );
   }
 }
@@ -224,32 +348,29 @@ class ViewerBookmark {
 
   /// JSON for host persistence.
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'title': title,
-        'position': position,
-        'createdAt': createdAtIso,
-        if (note != null) 'note': note,
-      };
+    'id': id,
+    'title': title,
+    'position': position,
+    'createdAt': createdAtIso,
+    if (note != null) 'note': note,
+  };
 
   /// Restores from [json] (host persistence).
-  static ViewerBookmark fromJson(final Map<String, dynamic> json) =>
-      ViewerBookmark(
-        id: json['id'] is String ? json['id'] as String : '',
-        title: json['title'] is String ? json['title'] as String : '',
-        position: json['position'] is String ? json['position'] as String : '',
-        createdAtIso:
-            json['createdAt'] is String ? json['createdAt'] as String : '',
-        note: json['note'] is String ? json['note'] as String : null,
-      );
+  static ViewerBookmark fromJson(final Map<String, dynamic> json) => ViewerBookmark(
+    id: json['id'] is String ? json['id'] as String : '',
+    title: json['title'] is String ? json['title'] as String : '',
+    position: json['position'] is String ? json['position'] as String : '',
+    createdAtIso: json['createdAt'] is String ? json['createdAt'] as String : '',
+    note: json['note'] is String ? json['note'] as String : null,
+  );
 
-  ViewerBookmark copyWith({final String? title, final String? note}) =>
-      ViewerBookmark(
-        id: id,
-        title: title ?? this.title,
-        position: position,
-        createdAtIso: createdAtIso,
-        note: note ?? this.note,
-      );
+  ViewerBookmark copyWith({final String? title, final String? note}) => ViewerBookmark(
+    id: id,
+    title: title ?? this.title,
+    position: position,
+    createdAtIso: createdAtIso,
+    note: note ?? this.note,
+  );
 }
 
 /// A search hit inside the book.
@@ -287,6 +408,9 @@ class ViewerSelection {
   final String text;
   final int start;
   final int end;
+
+  /// The selected range as a serializable locator.
+  ViewerLocator get locator => ViewerLocator(fileIndex: fileIndex, start: start, end: end);
 }
 
 /// Drives the reader: two preloading webview engines, the book
@@ -300,14 +424,20 @@ class ViewerController extends ChangeNotifier {
     final int marginsPx = 20,
     final ViewerLayoutMode layoutMode = ViewerLayoutMode.paged,
     final int columnsPerScreen = 0,
+    final String? fontFamily,
+    final bool justify = false,
+    final bool hyphenate = false,
     this.onExternalLink,
     final ViewerEngineFactory? engineFactory,
-  })  : _theme = theme,
-        _fontSizePx = fontSizePx,
-        _marginsPx = marginsPx,
-        _layoutMode = layoutMode,
-        _columnsPerScreen = columnsPerScreen,
-        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
+  }) : _theme = theme,
+       _fontSizePx = fontSizePx,
+       _marginsPx = marginsPx,
+       _layoutMode = layoutMode,
+       _columnsPerScreen = columnsPerScreen,
+       _fontFamily = fontFamily,
+       _justify = justify,
+       _hyphenate = hyphenate,
+       _engineFactory = engineFactory ?? selectViewerEngineFactory() {
     readingState = ReadingState.of(book);
     _subscription = bridge.events.listen(_onEvent);
   }
@@ -372,7 +502,10 @@ class ViewerController extends ChangeNotifier {
   final List<ViewerHighlight> _highlights = <ViewerHighlight>[];
   final StreamController<ViewerHighlight> _highlightTaps =
       StreamController<ViewerHighlight>.broadcast();
+  ViewerHighlightColor _defaultHighlightColor = ViewerHighlightColor.yellow;
+  ViewerHighlightDecoration _defaultHighlightDecoration = ViewerHighlightDecoration.background;
   bool _chromeVisible = false;
+  bool _useHostChrome = false;
   bool _started = false;
   bool _disposed = false;
 
@@ -403,11 +536,7 @@ class ViewerController extends ChangeNotifier {
       return;
     }
     for (var slot = 0; slot < _engines.length; slot++) {
-      _sendTo(slot, <String, Object?>{
-        'action': 'setViewport',
-        'width': width,
-        'height': height,
-      });
+      _sendTo(slot, <String, Object?>{'action': 'setViewport', 'width': width, 'height': height});
     }
   }
 
@@ -442,8 +571,8 @@ class ViewerController extends ChangeNotifier {
 
   String _netSearchUrl = defaultNetSearchUrl;
   String? _fontFamily;
-  final bool _justify = false;
-  final bool _hyphenate = false;
+  bool _justify = false;
+  bool _hyphenate = false;
   int _searchCursor = -1;
 
   /// Calibre formatting of a web search for the selected text.
@@ -464,7 +593,7 @@ class ViewerController extends ChangeNotifier {
   }
 
   /// Whether the reader chrome is visible.
-  bool get chromeVisible => _chromeVisible;
+  bool get chromeVisible => _useHostChrome ? false : _chromeVisible;
 
   /// Current search results (updated by [search]).
   List<ViewerSearchResult> get searchResults => _searchResults;
@@ -495,24 +624,65 @@ class ViewerController extends ChangeNotifier {
   ViewerSelection? get lastSelection => _lastSelection;
 
   /// Whether a text selection is active.
-  bool get hasSelection =>
-      _lastSelection != null && _lastSelection!.text.isNotEmpty;
+  bool get hasSelection => _lastSelection != null && _lastSelection!.text.isNotEmpty;
 
   /// Bookmarks in creation order.
-  List<ViewerBookmark> get bookmarks =>
-      List<ViewerBookmark>.unmodifiable(_bookmarks);
+  List<ViewerBookmark> get bookmarks => List<ViewerBookmark>.unmodifiable(_bookmarks);
 
   /// Highlights in creation order.
-  List<ViewerHighlight> get highlights =>
-      List<ViewerHighlight>.unmodifiable(_highlights);
+  List<ViewerHighlight> get highlights => List<ViewerHighlight>.unmodifiable(_highlights);
 
   /// Whether the book renders as comic pages (image-only items).
-  bool get isComicMode => book.readingOrder.any(
-        (final item) => !item.isHtml,
-      );
+  bool get isComicMode => book.readingOrder.any((final item) => !item.isHtml);
 
   /// Taps on highlights (resolved against [highlights]).
   Stream<ViewerHighlight> get highlightTapEvents => _highlightTaps.stream;
+
+  /// The color [addHighlightFromSelection] applies when called
+  /// without one. The built-in selection bar updates it from the
+  /// user's taps, so quick highlights remember the choice (Calibre's
+  /// default highlight style).
+  ViewerHighlightColor get defaultHighlightColor => _defaultHighlightColor;
+
+  set defaultHighlightColor(final ViewerHighlightColor color) {
+    if (color == _defaultHighlightColor) {
+      return;
+    }
+    _defaultHighlightColor = color;
+    notifyListeners();
+  }
+
+  /// The decoration [addHighlightFromSelection] applies when called
+  /// without one; see [defaultHighlightColor].
+  ViewerHighlightDecoration get defaultHighlightDecoration => _defaultHighlightDecoration;
+
+  set defaultHighlightDecoration(final ViewerHighlightDecoration decoration) {
+    if (decoration == _defaultHighlightDecoration) {
+      return;
+    }
+    _defaultHighlightDecoration = decoration;
+    notifyListeners();
+  }
+
+  /// Whether the host app owns all reader chrome. When true the
+  /// controller keeps its own chrome hidden: center taps and Esc
+  /// still emit [ChromeToggleEvent]s (so the host can toggle its own
+  /// UI) but no longer flip [chromeVisible], and [toggleChrome],
+  /// [showChrome] and [hideChrome] become no-ops. [ELivreView] sets
+  /// this from `showShell: false`; hosts driving the viewer without
+  /// the widget can set it directly.
+  bool get useHostChrome => _useHostChrome;
+
+  set useHostChrome(final bool value) {
+    if (value == _useHostChrome) {
+      return;
+    }
+    _useHostChrome = value;
+    if (value) {
+      _chromeVisible = false;
+    }
+    notifyListeners();
+  }
 
   /// Starts the book server and the engines, loading the first file.
   Future<void> start() async {
@@ -555,12 +725,10 @@ class ViewerController extends ChangeNotifier {
   // --- navigation ---
 
   /// Turns one page forward (or one screen in scroll mode).
-  Future<void> nextPage() =>
-      _send(const <String, Object?>{'action': 'nextColumn'});
+  Future<void> nextPage() => _send(const <String, Object?>{'action': 'nextColumn'});
 
   /// Turns one page backward.
-  Future<void> previousPage() =>
-      _send(const <String, Object?>{'action': 'previousColumn'});
+  Future<void> previousPage() => _send(const <String, Object?>{'action': 'previousColumn'});
 
   /// Navigates to a table-of-contents entry.
   Future<void> goToNavPoint(final NavPoint point) async {
@@ -569,10 +737,7 @@ class ViewerController extends ChangeNotifier {
       return;
     }
     final (fileIndex, anchor) = target;
-    await _navigate(
-      fileIndex,
-      _PendingNavigation(anchor: anchor.isEmpty ? null : anchor),
-    );
+    await _navigate(fileIndex, _PendingNavigation(anchor: anchor.isEmpty ? null : anchor));
     _chromeVisible = false;
     notifyListeners();
   }
@@ -588,10 +753,7 @@ class ViewerController extends ChangeNotifier {
 
   /// Navigates to [position].
   Future<void> goToPosition(final ViewerPosition position) {
-    return _navigate(
-      position.fileIndex,
-      _PendingNavigation(offset: position.charOffset),
-    );
+    return _navigate(position.fileIndex, _PendingNavigation(offset: position.charOffset));
   }
 
   // --- bookmarks ---
@@ -627,9 +789,13 @@ class ViewerController extends ChangeNotifier {
 
   // --- highlights ---
 
-  /// Highlights the active selection with [style].
+  /// Highlights the active selection with [color] and [decoration].
+  /// Highlights the active selection with [color] and [decoration],
+  /// defaulting to [defaultHighlightColor] and
+  /// [defaultHighlightDecoration].
   Future<ViewerHighlight?> addHighlightFromSelection({
-    final ViewerHighlightStyle style = ViewerHighlightStyle.yellow,
+    final ViewerHighlightColor? color,
+    final ViewerHighlightDecoration? decoration,
     final String? note,
   }) async {
     final selection = _lastSelection;
@@ -643,10 +809,10 @@ class ViewerController extends ChangeNotifier {
       start: selection.start,
       end: selection.end,
       text: selection.text,
-      before:
-          _contextAround(selection.fileIndex, selection.start, before: true),
+      before: _contextAround(selection.fileIndex, selection.start, before: true),
       after: _contextAround(selection.fileIndex, selection.end, before: false),
-      style: style,
+      color: color ?? _defaultHighlightColor,
+      decoration: decoration ?? _defaultHighlightDecoration,
       createdAtIso: DateTime.now().toIso8601String(),
       note: note,
       cfi: _highlightCfi(selection.fileIndex, selection.start),
@@ -670,8 +836,7 @@ class ViewerController extends ChangeNotifier {
 
   /// Removes a highlight and unwraps it in the page.
   Future<void> removeHighlight(final String id) async {
-    final index =
-        _highlights.indexWhere((final highlight) => highlight.id == id);
+    final index = _highlights.indexWhere((final highlight) => highlight.id == id);
     if (index == -1) {
       return;
     }
@@ -693,10 +858,7 @@ class ViewerController extends ChangeNotifier {
   /// Relocates a persisted highlight against the current text of its
   /// file: exact offsets win, then the highlighted text relocates
   /// them; `null` when the text no longer exists.
-  static (int, int)? relocateHighlight(
-    final ViewerHighlight highlight,
-    final String text,
-  ) {
+  static (int, int)? relocateHighlight(final ViewerHighlight highlight, final String text) {
     if (highlight.text.isEmpty || text.isEmpty) {
       return null;
     }
@@ -708,11 +870,7 @@ class ViewerController extends ChangeNotifier {
     return at == -1 ? null : (at, at + highlight.text.length);
   }
 
-  String _contextAround(
-    final int fileIndex,
-    final int offset, {
-    required final bool before,
-  }) {
+  String _contextAround(final int fileIndex, final int offset, {required final bool before}) {
     final text = _documentTextOf(fileIndex);
     if (before) {
       final from = offset - 40 < 0 ? 0 : offset - 40;
@@ -735,10 +893,7 @@ class ViewerController extends ChangeNotifier {
     return '';
   }
 
-  Future<void> _applyHighlightsToEngine(
-    final int slot,
-    final int fileIndex,
-  ) async {
+  Future<void> _applyHighlightsToEngine(final int slot, final int fileIndex) async {
     final items = <Map<String, Object?>>[
       for (final highlight in _highlights.where(
         (final highlight) => highlight.fileIndex == fileIndex,
@@ -747,13 +902,12 @@ class ViewerController extends ChangeNotifier {
           'id': highlight.id,
           'start': highlight.start,
           'end': highlight.end,
-          'style': highlight.style.wireName,
+          'decoration': highlight.decoration.wireName,
+          'colorLight': highlight.color.lightHex,
+          'colorDark': highlight.color.darkHex,
         },
     ];
-    await _sendTo(
-      slot,
-      <String, Object?>{'action': 'applyHighlights', 'items': items},
-    );
+    await _sendTo(slot, <String, Object?>{'action': 'applyHighlights', 'items': items});
   }
 
   // --- search ---
@@ -802,16 +956,11 @@ class ViewerController extends ChangeNotifier {
 
   /// Navigates to and highlights a search result.
   Future<void> goToSearchResult(final ViewerSearchResult result) {
-    return _navigate(
-      result.fileIndex,
-      _PendingNavigation(selection: (result.start, result.end)),
-    );
+    return _navigate(result.fileIndex, _PendingNavigation(selection: (result.start, result.end)));
   }
 
-  final StreamController<String> _imagePopups =
-      StreamController<String>.broadcast();
-  final StreamController<void> _annotationsChanged =
-      StreamController<void>.broadcast();
+  final StreamController<String> _imagePopups = StreamController<String>.broadcast();
+  final StreamController<void> _annotationsChanged = StreamController<void>.broadcast();
 
   final Completer<void> _readyCompleter = Completer<void>();
 
@@ -837,10 +986,7 @@ class ViewerController extends ChangeNotifier {
 
   /// Jumps the current file to [fraction] `0..1` (custom scrollbar).
   Future<void> goToFraction(final double fraction) async {
-    await _send(<String, Object?>{
-      'action': 'goToFraction',
-      'frac': fraction.clamp(0.0, 1.0),
-    });
+    await _send(<String, Object?>{'action': 'goToFraction', 'frac': fraction.clamp(0.0, 1.0)});
   }
 
   /// Broadcast stream of selections (for dictionary lookups).
@@ -856,8 +1002,7 @@ class ViewerController extends ChangeNotifier {
       );
 
   /// Clears the active selection.
-  Future<void> clearSelection() =>
-      _send(const <String, Object?>{'action': 'clearSelection'});
+  Future<void> clearSelection() => _send(const <String, Object?>{'action': 'clearSelection'});
 
   // --- settings ---
 
@@ -866,8 +1011,7 @@ class ViewerController extends ChangeNotifier {
   Future<void> setTheme(final ViewerTheme theme) async {
     _theme = theme;
     notifyListeners();
-    await _send(
-        <String, Object?>{'action': 'setVars', 'vars': theme.cssVars()});
+    await _send(<String, Object?>{'action': 'setVars', 'vars': theme.cssVars()});
     await _send(<String, Object?>{
       'action': 'setOverrideColors',
       'enabled': theme.overrideBookColors,
@@ -916,13 +1060,57 @@ class ViewerController extends ChangeNotifier {
     await _send(<String, Object?>{'action': 'setColumns', 'n': columns});
   }
 
+  /// The font-family override for body text, or null to keep the
+  /// book's own fonts.
+  String? get fontFamily => _fontFamily;
+
+  /// Overrides the body font family (a CSS font-family list, e.g.
+  /// `'Georgia, serif'`); null or empty restores the book's fonts.
+  /// Relayouts keeping position.
+  Future<void> setFontFamily(final String? family) async {
+    final value = (family == null || family.trim().isEmpty) ? null : family.trim();
+    if (value == _fontFamily) {
+      return;
+    }
+    _fontFamily = value;
+    _refreshPageCacheKey();
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setFontFamily', 'font': value ?? ''});
+  }
+
+  /// Whether body text is justified.
+  bool get justify => _justify;
+
+  /// Toggles justified text. Relayouts keeping position.
+  Future<void> setJustify(final bool enabled) async {
+    if (enabled == _justify) {
+      return;
+    }
+    _justify = enabled;
+    _refreshPageCacheKey();
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setTextJustify', 'enabled': enabled});
+  }
+
+  /// Whether hyphenation across line breaks is enabled.
+  bool get hyphenate => _hyphenate;
+
+  /// Toggles hyphenation. Relayouts keeping position.
+  Future<void> setHyphenate(final bool enabled) async {
+    if (enabled == _hyphenate) {
+      return;
+    }
+    _hyphenate = enabled;
+    _refreshPageCacheKey();
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setHyphenation', 'enabled': enabled});
+  }
+
   /// Toggles the reader chrome visibility.
   /// Applies the visual markers for every search match of the active
   /// file and resets the match cursor. [matches] are (start, end) pairs
   /// in the file's character space.
-  Future<void> showSearchMatches(
-    final List<(int, int)> matches,
-  ) async {
+  Future<void> showSearchMatches(final List<(int, int)> matches) async {
     _searchCursor = -1;
     await _sendTo(_active, <String, Object?>{
       'action': 'setSearchMatches',
@@ -957,7 +1145,8 @@ class ViewerController extends ChangeNotifier {
   Future<ViewerHighlight?> previousAnnotation() => _stepAnnotation(-1);
 
   Future<ViewerHighlight?> _stepAnnotation(final int direction) async {
-    final ordered = [..._highlights]..sort((final a, final b) {
+    final ordered = [..._highlights]
+      ..sort((final a, final b) {
         final byFile = a.fileIndex.compareTo(b.fileIndex);
         return byFile != 0 ? byFile : a.start.compareTo(b.start);
       });
@@ -969,16 +1158,14 @@ class ViewerController extends ChangeNotifier {
       found = ordered.firstWhere(
         (final h) =>
             h.fileIndex > _position.fileIndex ||
-            (h.fileIndex == _position.fileIndex &&
-                h.start > _position.charOffset),
+            (h.fileIndex == _position.fileIndex && h.start > _position.charOffset),
         orElse: () => ordered.first,
       );
     } else {
       found = ordered.lastWhere(
         (final h) =>
             h.fileIndex < _position.fileIndex ||
-            (h.fileIndex == _position.fileIndex &&
-                h.start < _position.charOffset),
+            (h.fileIndex == _position.fileIndex && h.start < _position.charOffset),
         orElse: () => ordered.last,
       );
     }
@@ -986,16 +1173,18 @@ class ViewerController extends ChangeNotifier {
     return found;
   }
 
-  /// Changes the style of an existing highlight in place.
+  /// Restyles an existing highlight in place: any subset of [color]
+  /// and [decoration].
   Future<void> updateHighlightStyle(
-    final String id,
-    final ViewerHighlightStyle style,
-  ) async {
+    final String id, {
+    final ViewerHighlightColor? color,
+    final ViewerHighlightDecoration? decoration,
+  }) async {
     final index = _highlights.indexWhere((final h) => h.id == id);
     if (index < 0) {
       return;
     }
-    _highlights[index] = _highlights[index].copyWith(style: style);
+    _highlights[index] = _highlights[index].copyWith(color: color, decoration: decoration);
     await _applyHighlightsToEngine(_active, _highlights[index].fileIndex);
     notifyListeners();
   }
@@ -1012,9 +1201,9 @@ class ViewerController extends ChangeNotifier {
 
   /// Serializes all annotations for persistence (host-owned storage).
   String exportAnnotations() => jsonEncode(<String, Object?>{
-        'highlights': [for (final h in _highlights) h.toJson()],
-        'bookmarks': [for (final b in _bookmarks) b.toJson()],
-      });
+    'highlights': [for (final h in _highlights) h.toJson()],
+    'bookmarks': [for (final b in _bookmarks) b.toJson()],
+  });
 
   /// Imports annotations, merging by identity and keeping the newest
   /// timestamp (the ported Calibre merge semantics, annot_merge.dart).
@@ -1026,8 +1215,7 @@ class ViewerController extends ChangeNotifier {
     final incomingHighlights = <ViewerHighlight>[
       for (final h in (decoded['highlights'] as List<dynamic>? ?? []))
         if (h is Map<String, dynamic>)
-          if (ViewerHighlight.fromJson(h) case final parsedHighlight?)
-            parsedHighlight,
+          if (ViewerHighlight.fromJson(h) case final parsedHighlight?) parsedHighlight,
     ];
     final incomingBookmarks = <ViewerBookmark>[
       for (final b in (decoded['bookmarks'] as List<dynamic>? ?? []))
@@ -1037,20 +1225,17 @@ class ViewerController extends ChangeNotifier {
       final at = _highlights.indexWhere((final h) => h.id == incoming.id);
       if (at < 0) {
         _highlights.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) >
-          0) {
+      } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) > 0) {
         _highlights[at] = incoming;
       }
     }
     for (final incoming in incomingBookmarks) {
       final at = _bookmarks.indexWhere(
-        (final b) =>
-            b.title == incoming.title || b.position == incoming.position,
+        (final b) => b.title == incoming.title || b.position == incoming.position,
       );
       if (at < 0) {
         _bookmarks.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) >
-          0) {
+      } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) > 0) {
         _bookmarks[at] = incoming;
       }
     }
@@ -1059,42 +1244,34 @@ class ViewerController extends ChangeNotifier {
   }
 
   void toggleChrome() {
+    if (_useHostChrome) {
+      return;
+    }
     _chromeVisible = !_chromeVisible;
     notifyListeners();
   }
 
   // --- internals ---
 
-  Future<void> _send(final Map<String, Object?> message) =>
-      _sendTo(_active, message);
+  Future<void> _send(final Map<String, Object?> message) => _sendTo(_active, message);
 
-  Future<void> _sendTo(
-    final int slot,
-    final Map<String, Object?> message,
-  ) async {
+  Future<void> _sendTo(final int slot, final Map<String, Object?> message) async {
     if (slot == 2) {
       // Settings must reach the measurer too, or it would lay out with
       // defaults and report another book's column counts.
       final engine = _measureEngine;
       if (engine != null) {
-        await engine.evaluateJavaScript(
-          ViewerBridge.javaScriptFor(message),
-        );
+        await engine.evaluateJavaScript(ViewerBridge.javaScriptFor(message));
       }
       return;
     }
     if (slot >= _engines.length) {
       return;
     }
-    await _engines[slot].evaluateJavaScript(
-      ViewerBridge.javaScriptFor(message),
-    );
+    await _engines[slot].evaluateJavaScript(ViewerBridge.javaScriptFor(message));
   }
 
-  Future<void> _navigate(
-    final int target,
-    final _PendingNavigation pending,
-  ) async {
+  Future<void> _navigate(final int target, final _PendingNavigation pending) async {
     final server = _server;
     if (server == null) {
       return;
@@ -1116,25 +1293,16 @@ class ViewerController extends ChangeNotifier {
     await _engines[other].loadUrl(server.urlForItem(index));
   }
 
-  Future<void> _applyPending(
-    final int slot,
-    final _PendingNavigation pending,
-  ) async {
+  Future<void> _applyPending(final int slot, final _PendingNavigation pending) async {
     if (pending.offset != null) {
-      await _sendTo(slot, <String, Object?>{
-        'action': 'goToOffset',
-        'offset': pending.offset,
-      });
+      await _sendTo(slot, <String, Object?>{'action': 'goToOffset', 'offset': pending.offset});
     } else if (pending.restoreColumn != null) {
       await _sendTo(slot, <String, Object?>{
         'action': 'goToColumn',
         'column': pending.restoreColumn,
       });
     } else if (pending.anchor != null) {
-      await _sendTo(
-        slot,
-        <String, Object?>{'action': 'goToAnchor', 'id': pending.anchor},
-      );
+      await _sendTo(slot, <String, Object?>{'action': 'goToAnchor', 'id': pending.anchor});
     } else if (pending.atEnd) {
       await _sendTo(slot, const <String, Object?>{'action': 'goToEnd'});
     }
@@ -1145,17 +1313,13 @@ class ViewerController extends ChangeNotifier {
         'start': selection.$1,
         'end': selection.$2,
       });
-      await _sendTo(slot, <String, Object?>{
-        'action': 'goToOffset',
-        'offset': selection.$1,
-      });
+      await _sendTo(slot, <String, Object?>{'action': 'goToOffset', 'offset': selection.$1});
     }
   }
 
   void _activate(final int slot) {
     _active = slot;
-    _position =
-        ViewerPosition(fileIndex: _loadedFile[slot] ?? 0, charOffset: 0);
+    _position = ViewerPosition(fileIndex: _loadedFile[slot] ?? 0, charOffset: 0);
     notifyListeners();
     _schedulePreload();
   }
@@ -1325,10 +1489,7 @@ class ViewerController extends ChangeNotifier {
   }
 
   Future<void> _applySettingsTo(final int slot) async {
-    await _sendTo(slot, <String, Object?>{
-      'action': 'setVars',
-      'vars': _theme.cssVars(),
-    });
+    await _sendTo(slot, <String, Object?>{'action': 'setVars', 'vars': _theme.cssVars()});
     await _sendTo(slot, <String, Object?>{
       'action': 'setOverrideColors',
       'enabled': _theme.overrideBookColors,
@@ -1338,22 +1499,16 @@ class ViewerController extends ChangeNotifier {
       'width': _logicalViewportWidth,
       'height': _logicalViewportHeight,
     });
-    await _sendTo(
-      slot,
-      <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx},
-    );
-    await _sendTo(
-      slot,
-      <String, Object?>{'action': 'setMargins', 'px': _marginsPx},
-    );
+    await _sendTo(slot, <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx});
+    await _sendTo(slot, <String, Object?>{'action': 'setMargins', 'px': _marginsPx});
     await _sendTo(slot, <String, Object?>{
       'action': 'setLayoutMode',
       'scroll': _layoutMode == ViewerLayoutMode.scroll,
     });
-    await _sendTo(
-      slot,
-      <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen},
-    );
+    await _sendTo(slot, <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen});
+    await _sendTo(slot, <String, Object?>{'action': 'setFontFamily', 'font': _fontFamily ?? ''});
+    await _sendTo(slot, <String, Object?>{'action': 'setTextJustify', 'enabled': _justify});
+    await _sendTo(slot, <String, Object?>{'action': 'setHyphenation', 'enabled': _hyphenate});
   }
 
   // --- book-wide page measurement queue ---
@@ -1361,15 +1516,15 @@ class ViewerController extends ChangeNotifier {
   /// Layout fingerprint: any input that changes column layout
   /// (viewport, font, justification, margins, columns per screen).
   int _computeLayoutSignature() => Object.hash(
-        _logicalViewportWidth?.round(),
-        _logicalViewportHeight?.round(),
-        _fontSizePx,
-        _marginsPx,
-        _fontFamily,
-        _justify,
-        _hyphenate,
-        _columnsPerScreen,
-      );
+    _logicalViewportWidth?.round(),
+    _logicalViewportHeight?.round(),
+    _fontSizePx,
+    _marginsPx,
+    _fontFamily,
+    _justify,
+    _hyphenate,
+    _columnsPerScreen,
+  );
 
   String get _cacheKey => 'elivre-pages/$_pageCacheKey/$_layoutSignature';
 
@@ -1411,24 +1566,22 @@ class ViewerController extends ChangeNotifier {
   /// estimates elsewhere.
   (int, int, bool) get bookPageState {
     final counts = <int>[
-      for (var i = 0; i < _measuredColumns.length; i++)
-        _measuredColumns[i] ?? _estimatePagesFor(i),
+      for (var i = 0; i < _measuredColumns.length; i++) _measuredColumns[i] ?? _estimatePagesFor(i),
     ];
     final total = counts.fold(0, (final a, final b) => a + b);
     var before = 0;
     for (var i = 0; i < _position.fileIndex && i < counts.length; i++) {
       before += counts[i];
     }
-    final allMeasured = _measuredColumns.isNotEmpty &&
-        _measuredColumns.every((final c) => c != null);
+    final allMeasured =
+        _measuredColumns.isNotEmpty && _measuredColumns.every((final c) => c != null);
     final page = math.min(
       total,
       before +
           math.min(
-              _position.column + 1,
-              counts.isEmpty
-                  ? 1
-                  : counts[math.min(_position.fileIndex, counts.length - 1)]),
+            _position.column + 1,
+            counts.isEmpty ? 1 : counts[math.min(_position.fileIndex, counts.length - 1)],
+          ),
     );
     return (math.max(1, page).toInt(), math.max(1, total), allMeasured);
   }
@@ -1439,7 +1592,8 @@ class ViewerController extends ChangeNotifier {
         ? math.max(
             1,
             _documentTextOf(_position.fileIndex).length /
-                math.max(1, _measuredColumns[_position.fileIndex]!))
+                math.max(1, _measuredColumns[_position.fileIndex]!),
+          )
         : 1500.0;
     return chars <= 0 ? 1 : math.max(1, (chars / density).ceil());
   }
@@ -1485,9 +1639,7 @@ class ViewerController extends ChangeNotifier {
           if (raw != null) {
             final decoded = jsonDecode(raw);
             if (decoded is List) {
-              _measuredColumns = <int?>[
-                for (final item in decoded) item is int ? item : null,
-              ];
+              _measuredColumns = <int?>[for (final item in decoded) item is int ? item : null];
               while (_measuredColumns.length < book.readingOrder.length) {
                 _measuredColumns.add(null);
               }
@@ -1503,9 +1655,7 @@ class ViewerController extends ChangeNotifier {
   }
 
   Future<void> _measureNext() async {
-    if (_disposed ||
-        pageCountMode == BookPageCountMode.estimate ||
-        _measureCursor >= 0) {
+    if (_disposed || pageCountMode == BookPageCountMode.estimate || _measureCursor >= 0) {
       return;
     }
     var next = _nextUnmeasured();
@@ -1559,12 +1709,7 @@ class ViewerController extends ChangeNotifier {
       return;
     }
     try {
-      await saver(
-        _cacheKey,
-        jsonEncode([
-          for (final c in _measuredColumns) c,
-        ]),
-      );
+      await saver(_cacheKey, jsonEncode([for (final c in _measuredColumns) c]));
     } on Object {
       // Persistence failures are non-fatal.
     }
@@ -1598,10 +1743,7 @@ class ViewerController extends ChangeNotifier {
     return _cfiDocs.putIfAbsent(fileIndex, () {
       final name = book.readingOrder[fileIndex].name;
       final html = book.files.html
-          .firstWhere(
-            (final f) => f.path == name,
-            orElse: () => book.files.html.first,
-          )
+          .firstWhere((final f) => f.path == name, orElse: () => book.files.html.first)
           .content;
       return EpubCfiDocument.parse(html);
     });
@@ -1633,10 +1775,7 @@ class ViewerController extends ChangeNotifier {
       }
       final offset = _cfiDocFor(fileIndex).offsetForCfi(parsed);
       if (offset != null) {
-        await _navigate(
-          fileIndex,
-          _PendingNavigation(offset: offset),
-        );
+        await _navigate(fileIndex, _PendingNavigation(offset: offset));
         return true;
       }
     }
@@ -1683,19 +1822,14 @@ class ViewerController extends ChangeNotifier {
           _readyCompleter.complete();
         }
       case 'bookEnd':
-        await _navigate(
-          book.readingOrder.length - 1,
-          const _PendingNavigation(atEnd: true),
-        );
+        await _navigate(book.readingOrder.length - 1, const _PendingNavigation(atEnd: true));
       case 'moreColumns':
         await setColumnsPerScreen(math.min(4, _columnsPerScreen + 1));
       case 'fewerColumns':
         await setColumnsPerScreen(math.max(0, _columnsPerScreen - 1));
       case 'toggleLayout':
         await setLayoutMode(
-          _layoutMode == ViewerLayoutMode.paged
-              ? ViewerLayoutMode.scroll
-              : ViewerLayoutMode.paged,
+          _layoutMode == ViewerLayoutMode.paged ? ViewerLayoutMode.scroll : ViewerLayoutMode.paged,
         );
     }
   }
@@ -1714,10 +1848,7 @@ class ViewerController extends ChangeNotifier {
     if (target == null) {
       return;
     }
-    await _navigate(
-      target,
-      _PendingNavigation(anchor: fragment.isEmpty ? null : fragment),
-    );
+    await _navigate(target, _PendingNavigation(anchor: fragment.isEmpty ? null : fragment));
   }
 
   (int, String)? _resolveNavTarget(final String content) {
@@ -1741,8 +1872,7 @@ class ViewerController extends ChangeNotifier {
   /// Resolves a relative href (from links or the TOC) to a
   /// reading-order index by suffix/basename match.
   int? _resolveRelativePath(final String path) {
-    final normalized =
-        path.replaceAll('\\', '/').replaceAll('./', '').toLowerCase();
+    final normalized = path.replaceAll('\\', '/').replaceAll('./', '').toLowerCase();
     final order = book.readingOrder;
     for (var i = 0; i < order.length; i++) {
       final name = order[i].name.toLowerCase();
@@ -1765,10 +1895,7 @@ class ViewerController extends ChangeNotifier {
   static String _excerpt(final String text, final int start, final int end) {
     final contextStart = start - 40 < 0 ? 0 : start - 40;
     final contextEnd = end + 40 > text.length ? text.length : end + 40;
-    return text
-        .substring(contextStart, contextEnd)
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    return text.substring(contextStart, contextEnd).replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
 

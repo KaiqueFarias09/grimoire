@@ -130,9 +130,7 @@ class _ThemeButton extends StatelessWidget {
       onPressed: () {
         final next = isDark
             ? ViewerTheme.sepia
-            : (controller.theme == ViewerTheme.sepia
-                ? ViewerTheme.light
-                : ViewerTheme.dark);
+            : (controller.theme == ViewerTheme.sepia ? ViewerTheme.light : ViewerTheme.dark);
         controller.setTheme(next);
       },
     );
@@ -160,8 +158,7 @@ class _BottomBar extends StatelessWidget {
               IconButton(
                 tooltip: 'Smaller text',
                 icon: const Icon(Icons.text_decrease),
-                onPressed: () =>
-                    controller.setFontSize(controller.fontSizePx - 1),
+                onPressed: () => controller.setFontSize(controller.fontSizePx - 1),
               ),
               Expanded(
                 child: Text(
@@ -174,8 +171,7 @@ class _BottomBar extends StatelessWidget {
               IconButton(
                 tooltip: 'Larger text',
                 icon: const Icon(Icons.text_increase),
-                onPressed: () =>
-                    controller.setFontSize(controller.fontSizePx + 1),
+                onPressed: () => controller.setFontSize(controller.fontSizePx + 1),
               ),
             ],
           ),
@@ -199,19 +195,13 @@ class _FileScrollbar extends StatelessWidget {
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onVerticalDragUpdate: (final details) {
-            controller.goToFraction(
-              details.globalPosition.dy.clamp(0.0, height) / height,
-            );
+            controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height);
           },
           onVerticalDragStart: (final details) {
-            controller.goToFraction(
-              details.globalPosition.dy.clamp(0.0, height) / height,
-            );
+            controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height);
           },
           onTapUp: (final details) {
-            controller.goToFraction(
-              details.globalPosition.dy.clamp(0.0, height) / height,
-            );
+            controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height);
           },
           child: Align(
             alignment: Alignment(0, frac * 2 - 1),
@@ -220,9 +210,7 @@ class _FileScrollbar extends StatelessWidget {
               height: 48,
               margin: const EdgeInsets.symmetric(vertical: 2),
               decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.35),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -238,27 +226,12 @@ class _SelectionToolbar extends StatelessWidget {
 
   final ViewerController controller;
 
-  static const List<(Icon, ViewerHighlightStyle, String)> _styles = [
-    (
-      Icon(Icons.highlight, color: Color(0xFFB58900)),
-      ViewerHighlightStyle.yellow,
-      'Yellow'
-    ),
-    (
-      Icon(Icons.highlight, color: Color(0xFF2AA198)),
-      ViewerHighlightStyle.green,
-      'Green'
-    ),
-    (
-      Icon(Icons.highlight, color: Color(0xFF268BD2)),
-      ViewerHighlightStyle.blue,
-      'Blue'
-    ),
-    (
-      Icon(Icons.format_underlined),
-      ViewerHighlightStyle.underline,
-      'Underline'
-    ),
+  static const List<(ViewerHighlightColor, String)> _colors = [
+    (ViewerHighlightColor.yellow, 'Yellow'),
+    (ViewerHighlightColor.green, 'Green'),
+    (ViewerHighlightColor.blue, 'Blue'),
+    (ViewerHighlightColor.pink, 'Pink'),
+    (ViewerHighlightColor.purple, 'Purple'),
   ];
 
   @override
@@ -278,13 +251,42 @@ class _SelectionToolbar extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (final (icon, style, tooltip) in _styles)
+                  for (final (color, tooltip) in _colors)
                     IconButton(
                       iconSize: 20,
                       tooltip: tooltip,
-                      icon: icon,
+                      isSelected:
+                          controller.defaultHighlightColor == color &&
+                          controller.defaultHighlightDecoration ==
+                              ViewerHighlightDecoration.background,
+                      icon: _Swatch(color: color.light),
                       onPressed: () {
-                        controller.addHighlightFromSelection(style: style);
+                        controller
+                          ..defaultHighlightColor = color
+                          ..defaultHighlightDecoration = ViewerHighlightDecoration.background;
+                        controller.addHighlightFromSelection();
+                        controller.clearSelection();
+                      },
+                    ),
+                  const VerticalDivider(width: 8, indent: 10, endIndent: 10),
+                  for (final (decoration, icon, tooltip) in const [
+                    (ViewerHighlightDecoration.wavy, Icons.format_underlined, 'Red wavy underline'),
+                    (
+                      ViewerHighlightDecoration.strikeout,
+                      Icons.format_strikethrough,
+                      'Red strikeout',
+                    ),
+                  ])
+                    IconButton(
+                      iconSize: 20,
+                      tooltip: tooltip,
+                      isSelected: controller.defaultHighlightDecoration == decoration,
+                      icon: Icon(icon, color: ViewerHighlightColor.red.light),
+                      onPressed: () {
+                        controller
+                          ..defaultHighlightColor = ViewerHighlightColor.red
+                          ..defaultHighlightDecoration = decoration;
+                        controller.addHighlightFromSelection();
                         controller.clearSelection();
                       },
                     ),
@@ -301,6 +303,21 @@ class _SelectionToolbar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _Swatch extends StatelessWidget {
+  const _Swatch({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(final BuildContext context) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

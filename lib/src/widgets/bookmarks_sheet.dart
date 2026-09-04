@@ -2,10 +2,7 @@ import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:flutter/material.dart';
 
 /// Opens the bookmarks + highlights panel as a bottom sheet.
-Future<void> showBookmarksSheet(
-  final BuildContext context,
-  final ViewerController controller,
-) {
+Future<void> showBookmarksSheet(final BuildContext context, final ViewerController controller) {
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -44,10 +41,7 @@ class BookmarksSheet extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
           child: Row(
             children: [
-              Expanded(
-                child: Text('Bookmarks & Highlights',
-                    style: theme.textTheme.titleMedium),
-              ),
+              Expanded(child: Text('Bookmarks & Highlights', style: theme.textTheme.titleMedium)),
               IconButton(icon: const Icon(Icons.close), onPressed: onClose),
             ],
           ),
@@ -61,11 +55,7 @@ class BookmarksSheet extends StatelessWidget {
                 ListTile(
                   dense: true,
                   leading: const Icon(Icons.bookmark_border),
-                  title: Text(
-                    bookmark.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  title: Text(bookmark.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(bookmark.position),
                   onTap: () {
                     Navigator.of(context).maybePop();
@@ -80,19 +70,11 @@ class BookmarksSheet extends StatelessWidget {
               for (final highlight in controller.highlights)
                 ListTile(
                   dense: true,
-                  leading: _styleIcon(highlight.style),
-                  title: Text(
-                    highlight.text,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  leading: _styleIcon(highlight),
+                  title: Text(highlight.text, maxLines: 2, overflow: TextOverflow.ellipsis),
                   subtitle: highlight.note == null
                       ? null
-                      : Text(
-                          highlight.note!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      : Text(highlight.note!, maxLines: 1, overflow: TextOverflow.ellipsis),
                   onTap: () {
                     Navigator.of(context).maybePop();
                     controller.goToHighlight(highlight);
@@ -115,23 +97,21 @@ class BookmarksSheet extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Text(
         '$title ($count)',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.primary,
-        ),
+        style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary),
       ),
     );
   }
 
-  static Widget _styleIcon(final ViewerHighlightStyle style) {
-    switch (style) {
-      case ViewerHighlightStyle.yellow:
-        return const Icon(Icons.highlight, color: Color(0xFFB58900));
-      case ViewerHighlightStyle.green:
-        return const Icon(Icons.highlight, color: Color(0xFF2AA198));
-      case ViewerHighlightStyle.blue:
-        return const Icon(Icons.highlight, color: Color(0xFF268BD2));
-      case ViewerHighlightStyle.underline:
-        return const Icon(Icons.format_underlined);
+  static Widget _styleIcon(final ViewerHighlight highlight) {
+    final color = highlight.color.light;
+    switch (highlight.decoration) {
+      case ViewerHighlightDecoration.background:
+        return Icon(Icons.highlight, color: color);
+      case ViewerHighlightDecoration.underline:
+      case ViewerHighlightDecoration.wavy:
+        return Icon(Icons.format_underlined, color: color);
+      case ViewerHighlightDecoration.strikeout:
+        return Icon(Icons.format_strikethrough, color: color);
     }
   }
 }

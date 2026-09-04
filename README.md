@@ -37,7 +37,10 @@ final controller = ViewerController(book);
 ELivreView(book: book, controller: controller);
 
 // Highlights (selection toolbar appears automatically):
-await controller.addHighlightFromSelection(style: ViewerHighlightStyle.yellow);
+await controller.addHighlightFromSelection(
+  color: ViewerHighlightColor.purple,
+  decoration: ViewerHighlightDecoration.background,
+);
 final highlightJson = controller.highlights.map((h) => h.toJson()).toList();
 
 // Bookmarks:
@@ -46,6 +49,16 @@ final bookmark = controller.addBookmark('Chapter 5');
 // Layout:
 await controller.setLayoutMode(ViewerLayoutMode.scroll);
 await controller.setColumnsPerScreen(2); // or 0 = auto for tablets
+
+// Typography:
+await controller.setFontFamily('Georgia, serif'); // null = book's fonts
+await controller.setJustify(true);
+await controller.setHyphenate(true);
+
+// Quick highlights remember the user's choice:
+controller.defaultHighlightColor = ViewerHighlightColor.purple;
+final highlight = await controller.addHighlightFromSelection();
+print(highlight?.locator.serialize()); // ('eLv1:0:12', 'eLv1:0:31')
 
 // Search:
 final results = await controller.search('white rabbit');

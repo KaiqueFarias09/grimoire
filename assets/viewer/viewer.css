@@ -87,9 +87,6 @@ body.elv-hyphenate {
   hyphens: auto;
 }
 
-/* Highlights (Calibre palette). */
+/* Highlights: colors and decorations are set inline per span by
+   viewer.js from the annotation's theme-aware palette. */
 .elv-hl { border-radius: 2px; }
-.elv-hl-yellow { background-color: rgba(181, 137, 0, 0.35); }
-.elv-hl-green { background-color: rgba(42, 161, 152, 0.35); }
-.elv-hl-blue { background-color: rgba(38, 139, 210, 0.35); }
-.elv-hl-underline { text-decoration: underline; text-decoration-thickness: 2px; }

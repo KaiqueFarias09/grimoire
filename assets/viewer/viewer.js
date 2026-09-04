@@ -28,6 +28,8 @@
     resizeTimer: null,
     suppressScrollNotify: false,
     highlights: {}, // id -> [span, ...]
+    highlightItems: {}, // id -> item (for theme recolor)
+    themeIsDark: false,
     isFullScreenLayout: false,
     hostViewport: null, // {w, h} from the Flutter widget when known
     writingMode: { vertical: false, rtl: false },
@@ -1065,10 +1067,29 @@
   }
 
   function applyHighlights(items) {
+    state.themeIsDark = detectThemeBrightness();
+    state.highlightItems = {};
+    for (var i = 0; i < items.length; i++) {
+      state.highlightItems[items[i].id] = items[i];
+    }
     clearHighlightSpans();
     for (var i = 0; i < items.length; i++) {
       applyHighlight(items[i]);
     }
+  }
+
+  // Page background luminance decides which palette half a highlight
+  // color uses (parity: calibre read_book/globals.pyj is_dark_theme).
+  function detectThemeBrightness() {
+    var bg = getComputedStyle(document.documentElement)
+      .getPropertyValue('--elv-bg') || '';
+    if (bg.charAt(0) !== '#' || bg.length < 7) {
+      return false;
+    }
+    var r = parseInt(bg.slice(1, 3), 16) / 255;
+    var g = parseInt(bg.slice(3, 5), 16) / 255;
+    var b = parseInt(bg.slice(5, 7), 16) / 255;
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 0.5;
   }
 
   // Parity: calibre src/pyj/range_utils.pyj:150-157 (wrap_range) —
@@ -1115,7 +1136,8 @@
       }
       var span = document.createElement('span');
       span.setAttribute('data-elv-hl', item.id);
-      span.className = 'elv-hl elv-hl-' + (item.style || 'yellow');
+      span.className = 'elv-hl';
+      applyHighlightStyle(span, item);
       wrapRange(range, span);
       spans.push(span);
       consumed = nodeEnd;
@@ -1129,6 +1151,51 @@
         ancestor.normalize();
       }
       state.highlights[item.id] = spans;
+    }
+  }
+
+  // Parity: calibre src/pyj/read_book/highlights.pyj
+  // (highlight_style_as_css) — inline !important styles so book
+  // stylesheets cannot override them, and the color half follows the
+  // active theme.
+  function applyHighlightStyle(span, item) {
+    var decoration = item.decoration || 'background';
+    var color = highlightColor(item);
+    if (decoration === 'strikeout') {
+      span.style.setProperty('text-decoration-line', 'line-through', 'important');
+      span.style.setProperty('text-decoration-color', color, 'important');
+      return;
+    }
+    if (decoration === 'underline' || decoration === 'wavy') {
+      span.style.setProperty('text-decoration-line', 'underline', 'important');
+      span.style.setProperty(
+        'text-decoration-style', decoration === 'wavy' ? 'wavy' : 'solid', 'important');
+      span.style.setProperty('text-decoration-color', color, 'important');
+      return;
+    }
+    span.style.setProperty('background-color', color, 'important');
+  }
+
+  function highlightColor(item) {
+    var raw = state.themeIsDark ? item.colorDark : item.colorLight;
+    return raw || '#ffeb6b';
+  }
+
+  // Recolors spans in place when the theme flips light/dark; the
+  // ranges stay wrapped so the character-offset model is untouched.
+  function recolorHighlights() {
+    for (var id in state.highlights) {
+      if (!Object.prototype.hasOwnProperty.call(state.highlights, id)) {
+        continue;
+      }
+      var item = state.highlightItems[id];
+      if (!item) {
+        continue;
+      }
+      var spans = state.highlights[id];
+      for (var i = 0; i < spans.length; i++) {
+        applyHighlightStyle(spans[i], item);
+      }
     }
   }
 
@@ -1396,6 +1463,11 @@
         root.style.setProperty(key, vars[key]);
       }
     }
+    var dark = detectThemeBrightness();
+    if (dark !== state.themeIsDark) {
+      state.themeIsDark = dark;
+      recolorHighlights();
+    }
   }
 
   // --- message API from Dart ---
@@ -1443,12 +1515,14 @@
         break;
       case 'setFontFamily':
         applyFontFamily(message.font || '');
+        relayoutKeepingPosition();
         break;
       case 'setTextJustify':
         document.body.classList.toggle(
           'elv-justify',
           !!message.enabled
         );
+        relayoutKeepingPosition();
         break;
       case 'setHyphenation':
         document.body.classList.toggle(
@@ -1458,6 +1532,7 @@
         if (message.lang) {
           document.documentElement.lang = message.lang;
         }
+        relayoutKeepingPosition();
         break;
       case 'goToFraction':
         if (state.ready) {

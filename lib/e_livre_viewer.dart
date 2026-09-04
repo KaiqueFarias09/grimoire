@@ -22,13 +22,13 @@ export 'src/controller/viewer_controller.dart'
         ViewerSearchResult,
         ViewerSelection,
         ViewerHighlight,
-        ViewerHighlightStyle,
+        ViewerHighlightColor,
+        ViewerHighlightDecoration,
         ViewerBookmark,
         ViewerLayoutMode,
         BookPageCountMode;
 export 'src/features/navigation/viewer_position.dart'
-    show ViewerPosition, ReadingState;
-export 'src/features/rendering/api/viewer_engine.dart'
-    show ViewerEngine, ViewerEngineFactory;
+    show ViewerLocator, ViewerPosition, ReadingState;
+export 'src/features/rendering/api/viewer_engine.dart' show ViewerEngine, ViewerEngineFactory;
 export 'src/features/settings/viewer_theme.dart' show ViewerTheme;
 export 'src/widgets/elivre_view.dart' show ELivreView;

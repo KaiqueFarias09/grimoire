@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/test_book.dart';
@@ -12,16 +13,8 @@ Book _comicBook() {
     cover: BinaryFile.empty(),
     metadata: const BookMetadata(format: BookFormat.cbz, title: 'C'),
     pages: [
-      BinaryFile(
-          content: Uint8List.fromList([1]),
-          name: 'p1.png',
-          type: 'png',
-          path: 'p1.png'),
-      BinaryFile(
-          content: Uint8List.fromList([2]),
-          name: 'p2.png',
-          type: 'png',
-          path: 'p2.png'),
+      BinaryFile(content: Uint8List.fromList([1]), name: 'p1.png', type: 'png', path: 'p1.png'),
+      BinaryFile(content: Uint8List.fromList([2]), name: 'p2.png', type: 'png', path: 'p2.png'),
     ],
     format: BookFormat.cbz,
   );
@@ -38,9 +31,11 @@ void main() {
         text: 'highlighted',
         before: 'text before ',
         after: ' text after',
-        style: ViewerHighlightStyle.yellow,
+        color: ViewerHighlightColor.purple,
+        decoration: ViewerHighlightDecoration.wavy,
         createdAtIso: '2026-08-30T00:00:00Z',
         note: 'my note',
+        cfi: 'epubcfi(/6/4!/4/2,/1:0,/1:11)',
       );
       final json = highlight.toJson();
       final restored = ViewerHighlight.fromJson(json)!;
@@ -51,8 +46,27 @@ void main() {
       expect(restored.text, highlight.text);
       expect(restored.before, highlight.before);
       expect(restored.after, highlight.after);
-      expect(restored.style, highlight.style);
+      expect(restored.color, highlight.color);
+      expect(restored.decoration, highlight.decoration);
       expect(restored.note, highlight.note);
+      expect(restored.cfi, highlight.cfi);
+    });
+
+    test('json round-trips default decoration', () {
+      const highlight = ViewerHighlight(
+        id: 'hl-2',
+        fileIndex: 3,
+        start: 0,
+        end: 4,
+        text: 'word',
+        before: '',
+        after: '',
+        color: ViewerHighlightColor.yellow,
+        createdAtIso: '',
+      );
+      final restored = ViewerHighlight.fromJson(highlight.toJson())!;
+      expect(restored.decoration, ViewerHighlightDecoration.background);
+      expect(restored.color, ViewerHighlightColor.yellow);
     });
 
     test('json rejects malformed payloads', () {
@@ -64,9 +78,51 @@ void main() {
           'start': 0,
           'end': 1,
           'text': 'a',
-          'style': 'bogus'
+          'decoration': 'bogus',
+          'color': ViewerHighlightColor.green.toJson(),
         }),
         isNull,
+      );
+      expect(
+        ViewerHighlight.fromJson({
+          'id': 'x',
+          'fileIndex': 0,
+          'start': 0,
+          'end': 1,
+          'text': 'a',
+          'decoration': 'background',
+        }),
+        isNull,
+      );
+      expect(
+        ViewerHighlight.fromJson({
+          'id': 'x',
+          'fileIndex': 0,
+          'start': 0,
+          'end': 1,
+          'text': 'a',
+          'decoration': 'background',
+          'color': {'light': '#ffeb6b'},
+        }),
+        isNull,
+      );
+    });
+
+    test('highlight color parses hex halves and rejects junk', () {
+      final color = ViewerHighlightColor.fromJson(ViewerHighlightColor.purple.toJson());
+      expect(color, ViewerHighlightColor.purple);
+      expect(ViewerHighlightColor.fromJson({'light': '#ffeb6b', 'dark': 'nope'}), isNull);
+      expect(ViewerHighlightColor.fromJson('#ffeb6b'), isNull);
+    });
+
+    test('highlight color resolves by background brightness', () {
+      expect(
+        ViewerHighlightColor.yellow.resolve(const Color(0xFFFFFFFF)).toARGB32(),
+        ViewerHighlightColor.yellow.light.toARGB32(),
+      );
+      expect(
+        ViewerHighlightColor.yellow.resolve(const Color(0xFF151515)).toARGB32(),
+        ViewerHighlightColor.yellow.dark.toARGB32(),
       );
     });
 
@@ -79,13 +135,10 @@ void main() {
         text: 'llo',
         before: 'he',
         after: ' wo',
-        style: ViewerHighlightStyle.green,
+        color: ViewerHighlightColor.green,
         createdAtIso: '',
       );
-      expect(
-        ViewerController.relocateHighlight(highlight, 'hello world'),
-        (2, 5),
-      );
+      expect(ViewerController.relocateHighlight(highlight, 'hello world'), (2, 5));
     });
 
     test('relocateHighlight drifts when offsets shift', () {
@@ -97,14 +150,11 @@ void main() {
         text: 'llo',
         before: '',
         after: '',
-        style: ViewerHighlightStyle.blue,
+        color: ViewerHighlightColor.blue,
         createdAtIso: '',
       );
       // 'llo' moved to index 3.
-      expect(
-        ViewerController.relocateHighlight(highlight, 'Say hello world'),
-        (6, 9),
-      );
+      expect(ViewerController.relocateHighlight(highlight, 'Say hello world'), (6, 9));
     });
 
     test('relocateHighlight returns null when text is gone', () {
@@ -116,13 +166,47 @@ void main() {
         text: 'gone',
         before: '',
         after: '',
-        style: ViewerHighlightStyle.underline,
+        color: ViewerHighlightColor.red,
+        decoration: ViewerHighlightDecoration.strikeout,
         createdAtIso: '',
       );
-      expect(
-        ViewerController.relocateHighlight(highlight, 'different entirely'),
-        isNull,
+      expect(ViewerController.relocateHighlight(highlight, 'different entirely'), isNull);
+    });
+  });
+
+  group('ViewerLocator', () {
+    test('serialize and parse round-trip', () {
+      const locator = ViewerLocator(fileIndex: 2, start: 10, end: 25);
+      final (start, end) = locator.serialize();
+      expect(start, 'eLv1:2:10');
+      expect(end, 'eLv1:2:25');
+      expect(ViewerLocator.parse(start, end), locator);
+      expect(locator.startSerialized, 'eLv1:2:10');
+      expect(locator.endSerialized, 'eLv1:2:25');
+    });
+
+    test('parse rejects mismatched files and empty or inverted ranges', () {
+      expect(ViewerLocator.parse('eLv1:0:5', 'eLv1:1:9'), isNull);
+      expect(ViewerLocator.parse('eLv1:0:9', 'eLv1:0:9'), isNull);
+      expect(ViewerLocator.parse('eLv1:0:9', 'eLv1:0:2'), isNull);
+      expect(ViewerLocator.parse('junk', 'eLv1:0:9'), isNull);
+      expect(ViewerLocator.parse('eLv1:0:2'), isNull);
+    });
+
+    test('highlights and selections expose locators', () {
+      const highlight = ViewerHighlight(
+        id: 'x',
+        fileIndex: 1,
+        start: 3,
+        end: 8,
+        text: 'thing',
+        before: '',
+        after: '',
+        color: ViewerHighlightColor.blue,
+        createdAtIso: '',
       );
+      expect(highlight.locator, const ViewerLocator(fileIndex: 1, start: 3, end: 8));
+      expect(highlight.locator.serialize(), ('eLv1:1:3', 'eLv1:1:8'));
     });
   });
 
@@ -139,17 +223,13 @@ void main() {
       controller.dispose();
     });
 
-    test('start loads the first file into slot 0 and preloads slot 1',
-        () async {
+    test('start loads the first file into slot 0 and preloads slot 1', () async {
       await controller.start();
       // Wait for the preload timer.
       await Future<void>.delayed(const Duration(milliseconds: 600));
 
       expect(factory.engines[0].loadedUrls, hasLength(1));
-      expect(
-        factory.engines[0].loadedUrls.first.path,
-        contains('/book/chapter1.html'),
-      );
+      expect(factory.engines[0].loadedUrls.first.path, contains('/book/chapter1.html'));
       // Slot 1 preloaded chapter 2.
       expect(
         factory.engines[1].loadedUrls.map((final u) => u.path).toList(),
@@ -162,10 +242,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 600));
 
       // Simulate the active page hitting the end.
-      factory.engines[0].postMessage({
-        'type': 'fileBoundary',
-        'direction': 1,
-      });
+      factory.engines[0].postMessage({'type': 'fileBoundary', 'direction': 1});
       await Future<void>.delayed(Duration.zero);
 
       // The spare engine (slot 1) already has chapter2; fast path.
@@ -257,11 +334,80 @@ void main() {
 
       // Both engines should have received the theme vars.
       for (final engine in factory.engines) {
-        expect(
-          engine.scripts.where((final s) => s.contains('setVars')),
-          isNotEmpty,
-        );
+        expect(engine.scripts.where((final s) => s.contains('setVars')), isNotEmpty);
       }
+    });
+
+    test('typography settings reach engines on ready and on change', () async {
+      await controller.setFontFamily('Georgia, serif');
+      await controller.setJustify(true);
+      await controller.setHyphenate(true);
+      expect(controller.fontFamily, 'Georgia, serif');
+      expect(controller.justify, isTrue);
+      expect(controller.hyphenate, isTrue);
+
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      for (final engine in factory.engines) {
+        expect(engine.scripts.where((final s) => s.contains('setFontFamily')), isNotEmpty);
+        expect(engine.scripts.where((final s) => s.contains('setTextJustify')), isNotEmpty);
+        expect(engine.scripts.where((final s) => s.contains('setHyphenation')), isNotEmpty);
+      }
+
+      await controller.setFontFamily(null);
+      expect(controller.fontFamily, isNull);
+    });
+
+    test('quick highlight uses the remembered default style', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      factory.engines[controller.activeEngineIndex].postMessage({
+        'type': 'selectionChanged',
+        'text': 'some text',
+        'start': 5,
+        'end': 14,
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      controller
+        ..defaultHighlightColor = ViewerHighlightColor.purple
+        ..defaultHighlightDecoration = ViewerHighlightDecoration.wavy;
+      final highlight = await controller.addHighlightFromSelection();
+      expect(highlight!.color, ViewerHighlightColor.purple);
+      expect(highlight.decoration, ViewerHighlightDecoration.wavy);
+
+      // Explicit arguments still win over the defaults.
+      final blue = await controller.addHighlightFromSelection(color: ViewerHighlightColor.blue);
+      expect(blue!.color, ViewerHighlightColor.blue);
+      expect(blue.decoration, ViewerHighlightDecoration.wavy);
+    });
+
+    test('useHostChrome keeps chrome hidden but reports toggle events', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      final toggles = <ChromeToggleEvent>[];
+      final sub = controller.bridge.events.listen((final event) {
+        if (event is ChromeToggleEvent) {
+          toggles.add(event);
+        }
+      });
+      addTearDown(sub.cancel);
+
+      controller.useHostChrome = true;
+      controller.toggleChrome();
+      expect(controller.chromeVisible, isFalse);
+
+      factory.engines[controller.activeEngineIndex].postMessage({'type': 'chromeToggle'});
+      await Future<void>.delayed(Duration.zero);
+      expect(toggles, hasLength(1));
+      expect(controller.chromeVisible, isFalse);
+
+      controller.useHostChrome = false;
+      controller.toggleChrome();
+      expect(controller.chromeVisible, isTrue);
     });
   });
 }

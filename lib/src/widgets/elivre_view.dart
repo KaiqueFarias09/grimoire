@@ -91,11 +91,20 @@ class _ELivreViewState extends State<ELivreView> {
     _startFuture = _boot();
   }
 
+  @override
+  void didUpdateWidget(final ELivreView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.showShell != widget.showShell) {
+      _controller.useHostChrome = !widget.showShell;
+    }
+  }
+
   StreamSubscription<String>? _imagePopupSub;
   StreamSubscription<FootnoteTapEvent>? _footnoteSub;
 
   Future<void> _boot() async {
     final controller = _controller;
+    controller.useHostChrome = !widget.showShell;
     if (widget.onExternalLink != null) {
       controller.onExternalLink = widget.onExternalLink;
     }
@@ -126,8 +135,7 @@ class _ELivreViewState extends State<ELivreView> {
     if (widget.initialPosition != null) {
       await controller.goToSerializedPosition(widget.initialPosition!);
     }
-    if (!_wired &&
-        (widget.onPositionChanged != null || widget.onSelection != null)) {
+    if (!_wired && (widget.onPositionChanged != null || widget.onSelection != null)) {
       _wired = true;
       if (widget.onPositionChanged != null) {
         controller.addListener(_notifyPosition);
@@ -163,11 +171,7 @@ class _ELivreViewState extends State<ELivreView> {
                 src,
                 fit: BoxFit.contain,
                 errorBuilder: (final context, final error, final stack) =>
-                    const Icon(
-                  Icons.broken_image,
-                  size: 48,
-                  color: Colors.white70,
-                ),
+                    const Icon(Icons.broken_image, size: 48, color: Colors.white70),
               ),
             ),
           ),
@@ -221,10 +225,7 @@ class _ELivreViewState extends State<ELivreView> {
                 padding: EdgeInsets.all(controller.marginsPx.toDouble()),
                 child: LayoutBuilder(
                   builder: (final context, final constraints) {
-                    controller.setLogicalViewport(
-                      constraints.maxWidth,
-                      constraints.maxHeight,
-                    );
+                    controller.setLogicalViewport(constraints.maxWidth, constraints.maxHeight);
                     return Stack(
                       children: [
                         // Inactive engine below (preloaded content), active on
@@ -234,9 +235,7 @@ class _ELivreViewState extends State<ELivreView> {
                         if (engines.length > active)
                           Positioned.fill(child: engines[active].buildWidget()),
                         if (widget.showShell)
-                          Positioned.fill(
-                            child: ReaderShell(controller: controller),
-                          ),
+                          Positioned.fill(child: ReaderShell(controller: controller)),
                       ],
                     );
                   },
