@@ -1191,6 +1191,13 @@
       post({ type: 'chromeToggle' });
       return;
     }
+    // Modern reader convention: the center third toggles the host
+    // chrome (Moon+ / Kindle / Apple Books behavior), leaving the
+    // calibre side zones for turning.
+    if (x >= w / 3 && x <= (2 * w) / 3) {
+      post({ type: 'chromeToggle' });
+      return;
+    }
     var backZone = Math.min(unitSizeInPixels('in'), w / 4);
     var forward = state.writingMode.rtl
       ? x < w - backZone
@@ -1968,6 +1975,11 @@
     // gesture handlers need the raw stream without browser panning.
     if ('ontouchstart' in window) {
       document.body.style.touchAction = 'none';
+      // Paged taps land on the document element whenever they hit the
+      // column-overflow area outside the body's fixed-width box; iOS
+      // WebKit applies its double-tap-zoom delay (~350ms) to clicks
+      // unless the tapped element opts out of touch gestures too.
+      document.documentElement.style.touchAction = 'none';
     }
 
     var scrollNotifyTimer = null;
