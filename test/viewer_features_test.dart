@@ -565,7 +565,182 @@ void main() {
       expect(controller.position.fileIndex, 0);
       expect(controller.canGoForward, isFalse);
     });
+
+    test('rtl page progression reaches the engines', () async {
+      expect(controller.rtlPageProgression, isFalse);
+
+      final rtlBook = buildTestBook(pageProgressionDirection: 'rtl');
+      final rtlController = ViewerController(rtlBook, engineFactory: factory);
+      addTearDown(rtlController.dispose);
+      expect(rtlController.rtlPageProgression, isTrue);
+
+      await rtlController.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      for (final engine in factory.engines.skip(2)) {
+        expect(engine.scripts.where((final s) => s.contains('setPageProgression')), isNotEmpty);
+      }
+
+      await rtlController.setReversePageTurnZones(true);
+      expect(rtlController.reversePageTurnZones, isTrue);
+    });
+
+    group('search modes', () {
+      setUp(() async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+      });
+
+      test('regex mode matches the raw pattern', () async {
+        final results = await controller.search(r'wo\w+', mode: SearchMode.regex);
+        expect(results, isNotEmpty);
+        expect(controller.searchResults.first.excerpt, isNotEmpty);
+      });
+
+      test('proximity mode finds words within the interval', () async {
+        final results = await controller.search('more search 400', mode: SearchMode.proximity);
+        expect(results, hasLength(1));
+      });
+
+      test('forwards caseSensitive to the engine', () async {
+        final insensitive = await controller.search('chapter');
+        final sensitive = await controller.search('Chapter', caseSensitive: true);
+        expect(insensitive.length, greaterThanOrEqualTo(sensitive.length));
+      });
+
+      test('invalid regex throws FormatException', () async {
+        await expectLater(
+          controller.search('([unclosed', mode: SearchMode.regex),
+          throwsFormatException,
+        );
+      });
+
+      test('marks matches on the active engine after searching', () async {
+        final engine = factory.engines[controller.activeEngineIndex];
+        await controller.search('search');
+        expect(engine.scripts.where((final s) => s.contains('setSearchMatches')), isNotEmpty);
+      });
+
+      test('clearSearch empties the page markers', () async {
+        final engine = factory.engines[controller.activeEngineIndex];
+        await controller.search('search');
+        await controller.clearSearch();
+        expect(
+          engine.scripts.lastWhere((final s) => s.contains('setSearchMatches'), orElse: () => ''),
+          contains('[]'),
+        );
+      });
+    });
+
+    test('per-side margins reach the engine as four values', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      await controller.setMarginsPerSide(
+        const ViewerMargins(left: 4, top: 6, right: 8, bottom: 10),
+      );
+      expect(controller.margins.left, 4);
+      expect(controller.margins.bottom, 10);
+      expect(controller.marginsPx, 4);
+
+      final engine = factory.engines[controller.activeEngineIndex];
+      final sent = engine.scripts.lastWhere(
+        (final s) => s.contains('setMargins'),
+        orElse: () => '',
+      );
+      expect(sent, contains('"left":4'));
+      expect(sent, contains('"bottom":10'));
+
+      // The uniform shorthand still works.
+      await controller.setMargins(30);
+      expect(controller.margins, ViewerMargins.uniform(30));
+    });
+
+    test('capture and apply profile round-trips appearance', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      await controller.setTheme(ViewerTheme.sepia);
+      await controller.setFontFamily('Georgia, serif');
+      await controller.setJustify(true);
+      await controller.setMarginsPerSide(
+        const ViewerMargins(left: 12, top: 24, right: 12, bottom: 24, maxTextWidth: 720),
+      );
+      await controller.setColumnsPerScreen(2);
+      await controller.setLayoutMode(ViewerLayoutMode.scroll);
+      await controller.setUserStylesheet('p { color: purple; }');
+
+      final captured = controller.captureProfile();
+      expect(captured.containsKey('fontSize'), isFalse, reason: 'default values are dropped');
+
+      // Mutate everything away from the captured state, then restore.
+      await controller.applyProfile(<String, Object?>{});
+      expect(controller.theme, ViewerTheme.light);
+      expect(controller.fontFamily, isNull);
+      expect(controller.justify, isFalse);
+      expect(controller.margins, ViewerMargins.uniform(20));
+      expect(controller.columnsPerScreen, 0);
+      expect(controller.layoutMode, ViewerLayoutMode.paged);
+      expect(controller.userStylesheet, isNull);
+
+      await controller.applyProfile(captured);
+      expect(controller.theme, ViewerTheme.sepia);
+      expect(controller.fontFamily, 'Georgia, serif');
+      expect(controller.justify, isTrue);
+      expect(
+        controller.margins,
+        const ViewerMargins(left: 12, top: 24, right: 12, bottom: 24, maxTextWidth: 720),
+      );
+      expect(controller.columnsPerScreen, 2);
+      expect(controller.layoutMode, ViewerLayoutMode.scroll);
+      expect(controller.userStylesheet, 'p { color: purple; }');
+    });
+
+    test('user stylesheet reaches the engine and the replay', () async {
+      await controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      await controller.setUserStylesheet('p { margin: 0; }');
+      expect(controller.userStylesheet, 'p { margin: 0; }');
+      final engine = factory.engines[controller.activeEngineIndex];
+      expect(engine.scripts.where((final s) => s.contains('setStylesheet')), isNotEmpty);
+      expect(controller.captureProfile()['stylesheet'], 'p { margin: 0; }');
+
+      await controller.setUserStylesheet(null);
+      expect(controller.userStylesheet, isNull);
+    });
+
+    // A minimal dark theme for the test.
+
+    group('ViewerMargins', () {
+      test('json round-trips and rejects junk', () {
+        const margins = ViewerMargins(left: 8, top: 4, right: 12, bottom: 6, maxTextWidth: 700);
+        expect(ViewerMargins.fromJson(margins.toJson()), margins);
+        expect(ViewerMargins.fromJson({'left': -1}), isNull);
+        expect(ViewerMargins.fromJson(null), isNull);
+      });
+
+      test('grows insets to respect the text-block caps', () {
+        // 800 wide viewport, 40 side margins: 720 of text; a 600 cap adds
+        // 60 to each side.
+        final insets = const ViewerMargins(
+          left: 40,
+          right: 40,
+          maxTextWidth: 600,
+        ).insetsFor(availableWidth: 800, availableHeight: 600);
+        expect(insets.left, 100);
+        expect(insets.right, 100);
+        // Untouched when the text is already narrower than the cap.
+        final small = const ViewerMargins(
+          maxTextWidth: 600,
+        ).insetsFor(availableWidth: 500, availableHeight: 600);
+        expect(small.left, 20);
+      });
+
+      test('negative values clamp to zero', () {
+        const margins = ViewerMargins(left: -5, maxTextHeight: -3);
+        expect(margins.left, 0);
+        expect(margins.maxTextHeight, 0);
+      });
+    });
   });
 }
-
-// A minimal dark theme for the test.

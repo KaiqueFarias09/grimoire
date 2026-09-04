@@ -100,6 +100,8 @@ class _ELivreViewState extends State<ELivreView> {
   }
 
   StreamSubscription<String>? _imagePopupSub;
+  StreamSubscription<ViewerPageChange>? _pageChangeSub;
+  String _pageAnnouncement = '';
   StreamSubscription<FootnoteTapEvent>? _footnoteSub;
 
   Future<void> _boot() async {
@@ -126,6 +128,20 @@ class _ELivreViewState extends State<ELivreView> {
       } else {
         _showImagePopup(src);
       }
+    });
+    _pageChangeSub = controller.pageChanges.listen((final change) {
+      if (!mounted) {
+        return;
+      }
+      final percent = (change.progress * 100).round();
+      final page = change.position.column + 1;
+      final total = change.position.columns;
+      final chapter = change.chapterTitle;
+      setState(() {
+        _pageAnnouncement =
+            'Page $page of $total'
+            '${chapter != null ? ', $chapter' : ''}, $percent percent';
+      });
     });
     _footnoteSub = controller.footnoteTapEvents.listen((final event) {
       if (!mounted) {
@@ -206,6 +222,7 @@ class _ELivreViewState extends State<ELivreView> {
   void dispose() {
     _imagePopupSub?.cancel();
     _footnoteSub?.cancel();
+    _pageChangeSub?.cancel();
     _ownedController?.removeListener(_notifyPosition);
     _ownedController?.dispose();
     super.dispose();
@@ -240,28 +257,47 @@ class _ELivreViewState extends State<ELivreView> {
             // the same way (margin: 0 on the body, but the frame comes
             // from the window), so text never touches the edges.
             return SafeArea(
-              child: Padding(
-                // Calibre margins: 20 on every side (margin_left/right
-                // frame the text horizontally; margin_top/bottom keep
-                // it clear of the chrome).
-                padding: EdgeInsets.all(controller.marginsPx.toDouble()),
-                child: LayoutBuilder(
-                  builder: (final context, final constraints) {
-                    controller.setLogicalViewport(constraints.maxWidth, constraints.maxHeight);
-                    return Stack(
-                      children: [
-                        // Inactive engine below (preloaded content), active on
-                        // top, reader chrome overlays everything.
-                        if (engines.length > below)
-                          Positioned.fill(child: engines[below].buildWidget()),
-                        if (engines.length > active)
-                          Positioned.fill(child: engines[active].buildWidget()),
-                        if (widget.showShell)
-                          Positioned.fill(child: ReaderShell(controller: controller)),
-                      ],
-                    );
-                  },
-                ),
+              child: LayoutBuilder(
+                builder: (final context, final outer) {
+                  // Calibre View.set_margins: the text-block caps grow
+                  // the margins instead of shrinking the page.
+                  final insets = controller.margins.insetsFor(
+                    availableWidth: outer.maxWidth,
+                    availableHeight: outer.maxHeight,
+                  );
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      insets.left,
+                      insets.top,
+                      insets.right,
+                      insets.bottom,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (final context, final constraints) {
+                        controller.setLogicalViewport(constraints.maxWidth, constraints.maxHeight);
+                        return Stack(
+                          children: [
+                            // Screen readers announce page turns
+                            // (TalkBack/VoiceOver live region).
+                            Semantics(
+                              liveRegion: true,
+                              label: _pageAnnouncement,
+                              child: const SizedBox.shrink(),
+                            ),
+                            // Inactive engine below (preloaded content), active on
+                            // top, reader chrome overlays everything.
+                            if (engines.length > below)
+                              Positioned.fill(child: engines[below].buildWidget()),
+                            if (engines.length > active)
+                              Positioned.fill(child: engines[active].buildWidget()),
+                            if (widget.showShell)
+                              Positioned.fill(child: ReaderShell(controller: controller)),
+                          ],
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
             );
           },

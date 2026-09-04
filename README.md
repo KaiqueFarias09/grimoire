@@ -72,6 +72,23 @@ if (controller.canGoBack) await controller.goBack();
 // Footnotes as popups instead of page jumps:
 controller.footnoteMode = ViewerFootnoteMode.popup;
 
+// Search modes (contains, wholeWords, regex, near):
+await controller.search('rabbit warren 120', mode: SearchMode.proximity);
+
+// Per-side margins, text-block caps and a user stylesheet:
+await controller.setMarginsPerSide(
+  const ViewerMargins(left: 8, top: 24, right: 8, bottom: 24, maxTextWidth: 720),
+);
+await controller.setUserStylesheet('p { text-indent: 0 !important; }');
+
+// Reader profiles: capture the look, restore it later (storage is yours).
+final profile = controller.captureProfile(); // sparse diff-from-default
+await controller.applyProfile(profile);
+
+// RTL books are mirrored automatically from the EPUB spine
+// (`page-progression-direction="rtl"`); you can also swap tap zones:
+await controller.setReversePageTurnZones(true);
+
 // Search:
 final results = await controller.search('white rabbit');
 await controller.goToSearchResult(results.first);

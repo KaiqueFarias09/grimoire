@@ -16,8 +16,11 @@ export 'src/features/bridge/viewer_bridge.dart'
         ShortcutEvent,
         ViewImageEvent,
         FootnoteTapEvent,
-        MathJaxReadyEvent;
+        MathJaxReadyEvent,
+        FragmentOffsetEvent;
 export 'src/features/mathjax/mathjax_loader.dart' show MathJaxLoader;
+export 'src/features/narration/text_segmentation.dart' show TextSegment, segmentText;
+export 'package:e_livre/e_livre.dart' show SearchMode;
 export 'src/features/annotations/export_html.dart'
     show ViewerHtmlExportOptions, ViewerHtmlPartFormatter;
 export 'src/features/annotations/export_markdown.dart'
@@ -49,5 +52,6 @@ export 'src/controller/viewer_controller.dart'
 export 'src/features/navigation/viewer_position.dart'
     show ViewerLocator, ViewerPosition, ReadingState;
 export 'src/features/rendering/api/viewer_engine.dart' show ViewerEngine, ViewerEngineFactory;
+export 'src/features/settings/viewer_margins.dart' show ViewerMargins;
 export 'src/features/settings/viewer_theme.dart' show ViewerTheme;
 export 'src/widgets/elivre_view.dart' show ELivreView;

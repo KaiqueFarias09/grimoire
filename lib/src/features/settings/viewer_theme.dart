@@ -77,6 +77,53 @@ class ViewerTheme {
     );
   }
 
+  @override
+  bool operator ==(final Object other) =>
+      other is ViewerTheme &&
+      other.background == background &&
+      other.foreground == foreground &&
+      other.link == link &&
+      other.overrideBookColors == overrideBookColors;
+
+  @override
+  int get hashCode => Object.hash(background, foreground, link, overrideBookColors);
+
+  /// JSON for host persistence (reader profiles).
+  Map<String, Object?> toJson() => <String, Object?>{
+    'background': _hex(background),
+    'foreground': _hex(foreground),
+    'link': _hex(link),
+    'overrideBookColors': overrideBookColors,
+  };
+
+  /// Restores from JSON ([toJson]); null fields fall back to the
+  /// light scheme.
+  static ViewerTheme? fromJson(final Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    Color? parse(final Object? value) {
+      if (value is! String || !value.startsWith('#') || value.length != 7) {
+        return null;
+      }
+      final rgb = int.tryParse(value.substring(1), radix: 16);
+      return rgb == null ? null : Color(0xFF000000 | rgb);
+    }
+
+    final background = parse(json['background']);
+    final foreground = parse(json['foreground']);
+    final link = parse(json['link']);
+    if (background == null || foreground == null || link == null) {
+      return null;
+    }
+    return ViewerTheme(
+      background: background,
+      foreground: foreground,
+      link: link,
+      overrideBookColors: json['overrideBookColors'] == true,
+    );
+  }
+
   static String _hex(final Color color) {
     final argb = color.toARGB32();
     return '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';

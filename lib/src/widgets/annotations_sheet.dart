@@ -131,7 +131,11 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
             icon: Icon(_bookmarksTab ? Icons.highlight : Icons.bookmark_border),
             onPressed: () => setState(() => _bookmarksTab = !_bookmarksTab),
           ),
-          IconButton(icon: const Icon(Icons.close), onPressed: widget.onClose),
+          IconButton(
+            tooltip: 'Close annotations',
+            icon: const Icon(Icons.close),
+            onPressed: widget.onClose,
+          ),
         ],
       ),
     );
@@ -151,6 +155,7 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
                 _ColorDot(
                   color: color.light,
                   selected: _colors.contains(color),
+                  label: 'Filter highlights by color',
                   onTap: () => setState(() {
                     _colors.contains(color) ? _colors.remove(color) : _colors.add(color);
                   }),
@@ -180,6 +185,7 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
                 _DecorationChip(
                   icon: icon,
                   selected: _decorations.contains(decoration),
+                  label: 'Filter highlights by decoration',
                   onTap: () => setState(() {
                     _decorations.contains(decoration)
                         ? _decorations.remove(decoration)
@@ -380,28 +386,39 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
 }
 
 class _ColorDot extends StatelessWidget {
-  const _ColorDot({required this.color, required this.selected, required this.onTap});
+  const _ColorDot({
+    required this.color,
+    required this.selected,
+    required this.label,
+    required this.onTap,
+  });
 
   final Color color;
   final bool selected;
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(final BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: selected
-              ? Border.fromBorderSide(
-                  BorderSide(color: Theme.of(context).colorScheme.onSurface, width: 2.5),
-                )
-              : null,
+    return Semantics(
+      label: label,
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: selected
+                ? Border.fromBorderSide(
+                    BorderSide(color: Theme.of(context).colorScheme.onSurface, width: 2.5),
+                  )
+                : null,
+          ),
         ),
       ),
     );
@@ -409,28 +426,39 @@ class _ColorDot extends StatelessWidget {
 }
 
 class _DecorationChip extends StatelessWidget {
-  const _DecorationChip({required this.icon, required this.selected, required this.onTap});
+  const _DecorationChip({
+    required this.icon,
+    required this.selected,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final bool selected;
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(final BuildContext context) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: selected ? theme.colorScheme.primaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: selected ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurface,
+    return Semantics(
+      label: label,
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: selected ? theme.colorScheme.primaryContainer : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: selected ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurface,
+          ),
         ),
       ),
     );

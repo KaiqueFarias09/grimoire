@@ -136,6 +136,18 @@ class MathJaxReadyEvent extends ViewerEvent {
   MathJaxReadyEvent({required super.source});
 }
 
+/// The viewer resolved a DOM fragment id to its documentText offset
+/// (reply to the `locateFragment` action).
+class FragmentOffsetEvent extends ViewerEvent {
+  FragmentOffsetEvent({required this.id, required this.offset, super.source});
+
+  /// The requested fragment id.
+  final String id;
+
+  /// Character offset, or -1 when the id is unknown.
+  final int offset;
+}
+
 /// The center tap zone asked the host to toggle the chrome.
 class ChromeToggleEvent extends ViewerEvent {
   ChromeToggleEvent({super.source});
@@ -260,6 +272,12 @@ class ViewerBridge {
         );
       case 'mathjaxReady':
         return MathJaxReadyEvent(source: source);
+      case 'fragmentOffset':
+        return FragmentOffsetEvent(
+          id: map['id'] is String ? map['id'] as String : '',
+          offset: _asInt(map['offset']),
+          source: source,
+        );
       case 'shortcut':
         return ShortcutEvent(
           name: map['name'] is String ? map['name'] as String : '',

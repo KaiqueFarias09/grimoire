@@ -10,6 +10,7 @@ import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:e_livre_viewer/src/features/rendering/composition/viewer_engine_selector.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server.dart';
+import 'package:e_livre_viewer/src/features/settings/viewer_margins.dart';
 import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -483,7 +484,7 @@ class ViewerController extends ChangeNotifier {
     final MathJaxLoader? mathJaxLoader,
   }) : _theme = theme,
        _fontSizePx = fontSizePx,
-       _marginsPx = marginsPx,
+       _margins = ViewerMargins.uniform(marginsPx),
        _layoutMode = layoutMode,
        _columnsPerScreen = columnsPerScreen,
        _fontFamily = fontFamily,
@@ -582,7 +583,8 @@ class ViewerController extends ChangeNotifier {
 
   ViewerTheme _theme;
   int _fontSizePx;
-  int _marginsPx;
+  ViewerMargins _margins;
+  String? _userStylesheet;
   ViewerLayoutMode _layoutMode;
   int _columnsPerScreen;
 
@@ -675,8 +677,13 @@ class ViewerController extends ChangeNotifier {
   /// Base font size in pixels.
   int get fontSizePx => _fontSizePx;
 
-  /// Page margins in pixels (doubles as the column gap).
-  int get marginsPx => _marginsPx;
+  /// Page margins per side (the inline-axis pair doubles as the
+  /// column gap).
+  ViewerMargins get margins => _margins;
+
+  /// Uniform page margin in pixels (the left side; shorthand for
+  /// [margins]).
+  int get marginsPx => _margins.left;
 
   /// Current layout mode.
   ViewerLayoutMode get layoutMode => _layoutMode;
@@ -1361,25 +1368,65 @@ class ViewerController extends ChangeNotifier {
     return server.urlForPath(path).toString();
   }
 
+  final Map<String, Completer<int>> _fragmentRequests = <String, Completer<int>>{};
+
+  /// Resolves a DOM fragment id to its documentText offset in the
+  /// loaded file (media-overlay text targets). Null when the id is
+  /// unknown, the file is not loaded, or the engine did not answer.
+  Future<int?> fragmentOffset(final int fileIndex, final String fragment) async {
+    if (_loadedFile[_active] != fileIndex) {
+      return null;
+    }
+    final completer = Completer<int>();
+    _fragmentRequests[fragment] = completer;
+    await _send(<String, Object?>{'action': 'locateFragment', 'id': fragment});
+    final offset = await completer.future.timeout(const Duration(seconds: 2), onTimeout: () => -1);
+    return offset < 0 ? null : offset;
+  }
+
   // --- search ---
 
-  /// Searches [query] across the book (case-insensitive, tolerant to
-  /// hyphenation and whitespace differences, like Calibre's reader).
+  Map<int, List<(int, int)>> _searchMarkersByFile = const <int, List<(int, int)>>{};
+
+  /// Searches [query] across the book.
   ///
-  /// The matching itself lives in e_livre ([BookSearch]); this method
-  /// maps the hits to viewer results over the shared document-text
-  /// offset space.
-  Future<List<ViewerSearchResult>> search(final String query) async {
+  /// [mode] selects the query interpretation (Calibre's contains /
+  /// whole words / regex / near). The matching itself lives in e_livre
+  /// ([BookSearch]); this method maps the hits to viewer results over
+  /// the shared document-text offset space, marks every hit of the
+  /// visible file in the page (and re-marks it when chapters swap),
+  /// and keeps the result list for [goToSearchResult].
+  ///
+  /// Throws [FormatException] for an invalid [SearchMode.regex]
+  /// pattern or a [SearchMode.proximity] query with fewer than two
+  /// words — validate before searching to surface the error.
+  Future<List<ViewerSearchResult>> search(
+    final String query, {
+    final SearchMode mode = SearchMode.contains,
+    final bool caseSensitive = false,
+    final int nearChars = 60,
+  }) async {
     final results = <ViewerSearchResult>[];
     if (query.trim().isEmpty) {
       _searchResults = results;
+      _searchMarkersByFile = const <int, List<(int, int)>>{};
       notifyListeners();
       return results;
     }
     final htmlByPath = <String, String>{
       for (final file in book.files.html) file.path: file.content,
     };
-    for (final match in book.search(query, maxMatches: 500).matches) {
+    final markersByFile = <int, List<(int, int)>>{};
+    for (final match
+        in book
+            .search(
+              query,
+              mode: mode,
+              caseSensitive: caseSensitive,
+              nearChars: nearChars,
+              maxMatches: 500,
+            )
+            .matches) {
       final text = documentText(htmlByPath[match.sectionName] ?? '');
       results.add(
         ViewerSearchResult(
@@ -1389,19 +1436,26 @@ class ViewerController extends ChangeNotifier {
           excerpt: _excerpt(text, match.start, match.end),
         ),
       );
+      (markersByFile[match.sectionIndex] ??= []).add((match.start, match.end));
       if (results.length >= 500) {
         break;
       }
     }
     _searchResults = results;
+    _searchMarkersByFile = markersByFile;
     notifyListeners();
+    if (_started) {
+      await _applySearchMarkersToEngine(_active, _position.fileIndex);
+    }
     return results;
   }
 
-  /// Clears the current search results and selection.
+  /// Clears the current search results, page markers and selection.
   Future<void> clearSearch() async {
     _searchResults = const <ViewerSearchResult>[];
+    _searchMarkersByFile = const <int, List<(int, int)>>{};
     notifyListeners();
+    await _send(<String, Object?>{'action': 'setSearchMatches', 'matches': const <Never>[]});
     await _send(const <String, Object?>{'action': 'clearSelection'});
   }
 
@@ -1478,19 +1532,67 @@ class ViewerController extends ChangeNotifier {
       return;
     }
     _fontSizePx = px;
+    _refreshPageCacheKey();
     notifyListeners();
     await _send(<String, Object?>{'action': 'setFontSize', 'px': px});
   }
 
-  /// Changes the page margins (px) and relayouts keeping position.
-  Future<void> setMargins(final int px) async {
-    _refreshPageCacheKey();
-    if (px < 0 || px > 96) {
+  /// Changes all four page margins to [px] and relayouts keeping
+  /// position.
+  Future<void> setMargins(final int px) => setMarginsPerSide(ViewerMargins.uniform(px));
+
+  /// Changes the per-side page margins (and optional text-block
+  /// caps), relayouting keeping position. The inline-axis pair
+  /// doubles as the column gap in paged mode.
+  Future<void> setMarginsPerSide(final ViewerMargins margins) async {
+    if (margins == _margins) {
       return;
     }
-    _marginsPx = px;
+    _margins = margins;
+    _refreshPageCacheKey();
     notifyListeners();
-    await _send(<String, Object?>{'action': 'setMargins', 'px': px});
+    await _send(<String, Object?>{
+      'action': 'setMargins',
+      'left': _margins.left,
+      'top': _margins.top,
+      'right': _margins.right,
+      'bottom': _margins.bottom,
+    });
+  }
+
+  /// Whether the book declares RTL page progression (EPUB3 spine
+  /// `page-progression-direction="rtl"`). Page turns, tap zones and
+  /// arrow keys mirror accordingly; books without the attribute read
+  /// LTR (Calibre semantics).
+  bool get rtlPageProgression {
+    final book = this.book;
+    if (book is EpubBook) {
+      return book.package.spine.pageProgressionDirection?.toLowerCase() == 'rtl';
+    }
+    return false;
+  }
+
+  bool _reversePageTurnZones = false;
+
+  /// Mirrors the page-turn tap zones (Calibre's
+  /// reverse_page_turn_zones).
+  bool get reversePageTurnZones => _reversePageTurnZones;
+
+  Future<void> setReversePageTurnZones(final bool value) async {
+    if (value == _reversePageTurnZones) {
+      return;
+    }
+    _reversePageTurnZones = value;
+    notifyListeners();
+    await _sendPageProgression();
+  }
+
+  Future<void> _sendPageProgression() {
+    return _send(<String, Object?>{
+      'action': 'setPageProgression',
+      'rtl': rtlPageProgression,
+      'reverseZones': _reversePageTurnZones,
+    });
   }
 
   /// Switches between paged and continuous scroll layouts.
@@ -1505,11 +1607,11 @@ class ViewerController extends ChangeNotifier {
 
   /// Sets columns per screen (0 = auto for wide screens).
   Future<void> setColumnsPerScreen(final int columns) async {
-    _refreshPageCacheKey();
     if (columns < 0 || columns > 4) {
       return;
     }
     _columnsPerScreen = columns;
+    _refreshPageCacheKey();
     notifyListeners();
     await _send(<String, Object?>{'action': 'setColumns', 'n': columns});
   }
@@ -1560,13 +1662,111 @@ class ViewerController extends ChangeNotifier {
     await _send(<String, Object?>{'action': 'setHyphenation', 'enabled': enabled});
   }
 
+  /// The user stylesheet layered over the book's own CSS, or null.
+  String? get userStylesheet => _userStylesheet;
+
+  /// Sets a user stylesheet, injected as its own style element (so
+  /// theme changes never clobber it) and relayouting keeping
+  /// position. Selectors can hook `body.elv-paged` / `body.elv-scrolling`
+  /// and `body.elv-dark` / `body.elv-light` (Calibre ships the same
+  /// class contract).
+  Future<void> setUserStylesheet(final String? css) async {
+    final value = (css == null || css.trim().isEmpty) ? null : css;
+    if (value == _userStylesheet) {
+      return;
+    }
+    _userStylesheet = value;
+    _refreshPageCacheKey();
+    notifyListeners();
+    await _send(<String, Object?>{'action': 'setStylesheet', 'css': value ?? ''});
+  }
+
+  /// Captures the current reader appearance as a sparse profile: only
+  /// settings differing from their defaults (Calibre's
+  /// `settings_for_reader_profile`). Persist the returned map with
+  /// host storage; [applyProfile] restores it.
+  Map<String, Object?> captureProfile() {
+    final profile = <String, Object?>{};
+    if (_theme != ViewerTheme.light) {
+      profile['theme'] = _theme.toJson();
+    }
+    if (_fontSizePx != 17) {
+      profile['fontSize'] = _fontSizePx;
+    }
+    if (_fontFamily != null) {
+      profile['fontFamily'] = _fontFamily;
+    }
+    if (_justify) {
+      profile['justify'] = true;
+    }
+    if (_hyphenate) {
+      profile['hyphenate'] = true;
+    }
+    if (_margins != ViewerMargins.uniform(20)) {
+      profile['margins'] = _margins.toJson();
+    }
+    if (_columnsPerScreen != 0) {
+      profile['columns'] = _columnsPerScreen;
+    }
+    if (_layoutMode == ViewerLayoutMode.scroll) {
+      profile['layoutMode'] = 'scroll';
+    }
+    if (_userStylesheet != null) {
+      profile['stylesheet'] = _userStylesheet;
+    }
+    return profile;
+  }
+
+  /// Applies a profile captured by [captureProfile]. Keys absent from
+  /// the map reset to their defaults — applying an empty map resets
+  /// every appearance setting (Calibre's `__default__` profile).
+  Future<void> applyProfile(final Map<String, Object?> profile) async {
+    final themeJson = profile['theme'];
+    await setTheme(
+      themeJson is Map<String, dynamic>
+          ? (ViewerTheme.fromJson(themeJson) ?? ViewerTheme.light)
+          : ViewerTheme.light,
+    );
+    await setFontSize(profile['fontSize'] is int ? profile['fontSize']! as int : 17);
+    await setFontFamily(profile['fontFamily'] is String ? profile['fontFamily']! as String : null);
+    await setJustify(profile['justify'] == true);
+    await setHyphenate(profile['hyphenate'] == true);
+    await setMarginsPerSide(
+      ViewerMargins.fromJson(profile['margins']) ?? ViewerMargins.uniform(20),
+    );
+    final columns = profile['columns'];
+    await setColumnsPerScreen(columns is int ? columns.clamp(0, 4) : 0);
+    await setLayoutMode(
+      profile['layoutMode'] == 'scroll' ? ViewerLayoutMode.scroll : ViewerLayoutMode.paged,
+    );
+    await setUserStylesheet(
+      profile['stylesheet'] is String ? profile['stylesheet']! as String : null,
+    );
+  }
+
   /// Toggles the reader chrome visibility.
   /// Applies the visual markers for every search match of the active
   /// file and resets the match cursor. [matches] are (start, end) pairs
-  /// in the file's character space.
+  /// in the file's character space. [search] already marks matches
+  /// automatically; use this only to mark ranges manually.
   Future<void> showSearchMatches(final List<(int, int)> matches) async {
     _searchCursor = -1;
     await _sendTo(_active, <String, Object?>{
+      'action': 'setSearchMatches',
+      'matches': [
+        for (final (start, end) in matches) <int>[start, end],
+      ],
+    });
+  }
+
+  /// Re-marks the stored search matches of [fileIndex] on the engine
+  /// [slot] (chapter swaps load fresh pages without markers).
+  Future<void> _applySearchMarkersToEngine(final int slot, final int fileIndex) async {
+    final matches = _searchMarkersByFile[fileIndex];
+    if (matches == null || matches.isEmpty) {
+      return;
+    }
+    await _sendTo(slot, <String, Object?>{
       'action': 'setSearchMatches',
       'matches': [
         for (final (start, end) in matches) <int>[start, end],
@@ -1838,6 +2038,7 @@ class ViewerController extends ChangeNotifier {
         final fileIndex = slot < _loadedFile.length ? _loadedFile[slot] : null;
         if (fileIndex != null) {
           await _applyHighlightsToEngine(slot, fileIndex);
+          await _applySearchMarkersToEngine(slot, fileIndex);
         }
         if (_swapOnReadySlot == slot) {
           _swapOnReadySlot = null;
@@ -1927,6 +2128,8 @@ class ViewerController extends ChangeNotifier {
           _scheduleMeasure();
           notifyListeners();
         }
+      case FragmentOffsetEvent fragment:
+        _fragmentRequests.remove(fragment.id)?.complete(fragment.offset);
       case LinkTapEvent link:
         if (event.source != _active) {
           return;
@@ -1980,7 +2183,13 @@ class ViewerController extends ChangeNotifier {
       'height': _logicalViewportHeight,
     });
     await _sendTo(slot, <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx});
-    await _sendTo(slot, <String, Object?>{'action': 'setMargins', 'px': _marginsPx});
+    await _sendTo(slot, <String, Object?>{
+      'action': 'setMargins',
+      'left': _margins.left,
+      'top': _margins.top,
+      'right': _margins.right,
+      'bottom': _margins.bottom,
+    });
     await _sendTo(slot, <String, Object?>{
       'action': 'setLayoutMode',
       'scroll': _layoutMode == ViewerLayoutMode.scroll,
@@ -1989,6 +2198,12 @@ class ViewerController extends ChangeNotifier {
     await _sendTo(slot, <String, Object?>{'action': 'setFontFamily', 'font': _fontFamily ?? ''});
     await _sendTo(slot, <String, Object?>{'action': 'setTextJustify', 'enabled': _justify});
     await _sendTo(slot, <String, Object?>{'action': 'setHyphenation', 'enabled': _hyphenate});
+    await _sendTo(slot, <String, Object?>{'action': 'setStylesheet', 'css': _userStylesheet ?? ''});
+    await _sendTo(slot, <String, Object?>{
+      'action': 'setPageProgression',
+      'rtl': rtlPageProgression,
+      'reverseZones': _reversePageTurnZones,
+    });
   }
 
   // --- book-wide page measurement queue ---
@@ -1999,7 +2214,13 @@ class ViewerController extends ChangeNotifier {
     _logicalViewportWidth?.round(),
     _logicalViewportHeight?.round(),
     _fontSizePx,
-    _marginsPx,
+    _margins.left,
+    _margins.top,
+    _margins.right,
+    _margins.bottom,
+    _margins.maxTextWidth,
+    _margins.maxTextHeight,
+    _userStylesheet,
     _fontFamily,
     _justify,
     _hyphenate,

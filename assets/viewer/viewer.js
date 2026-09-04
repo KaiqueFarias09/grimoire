@@ -15,7 +15,7 @@
   var CHANNEL = 'ELivreBridge';
   var state = {
     fontSize: 17,
-    margins: 20,
+    margins: { left: 20, top: 20, right: 20, bottom: 20 },
     columns: 0, // 0 = auto
     layoutMode: 'paged', // 'paged' | 'scroll'
     colSize: 0,
@@ -30,6 +30,7 @@
     highlights: {}, // id -> [span, ...]
     highlightItems: {}, // id -> item (for theme recolor)
     themeIsDark: false,
+    pageProgression: { rtl: false, reverseZones: false },
     isFullScreenLayout: false,
     hostViewport: null, // {w, h} from the Flutter widget when known
     writingMode: { vertical: false, rtl: false },
@@ -80,6 +81,35 @@
     return document.body.classList.contains('elv-comic');
   }
 
+  // Parity: calibre viewport.pyj — RTL page progression negates X at
+  // the viewport boundary only; column and offset math keeps working
+  // in logical positive-inline coordinates.
+  function pageProgressionRtl() {
+    return !!state.pageProgression.rtl;
+  }
+
+  function logicalScrollX() {
+    var x = scrollElement().scrollLeft;
+    return pageProgressionRtl() ? -x : x;
+  }
+
+  function scrollToLogicalX(x) {
+    scrollElement().scrollLeft = pageProgressionRtl() ? -x : x;
+  }
+
+  // Reading-order start edge of a rect, viewport-relative.
+  function rectInlineStart(rect) {
+    return pageProgressionRtl() ? rect.right : rect.left;
+  }
+
+  // Document inline coordinate of a rect's reading-order start edge.
+  function rectInlineDocX(rect) {
+    if (pageProgressionRtl()) {
+      return -rect.right + logicalScrollX();
+    }
+    return rect.left + scrollElement().scrollLeft;
+  }
+
   // --- writing mode + measure helpers (Calibre viewport.pyj) ---
 
   // Parity: calibre src/pyj/read_book/viewport.pyj:28-49 (initialize_on_layout)
@@ -88,7 +118,7 @@
     state.writingMode.vertical =
       bs.writingMode === 'vertical-rl' || bs.writingMode === 'vertical-lr';
     state.writingMode.rtl = bs.direction === 'rtl' || bs.writingMode === 'vertical-rl';
-    if (bs.direction === 'rtl') {
+    if (bs.direction === 'rtl' || state.pageProgression.rtl) {
       // Chrome scrolling breaks for some RTL content without this.
       document.documentElement.style.overflow = 'visible';
     }
@@ -291,7 +321,10 @@
     );
     var singleScreen = documentBlock < blockSize() + 75;
 
-    var gap = Math.max(1, state.margins);
+    var marginPair = state.writingMode.vertical
+      ? state.margins.top + state.margins.bottom
+      : state.margins.left + state.margins.right;
+    var gap = Math.max(1, marginPair);
     if (n > 1) {
       gap += n - ((screenInline + gap) % n);
     }
@@ -394,6 +427,7 @@
       style.textContent = '';
     }
     document.body.classList.remove('elv-paged');
+    document.body.classList.add('elv-scrolling');
     fitImages();
     state.colSize = inlineSize();
     state.colGap = 0;
@@ -512,7 +546,7 @@
     if (isScrollMode()) {
       return Math.max(0, Math.floor((scrollElement().scrollTop + 2) / blockSize()));
     }
-    return columnAt(scrollElement().scrollLeft + 2);
+    return columnAt(logicalScrollX() + 2);
   }
 
   function scrollToColumn(n, silent) {
@@ -522,7 +556,7 @@
       target = max;
     }
     state.suppressScrollNotify = !!silent;
-    scrollElement().scrollLeft = target;
+    scrollToLogicalX(target);
     state.lastScrollCommandAt = Date.now();
     state.lastScrollTarget = target;
     if (silent) {
@@ -550,8 +584,8 @@
         scrollBugTimer = null;
         return;
       }
-      if (Math.abs(scrollElement().scrollLeft - state.lastScrollTarget) > 2) {
-        scrollElement().scrollLeft = state.lastScrollTarget;
+      if (Math.abs(logicalScrollX() - state.lastScrollTarget) > 2) {
+        scrollToLogicalX(state.lastScrollTarget);
       }
     }, 50);
   }
@@ -559,9 +593,7 @@
   // --- navigation locations (Calibre paged_mode.pyj:425-513) ---
 
   function currentScrollOffset() {
-    return isScrollMode()
-      ? scrollElement().scrollTop
-      : scrollElement().scrollLeft;
+    return isScrollMode() ? scrollElement().scrollTop : logicalScrollX();
   }
 
   // Starting edge of the first visible column, in document px.
@@ -794,7 +826,9 @@
       var rect = range.getBoundingClientRect();
       var visible = isScrollMode()
         ? rect.bottom > 4
-        : rect.right > 4;
+        : pageProgressionRtl()
+          ? rect.left < inlineSize() - 4
+          : rect.right > 4;
       if (visible) {
         return consumed + offsetWithinNode(node, 0);
       }
@@ -817,7 +851,12 @@
       if (!rects.length) {
         break;
       }
-      if (rects[0].left <= targetX) {
+      // RTL reads right-to-left: earlier characters sit further right
+      // and have already left the viewport.
+      var passed = pageProgressionRtl()
+        ? rects[0].left >= inlineSize() - 4
+        : rects[0].left <= targetX;
+      if (passed) {
         lo = mid + 1;
       } else {
         hi = mid;
@@ -860,8 +899,7 @@
           scrollElement().scrollTop = Math.max(0, docY - 8);
         } else {
           var rect = rectFor(node, within);
-          var docX = rect.left + scrollElement().scrollLeft;
-          scrollToColumn(columnAt(docX));
+          scrollToColumn(columnAt(rectInlineDocX(rect)));
         }
         reportPosition();
         return;
@@ -884,9 +922,7 @@
       reportPosition();
       return;
     }
-    var left =
-      element.getBoundingClientRect().left + scrollElement().scrollLeft;
-    scrollToColumn(columnAt(left));
+    scrollToColumn(columnAt(rectInlineDocX(element.getBoundingClientRect())));
     reportPosition();
   }
 
@@ -902,7 +938,7 @@
       columns = Math.max(1, Math.ceil(scroller.scrollHeight / blockSize()));
     } else {
       var limitX = scroller.scrollWidth - inlineSize();
-      frac = limitX > 0 ? scroller.scrollLeft / limitX : 1;
+      frac = limitX > 0 ? logicalScrollX() / limitX : 1;
       column = currentColumn();
       columns = state.colCount;
     }
@@ -938,12 +974,19 @@
       var last = rects.length ? rects[rects.length - 1] : null;
       var extents = null;
       if (first && last) {
-        var sl = scrollElement().scrollLeft || 0;
         var st = scrollElement().scrollTop || 0;
+        var firstLeft = rectInlineDocX(first);
+        var lastLeft = rectInlineDocX(last);
+        var firstRight = pageProgressionRtl()
+          ? -first.left + logicalScrollX()
+          : first.right + (scrollElement().scrollLeft || 0);
+        var lastRight = pageProgressionRtl()
+          ? -last.left + logicalScrollX()
+          : last.right + (scrollElement().scrollLeft || 0);
         extents = {
-          left: Math.min(first.left, last.left) + sl,
+          left: Math.min(firstLeft, lastLeft),
           top: Math.min(first.top, last.top) + st,
-          right: Math.max(first.right, last.right) + sl,
+          right: Math.max(firstRight, lastRight),
           bottom: Math.max(first.bottom, last.bottom) + st,
         };
       }
@@ -1008,11 +1051,11 @@
       }
       rect = host.getBoundingClientRect();
     }
-    var sl = scrollElement().scrollLeft || 0;
-    scrollToColumn(columnAt(rect.left + sl));
-    var x = useEnd ? rect.right : rect.left;
+    scrollToColumn(columnAt(rectInlineDocX(rect)));
+    var x = rectInlineStart(rect);
     if (x < 0 || x >= inlineSize()) {
-      scrollToPos(x + sl + 5);
+      var endDocX = rectInlineDocX(rect) + rect.width * (pageProgressionRtl() ? -1 : 1);
+      scrollToPos(endDocX + (pageProgressionRtl() ? -5 : 5));
     }
   }
 
@@ -1334,9 +1377,11 @@
       return;
     }
     var backZone = Math.min(unitSizeInPixels('in'), w / 4);
-    var forward = state.writingMode.rtl
-      ? x < w - backZone
-      : x >= backZone;
+    // Parity: calibre touch.pyj:326-347 — the back zone rides the
+    // inline start side and never exceeds one inch; reverse_page_turn
+    // zones swaps the branch.
+    var backOnRight = state.pageProgression.rtl !== state.pageProgression.reverseZones;
+    var forward = backOnRight ? x < w - backZone : x >= backZone;
     if (forward) {
       nextColumn();
     } else {
@@ -1534,6 +1579,9 @@
     var dark = detectThemeBrightness();
     if (dark !== state.themeIsDark) {
       state.themeIsDark = dark;
+      // User-stylesheet hooks (Calibre: -dark-colors / -light-colors).
+      document.body.classList.toggle('elv-dark', dark);
+      document.body.classList.toggle('elv-light', !dark);
       recolorHighlights();
     }
   }
@@ -1636,13 +1684,43 @@
         relayoutKeepingPosition();
         break;
       case 'setMargins':
-        state.margins = Math.max(0, message.px || 0);
+        state.margins = {
+          left: Math.max(0, message.left | 0),
+          top: Math.max(0, message.top | 0),
+          right: Math.max(0, message.right | 0),
+          bottom: Math.max(0, message.bottom | 0),
+        };
         relayoutKeepingPosition();
         break;
       case 'setLayoutMode':
         state.layoutMode = message.scroll ? 'scroll' : 'paged';
+        // User-stylesheet hooks (Calibre ships the same class pair).
+        document.body.classList.toggle('elv-scrolling', !!message.scroll);
+        document.body.classList.toggle('elv-paged', !message.scroll);
         relayoutKeepingPosition();
         break;
+      case 'setPageProgression':
+        state.pageProgression.rtl = !!message.rtl;
+        state.pageProgression.reverseZones = !!message.reverseZones;
+        initializeWritingMode();
+        relayoutKeepingPosition();
+        break;
+      case 'setStylesheet': {
+        // Parity: calibre settings.pyj apply_stylesheet — a style
+        // element separate from the theme sheet, so theme changes
+        // never clobber user CSS.
+        var id = 'elv-user-stylesheet';
+        var sheet = document.getElementById(id);
+        var css = typeof message.css === 'string' ? message.css : '';
+        if (!sheet) {
+          sheet = document.createElement('style');
+          sheet.id = id;
+          document.documentElement.appendChild(sheet);
+        }
+        sheet.textContent = css;
+        relayoutKeepingPosition();
+        break;
+      }
       case 'setColumns':
         state.columns = Math.max(0, Math.min(20, message.n || 0));
         relayoutKeepingPosition();
@@ -1676,6 +1754,24 @@
       case 'ttsClear':
         ttsClear();
         break;
+      case 'locateFragment': {
+        var id = String(message.id || '');
+        var el = document.getElementById(id);
+        var offset = -1;
+        if (el) {
+          var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          var node, off = 0;
+          while ((node = walker.nextNode())) {
+            if (el.contains(node)) {
+              offset = off;
+              break;
+            }
+            off += node.length;
+          }
+        }
+        post({ type: 'fragmentOffset', id: id, offset: offset });
+        break;
+      }
       case 'removeHighlight':
         removeHighlight(String(message.id || ''));
         break;
@@ -1800,11 +1896,11 @@
     var main = state.writingMode.vertical ? dy : dx;
     if (Math.abs(dx) > Math.abs(dy)) {
       // Horizontal wheel = section (file) jump.
-      var dir = state.writingMode.rtl ? (dx < 0 ? 1 : -1) : dx < 0 ? -1 : 1;
+      var dir = state.pageProgression.rtl ? (dx < 0 ? 1 : -1) : dx < 0 ? -1 : 1;
       postBoundary(dir);
       return;
     }
-    var delta = state.writingMode.rtl ? -dy : dy;
+    var delta = state.pageProgression.rtl ? -dy : dy;
     var now = Date.now();
     var ws = wheelState;
     if (now - ws.at > 1000 || ws.dir * delta < 0 || ws.mode !== mode) {
@@ -1964,7 +2060,7 @@
           return;
         }
         var forward = dx < 0;
-        if (state.writingMode.rtl) {
+        if (state.pageProgression.rtl) {
           forward = !forward;
         }
         if (forward) {
@@ -2032,11 +2128,11 @@
       var ctrl = event.ctrlKey || event.metaKey;
       switch (event.key) {
         case 'ArrowRight':
-          nextColumn();
+          pageProgressionRtl() ? previousColumn() : nextColumn();
           event.preventDefault();
           break;
         case 'ArrowLeft':
-          previousColumn();
+          pageProgressionRtl() ? nextColumn() : previousColumn();
           event.preventDefault();
           break;
         case 'PageDown':
@@ -2102,9 +2198,9 @@
     document.addEventListener('mousedown', function (event) {
       // Back/forward mouse buttons.
       if (event.button === 3) {
-        previousColumn();
+        pageProgressionRtl() ? nextColumn() : previousColumn();
       } else if (event.button === 4) {
-        nextColumn();
+        pageProgressionRtl() ? previousColumn() : nextColumn();
       }
     });
     document.addEventListener(

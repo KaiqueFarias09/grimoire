@@ -2,6 +2,46 @@
 
 ### Added
 
+- **Search modes**: `controller.search(query, {mode, caseSensitive,
+  nearChars})` exposes Calibre's contains / whole words / regex /
+  near queries (matching lives in e_livre). The overlay gains a mode
+  picker, case toggle and inline validation errors, marks every match
+  on the visible page (re-marked when chapters swap), and wires the
+  previously dormant next/previous match cycling with a position
+  counter.
+- **Per-side margins and text-block caps**: `ViewerMargins` (left,
+  top, right, bottom, `maxTextWidth`, `maxTextHeight`) with
+  `setMarginsPerSide`; `setMargins(px)` remains the uniform
+  shorthand. In paged mode the inline-axis pair doubles as the
+  column gap (Calibre layout parity) and the caps grow the margins
+  instead of shrinking the page (Calibre `View.set_margins`).
+- **User stylesheet**: `setUserStylesheet(css)` injects a dedicated
+  style element that theme changes never clobber, with the same
+  body-class hooks Calibre ships (`elv-paged`/`elv-scrolling`,
+  `elv-dark`/`elv-light`).
+- **Reader profiles**: `captureProfile()` returns a sparse
+  diff-from-default map of every appearance setting;
+  `applyProfile(map)` restores it and resets anything absent —
+  applying an empty map resets all appearance (Calibre's
+  `__default__`). Storage stays host-owned.
+- **RTL page progression**: books declaring
+  `page-progression-direction="rtl"` get mirrored page flow — scroll
+  math negates X at the viewport boundary (Calibre
+  `viewport.pyj`), tap zones, swipes, wheel, arrow keys and mouse
+  buttons flip, and `setReversePageTurnZones` mirrors the tap zones
+  on demand.
+- **Accessibility**: the reading position is announced on every page
+  turn (TalkBack/VoiceOver live region with page, chapter and
+  percent), the file scrollbar exposes slider semantics with
+  increase/decrease actions, and the annotation filter chips and
+  sheet close buttons carry semantic labels.
+
+### Fixed
+
+- `setMargins`/`setColumnsPerScreen` refreshed the page-count layout
+  signature before mutating their fields (stale cache key), and
+  `setFontSize` did not refresh it at all.
+
 - **Narration infrastructure** (used by read-aloud and media
   overlays): `segmentText()` produces sentence segments over the same
   character space as highlights and positions (abbreviation, initial
