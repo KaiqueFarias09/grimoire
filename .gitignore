@@ -7,3 +7,7 @@ build/
 *.iml
 .idea/
 example/.steward/
+
+# Local agent tooling
+.standardctl/
+.zcode/
