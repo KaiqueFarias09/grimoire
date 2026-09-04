@@ -8,8 +8,8 @@ repository: https://github.com/KaiqueFarias09/eLivreViewer
 issue_tracker: https://github.com/KaiqueFarias09/eLivreViewer/issues
 
 environment:
-  sdk: ">=3.1.0 <4.0.0"
-  flutter: ">=3.19.0"
+  sdk: ">=3.8.0 <4.0.0"
+  flutter: ">=3.32.0"
 
 topics:
   - ebook
@@ -30,7 +30,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
 
 # Local monorepo validation uses the sibling E10 checkout; publication uses
 # the hosted constraint above because dependency_overrides are not published.

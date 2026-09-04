@@ -1,10 +1,52 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  exclude:
+    - ".dart_tool/**"
+    - "build/**"
+    - "example/**"
+    - "lib/**/*.g.dart"
+    - "lib/**/*.freezed.dart"
   language:
     strict-casts: true
     strict-inference: true
     strict-raw-types: true
+
+formatter:
+  page_width: 100
+
 linter:
   rules:
-    prefer_final_parameters: true
+    - always_declare_return_types
+    - annotate_overrides
+    - avoid_classes_with_only_static_members
+    - avoid_dynamic_calls
+    - avoid_print
+    - avoid_private_typedef_functions
+    - avoid_relative_lib_imports
+    - avoid_web_libraries_in_flutter
+    - cancel_subscriptions
+    - close_sinks
+    - comment_references
+    - depend_on_referenced_packages
+    - deprecated_consistency
+    - directives_ordering
+    - discarded_futures
+    - document_ignores
+    - implementation_imports
+    - library_private_types_in_public_api
+    - prefer_const_constructors
+    - prefer_final_fields
+    - prefer_final_locals
+    - prefer_function_declarations_over_variables
+    - provide_deprecation_message
+    - public_member_api_docs
+    - slash_for_doc_comments
+    - sort_pub_dependencies
+    - unawaited_futures
+    - unnecessary_lambdas
+    - unnecessary_library_directive
+    - unnecessary_library_name
+    - unnecessary_this
+    - use_key_in_widget_constructors
+    - use_super_parameters
