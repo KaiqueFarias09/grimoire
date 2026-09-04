@@ -1,5 +1,4 @@
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/search/document_text.dart';
 
 /// A reading position: file (by reading-order index) plus the
 /// character offset inside the file's text model.

@@ -3,12 +3,10 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/annotations/epub_cfi.dart';
 import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
 import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:e_livre_viewer/src/features/rendering/composition/viewer_engine_selector.dart';
-import 'package:e_livre_viewer/src/features/search/document_text.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server.dart';
 import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:flutter/foundation.dart';
@@ -762,6 +760,10 @@ class ViewerController extends ChangeNotifier {
 
   /// Searches [query] across the book (case-insensitive, tolerant to
   /// hyphenation and whitespace differences, like Calibre's reader).
+  ///
+  /// The matching itself lives in e_livre ([BookSearch]); this method
+  /// maps the hits to viewer results over the shared document-text
+  /// offset space.
   Future<List<ViewerSearchResult>> search(final String query) async {
     final results = <ViewerSearchResult>[];
     if (query.trim().isEmpty) {
@@ -769,30 +771,19 @@ class ViewerController extends ChangeNotifier {
       notifyListeners();
       return results;
     }
-    final pattern = _searchPattern(query);
-    final order = book.readingOrder;
     final htmlByPath = <String, String>{
       for (final file in book.files.html) file.path: file.content,
     };
-    for (var fileIndex = 0; fileIndex < order.length; fileIndex++) {
-      final item = order[fileIndex];
-      if (!item.isHtml) {
-        continue;
-      }
-      final text = documentText(htmlByPath[item.name] ?? '');
-      for (final match in pattern.allMatches(text)) {
-        results.add(
-          ViewerSearchResult(
-            fileIndex: fileIndex,
-            start: match.start,
-            end: match.end,
-            excerpt: _excerpt(text, match.start, match.end),
-          ),
-        );
-        if (results.length >= 500) {
-          break;
-        }
-      }
+    for (final match in book.search(query, maxMatches: 500).matches) {
+      final text = documentText(htmlByPath[match.sectionName] ?? '');
+      results.add(
+        ViewerSearchResult(
+          fileIndex: match.sectionIndex,
+          start: match.start,
+          end: match.end,
+          excerpt: _excerpt(text, match.start, match.end),
+        ),
+      );
       if (results.length >= 500) {
         break;
       }
@@ -1630,7 +1621,7 @@ class ViewerController extends ChangeNotifier {
   /// Jumps to a CFI in the current book (single-file subset: no `!`
   /// indirection). Returns false when the CFI cannot be resolved.
   Future<bool> goToCfi(final String cfi) async {
-    final parsed = EpubCfi.parse(cfi);
+    final parsed = EpubCfi.tryParse(cfi);
     if (parsed == null) {
       return false;
     }
@@ -1769,24 +1760,6 @@ class ViewerController extends ChangeNotifier {
       }
     }
     return null;
-  }
-
-  /// Calibre-style tolerant pattern: whitespace matches any run,
-  /// soft hyphen and zero-width joiners are optional between
-  /// characters.
-  static RegExp _searchPattern(final String query) {
-    final buffer = StringBuffer();
-    for (final char in query.trim().split('')) {
-      if (buffer.isNotEmpty) {
-        buffer.write('[\\u00AD\\u200B\\u200C\\u200D]?');
-      }
-      if (RegExp(r'\s').hasMatch(char)) {
-        buffer.write(r'\s+');
-      } else {
-        buffer.write(RegExp.escape(char));
-      }
-    }
-    return RegExp(buffer.toString(), caseSensitive: false);
   }
 
   static String _excerpt(final String text, final int start, final int end) {

@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/features/annotations/epub_cfi.dart';
+import 'package:e_livre/e_livre.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Parity tests ported from calibre
@@ -25,7 +25,7 @@ void main() {
     expect(unescapeFromCfi(escapeForCfi('^^')), '^^');
     expect(escapeForCfi(';'), '^;');
     expect(escapeForCfi('[]()'), r'^[^]^(^)');
-    const cfi = EpubCfi(
+    final cfi = EpubCfi.simple(
       steps: [2, 4, 2],
       charOffset: 1,
       idAssertion: r'we^ird[id];',
@@ -33,8 +33,7 @@ void main() {
     final serialized = cfi.serialize();
     expect(serialized, r'epubcfi(/2/4/2:1[we^^ird^[id^]^;])');
     final parsed = EpubCfi.parse(serialized);
-    expect(parsed, isNotNull);
-    expect(parsed!.idAssertion, cfi.idAssertion);
+    expect(parsed.idAssertion, cfi.idAssertion);
     expect(parsed.steps, cfi.steps);
     expect(parsed.charOffset, cfi.charOffset);
   });
@@ -49,14 +48,14 @@ void main() {
     final insideP1 = d.indexOfText('alpha beta')!;
     final cfiP1 = d.cfiForOffset(insideP1);
     expect(cfiP1.idAssertion, 'p1');
-    expect(d.offsetForCfi(EpubCfi.parse(cfiP1.serialize())!), insideP1);
+    expect(d.offsetForCfi(EpubCfi.parse(cfiP1.serialize())), insideP1);
 
     // A text node after an inline element ("three" in p2) resolves
     // through the sibling structure.
     final insideThree = d.indexOfText('three')!;
     final cfiThree = d.cfiForOffset(insideThree);
     expect(
-      d.offsetForCfi(EpubCfi.parse(cfiThree.serialize())!),
+      d.offsetForCfi(EpubCfi.parse(cfiThree.serialize())),
       insideThree,
     );
 
@@ -65,14 +64,14 @@ void main() {
     final cfiNested = d.cfiForOffset(insideNested);
     expect(cfiNested.serialize(), startsWith('epubcfi(/'));
     expect(
-      d.offsetForCfi(EpubCfi.parse(cfiNested.serialize())!),
+      d.offsetForCfi(EpubCfi.parse(cfiNested.serialize())),
       insideNested,
     );
 
     // Character offsets in the middle of a node decode exactly.
     final mid = insideP1 + 6; // inside "alpha beta"
     expect(
-      d.offsetForCfi(EpubCfi.parse(d.cfiForOffset(mid).serialize())!),
+      d.offsetForCfi(EpubCfi.parse(d.cfiForOffset(mid).serialize())),
       mid,
     );
   });
@@ -90,7 +89,7 @@ void main() {
 
     final d2 = EpubCfiDocument.parse(page);
     expect(
-      d2.offsetForCfi(EpubCfi.parse(cfi.serialize())!),
+      d2.offsetForCfi(EpubCfi.parse(cfi.serialize())),
       at,
     );
     expect(d2.cfiForOffset(at).serialize(), cfi.serialize());
@@ -103,7 +102,7 @@ void main() {
   });
 
   test('parse rejects malformed cfis', () {
-    expect(EpubCfi.parse('not-a-cfi'), isNull);
-    expect(EpubCfi.parse('epubcfi()'), isNull);
+    expect(EpubCfi.tryParse('not-a-cfi'), isNull);
+    expect(EpubCfi.tryParse('epubcfi()'), isNull);
   });
 }
