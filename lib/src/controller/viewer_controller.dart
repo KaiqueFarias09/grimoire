@@ -662,7 +662,7 @@ class ViewerController extends ChangeNotifier {
   /// char offsets (interop with Calibre/Readium tooling).
   String? _highlightCfi(final int fileIndex, final int start) {
     try {
-      return _cfiDocFor(fileIndex).cfiForOffset(start).serialize();
+      return _cfiDocFor(fileIndex).cfiForOffset(start).encode();
     } on Object {
       return null;
     }
@@ -1612,7 +1612,7 @@ class ViewerController extends ChangeNotifier {
   String? get positionCfi {
     final doc = _cfiDocFor(_position.fileIndex);
     try {
-      return doc.cfiForOffset(_position.charOffset).serialize();
+      return doc.cfiForOffset(_position.charOffset).encode();
     } on Object {
       return null;
     }

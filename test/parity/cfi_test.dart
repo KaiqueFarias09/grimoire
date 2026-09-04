@@ -30,7 +30,7 @@ void main() {
       charOffset: 1,
       idAssertion: r'we^ird[id];',
     );
-    final serialized = cfi.serialize();
+    final serialized = cfi.encode();
     expect(serialized, r'epubcfi(/2/4/2:1[we^^ird^[id^]^;])');
     final parsed = EpubCfi.parse(serialized);
     expect(parsed.idAssertion, cfi.idAssertion);
@@ -48,30 +48,30 @@ void main() {
     final insideP1 = d.indexOfText('alpha beta')!;
     final cfiP1 = d.cfiForOffset(insideP1);
     expect(cfiP1.idAssertion, 'p1');
-    expect(d.offsetForCfi(EpubCfi.parse(cfiP1.serialize())), insideP1);
+    expect(d.offsetForCfi(EpubCfi.parse(cfiP1.encode())), insideP1);
 
     // A text node after an inline element ("three" in p2) resolves
     // through the sibling structure.
     final insideThree = d.indexOfText('three')!;
     final cfiThree = d.cfiForOffset(insideThree);
     expect(
-      d.offsetForCfi(EpubCfi.parse(cfiThree.serialize())),
+      d.offsetForCfi(EpubCfi.parse(cfiThree.encode())),
       insideThree,
     );
 
     // A nested wrapper div: steps count inside the wrapper as well.
     final insideNested = d.indexOfText('nested text here')!;
     final cfiNested = d.cfiForOffset(insideNested);
-    expect(cfiNested.serialize(), startsWith('epubcfi(/'));
+    expect(cfiNested.encode(), startsWith('epubcfi(/'));
     expect(
-      d.offsetForCfi(EpubCfi.parse(cfiNested.serialize())),
+      d.offsetForCfi(EpubCfi.parse(cfiNested.encode())),
       insideNested,
     );
 
     // Character offsets in the middle of a node decode exactly.
     final mid = insideP1 + 6; // inside "alpha beta"
     expect(
-      d.offsetForCfi(EpubCfi.parse(d.cfiForOffset(mid).serialize())),
+      d.offsetForCfi(EpubCfi.parse(d.cfiForOffset(mid).encode())),
       mid,
     );
   });
@@ -89,10 +89,10 @@ void main() {
 
     final d2 = EpubCfiDocument.parse(page);
     expect(
-      d2.offsetForCfi(EpubCfi.parse(cfi.serialize())),
+      d2.offsetForCfi(EpubCfi.parse(cfi.encode())),
       at,
     );
-    expect(d2.cfiForOffset(at).serialize(), cfi.serialize());
+    expect(d2.cfiForOffset(at).encode(), cfi.encode());
 
     final early = d.cfiForOffset(0);
     final late = d.cfiForOffset(d.indexOfText('nested text here')!);
