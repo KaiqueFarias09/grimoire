@@ -1574,7 +1574,7 @@ class ViewerController extends ChangeNotifier {
   bool get rtlPageProgression {
     final book = this.book;
     if (book is EpubBook) {
-      return book.package.spine.pageProgressionDirection?.toLowerCase() == 'rtl';
+      return book.package.spine.pageProgressionDirection == PageProgressionDirection.rtl;
     }
     return false;
   }
