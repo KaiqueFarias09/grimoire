@@ -55,6 +55,10 @@
   }
 
   function summarize(samples) {
+    // First timed sample kept separate: repeated wrap/unwrap cycles
+    // degrade the heap monotonically, so the median is a steady-state
+    // figure and `first` is the one-shot cost; both belong in the JSON.
+    var first = samples.length ? samples[0] : 0;
     samples.sort(function (a, b) { return a - b; });
     var total = 0;
     for (var i = 0; i < samples.length; i++) {
@@ -62,6 +66,7 @@
     }
     return {
       runs: samples.length,
+      firstUs: first,
       medianUs: samples[(samples.length / 2) | 0],
       meanUs: total / samples.length,
       p95Us: samples[Math.min(samples.length - 1, ((samples.length * 95) / 100) | 0)],
@@ -173,6 +178,116 @@
     return rows;
   }
 
+  // --- phase-isolation scenarios ---
+
+  // These rows run after the comparability rows above and mutate the
+  // document freely; each row establishes its own precondition, so the
+  // medians stay valid regardless of order.
+
+  // Clears every annotation span through the public message API; used
+  // untimed so a timed op always starts from a known span count.
+  function wipeAnnotations() {
+    window.__elivre({ action: 'applyHighlights', items: [] });
+    window.__elivre({ action: 'setSearchMatches', matches: [] });
+    window.__elivre({ action: 'ttsClear' });
+  }
+
+  function highlightItems(prefix, count, chars) {
+    var ranges = spread(chars, count, 40);
+    var items = [];
+    for (var i = 0; i < ranges.length; i++) {
+      items.push(highlightItem(prefix + i, ranges[i][0], ranges[i][1]));
+    }
+    return items;
+  }
+
+  // Clean apply: the wipe runs untimed so the timed apply starts with
+  // an empty clear phase; the comparability rows pay clear + wrap.
+  function measureCleanApply(name, items, minRuns, budgetMs) {
+    return measure(name, function () {
+      window.__elivre({ action: 'applyHighlights', items: [] });
+      return timeDispatch({ action: 'applyHighlights', items: items });
+    }, minRuns, budgetMs);
+  }
+
+  // Styling cost is isolated from OUTSIDE viewer.js: setProperty is
+  // no-oped for the dispatch only, so ranges + spans + wraps still
+  // happen; .elv-hl carries no stylesheet rules, so inline style
+  // attachment is the only thing skipped.
+  function timeDispatchNoStyles(message) {
+    var proto = window.CSSStyleDeclaration.prototype;
+    var original = proto.setProperty;
+    proto.setProperty = function () {};
+    try {
+      return timeDispatch(message);
+    } finally {
+      proto.setProperty = original;
+    }
+  }
+
+  // Applied vs styles-suppressed must alternate per sample: heap
+  // degradation over a row block is large enough that block-sequential
+  // rows read ambient drift as a styling effect (measured ~2x drift).
+  function measurePairedApply(items, minRuns, budgetMs) {
+    var applied = [];
+    var suppressed = [];
+    var begin = performance.now();
+    for (var i = 0; i < minRuns; i++) {
+      window.__elivre({ action: 'applyHighlights', items: [] });
+      applied.push(timeDispatch({ action: 'applyHighlights', items: items }));
+      window.__elivre({ action: 'applyHighlights', items: [] });
+      suppressed.push(timeDispatchNoStyles({ action: 'applyHighlights', items: items }));
+      if (i > 0 && i % 8 === 0 && performance.now() - begin > budgetMs) {
+        break;
+      }
+    }
+    var appliedRow = summarize(applied);
+    appliedRow.name = 'applyHighlights (500) styles applied';
+    var suppressedRow = summarize(suppressed);
+    suppressedRow.name = 'applyHighlights (500) styles suppressed';
+    return [appliedRow, suppressedRow];
+  }
+
+  function runIsolationSuite(chars) {
+    var rows = [];
+
+    [[10, 40, 1500], [100, 20, 2000]].forEach(function (entry) {
+      var items = highlightItems('iso-clean-', entry[0], chars);
+      rows.push(measureCleanApply(
+        'applyHighlights (' + entry[0] + ') clean doc',
+        items, entry[1], entry[2]));
+    });
+
+    rows = rows.concat(measurePairedApply(highlightItems('iso-paired-', 500, chars), 10, 6000));
+
+    // Repopulate untimed per run: a bare repeated clear decays to a
+    // no-op after the first sample and the median would read ~0.
+    // Highlights are wiped untimed first so the timed clear isolates
+    // the search-span unwrap phase only.
+    wipeAnnotations();
+    var clearMatches = spread(chars, 400, 12);
+    rows.push(measure('setSearchMatches clear (400 spans)', function () {
+      window.__elivre({ action: 'setSearchMatches', matches: clearMatches });
+      return timeDispatch({ action: 'setSearchMatches', matches: [] });
+    }, 20, 6000));
+
+    wipeAnnotations();
+    var pristineSize = 17;
+    rows.push(measure('setFontSize pristine (no spans)', function () {
+      pristineSize = pristineSize === 17 ? 18 : 17;
+      return timeDispatch({ action: 'setFontSize', px: pristineSize });
+    }, 10, 3000));
+
+    window.__elivre({ action: 'applyHighlights', items: highlightItems('iso-relayout-', 500, chars) });
+    var annotatedSize = 17;
+    rows.push(measure('setFontSize with 500 hl spans', function () {
+      annotatedSize = annotatedSize === 17 ? 18 : 17;
+      return timeDispatch({ action: 'setFontSize', px: annotatedSize });
+    }, 10, 3000));
+
+    return rows;
+  }
+
   // Load the real injected script once the chapter DOM is in place;
   // viewer.js boots as soon as it evaluates (no images to wait for).
   var script = document.createElement('script');
@@ -183,10 +298,13 @@
     var chars = readyInfo && readyInfo.chars ? readyInfo.chars : targetChars;
     var bootMs = (readyInfo ? performance.now() : 0) - startedAt;
     setTimeout(function () {
-      var rows = runSuite(chars);
+      // Comparability rows first, unchanged; isolation rows append and
+      // may leave annotation spans behind (nothing reads them after).
+      var rows = runSuite(chars).concat(runIsolationSuite(chars));
       rows.push({
         name: 'boot (script eval to ready post)',
         runs: 1,
+        firstUs: bootMs * 1000,
         medianUs: bootMs * 1000,
         meanUs: bootMs * 1000,
         p95Us: bootMs * 1000,

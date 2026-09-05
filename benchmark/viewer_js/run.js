@@ -8,6 +8,12 @@
 // Environment overrides:
 //     CHROME_BIN   path to a Chrome binary (default: the macOS one)
 //     CHARS        chapter size in characters (default 800000)
+//     SIZES        comma list of chapter sizes; runs the suite once per
+//                  size and prints one combined table with a size column
+//                  plus a lin-x factor ((median ratio)/(size ratio), so
+//                  1.0 = linear, >1 = superlinear). Overrides CHARS.
+//     OUT          also write the raw payloads to this file as a JSON
+//                  array, one entry per size
 //     WIDTH/HEIGHT viewport in px (default 1200x800)
 
 'use strict';
@@ -53,8 +59,19 @@ function chromePath() {
   process.exit(2);
 }
 
+function sizesFromEnv() {
+  if (process.env.SIZES) {
+    return process.env.SIZES
+      .split(',')
+      .map((value) => parseInt(value.trim(), 10))
+      .filter((value) => value > 0);
+  }
+  return [parseInt(process.env.CHARS, 10) || 800000];
+}
+
 (async () => {
   const puppeteer = resolvePuppeteer();
+  const sizes = sizesFromEnv();
   const browser = await puppeteer.launch({
     executablePath: chromePath(),
     headless: 'new',
@@ -64,45 +81,129 @@ function chromePath() {
       height: parseInt(process.env.HEIGHT, 10) || 800,
     },
   });
+  const payloads = [];
   try {
-    const page = await browser.newPage();
-    const url = 'file://' + path.join(here, 'index.html')
-      + '?chars=' + (parseInt(process.env.CHARS, 10) || 800000);
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction('document.title === "BENCH_DONE"', { timeout: 180000 });
-    const payload = JSON.parse(await page.$eval('#results', (node) => node.textContent));
-    if (payload.error) {
-      console.error(payload.error);
-      process.exit(1);
-    }
-
-    console.log(`viewer.js benchmarks — ${payload.chars} chars · `
-      + `${payload.textNodesEstimate | 0} paragraphs · `
-      + `${payload.userAgent}`);
-    console.log(
-      'benchmark'.padEnd(52)
-      + 'runs'.padStart(7) + 'median'.padStart(11) + 'mean'.padStart(11) + 'p95'.padStart(11)
-      + '  ops/s',
-    );
-    for (const row of payload.rows) {
-      const micros = row.medianUs;
-      const ops = micros > 0 ? (1e6 / micros) : 0;
-      console.log(
-        row.name.padEnd(52)
-        + String(row.runs).padStart(7)
-        + formatMicros(micros).padStart(11)
-        + formatMicros(row.meanUs).padStart(11)
-        + formatMicros(row.p95Us).padStart(11)
-        + ('  ' + compact(ops)),
-      );
+    for (const size of sizes) {
+      // Fresh page per size: the harness builds its DOM at load time.
+      const page = await browser.newPage();
+      const url = 'file://' + path.join(here, 'index.html') + '?chars=' + size;
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction('document.title === "BENCH_DONE"', { timeout: 300000 });
+      const payload = JSON.parse(await page.$eval('#results', (node) => node.textContent));
+      payloads.push(payload);
+      await page.close();
     }
   } finally {
     await browser.close();
+  }
+
+  if (process.env.OUT) {
+    const outPath = path.resolve(process.env.OUT);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, JSON.stringify(payloads, null, 2));
+    console.error('payloads written to ' + outPath);
+  }
+
+  const failed = payloads.filter((payload) => payload.error);
+  if (failed.length) {
+    for (const payload of failed) {
+      console.error(`size ${payload.chars}: ${payload.error}`);
+    }
+    process.exit(1);
+  }
+
+  if (process.env.SIZES) {
+    printCombined(payloads);
+  } else {
+    printSingle(payloads[0]);
   }
 })().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+// Default invocation: identical shape to the pre-SIZES output.
+function printSingle(payload) {
+  console.log(`viewer.js benchmarks — ${payload.chars} chars · `
+    + `${payload.textNodesEstimate | 0} paragraphs · `
+    + `${payload.userAgent}`);
+  console.log(
+    'benchmark'.padEnd(52)
+    + 'runs'.padStart(7) + 'median'.padStart(11) + 'mean'.padStart(11) + 'p95'.padStart(11)
+    + '  ops/s',
+  );
+  for (const row of payload.rows) {
+    const micros = row.medianUs;
+    const ops = micros > 0 ? (1e6 / micros) : 0;
+    console.log(
+      row.name.padEnd(52)
+      + String(row.runs).padStart(7)
+      + formatMicros(micros).padStart(11)
+      + formatMicros(row.meanUs).padStart(11)
+      + formatMicros(row.p95Us).padStart(11)
+      + ('  ' + compact(ops)),
+    );
+  }
+}
+
+// One table across all sizes, benchmark rows grouped so each op's
+// sizes are adjacent and the lin-x factor reads as the complexity
+// class between consecutive sizes.
+function printCombined(payloads) {
+  console.log(`viewer.js benchmarks — ${payloads.length} sizes · ${payloads[0].userAgent}`);
+  console.log(
+    'benchmark'.padEnd(52)
+    + 'size'.padStart(9)
+    + 'runs'.padStart(7) + 'median'.padStart(11) + 'mean'.padStart(11) + 'p95'.padStart(11)
+    + '  ops/s'
+    + '  lin-x',
+  );
+  const names = [];
+  for (const payload of payloads) {
+    for (const row of payload.rows) {
+      if (names.indexOf(row.name) === -1) {
+        names.push(row.name);
+      }
+    }
+  }
+  for (const name of names) {
+    let previous = null;
+    let previousChars = 0;
+    for (const payload of payloads) {
+      const row = payload.rows.find((candidate) => candidate.name === name);
+      if (!row) {
+        continue;
+      }
+      let linX = '—';
+      if (previous && previous.medianUs > 0 && row.medianUs > 0 && payload.chars !== previousChars) {
+        const growth = row.medianUs / previous.medianUs;
+        const sizeRatio = payload.chars / previousChars;
+        linX = (growth / sizeRatio).toFixed(2);
+      }
+      const micros = row.medianUs;
+      const ops = micros > 0 ? (1e6 / micros) : 0;
+      console.log(
+        row.name.padEnd(52)
+        + formatSize(payload.chars).padStart(9)
+        + String(row.runs).padStart(7)
+        + formatMicros(micros).padStart(11)
+        + formatMicros(row.meanUs).padStart(11)
+        + formatMicros(row.p95Us).padStart(11)
+        + ('  ' + compact(ops))
+        + ('  ' + String(linX).padStart(5)),
+      );
+      previous = row;
+      previousChars = payload.chars;
+    }
+  }
+}
+
+function formatSize(chars) {
+  if (chars < 1e6) {
+    return (chars / 1000).toFixed(0) + 'k';
+  }
+  return (chars / 1e6).toFixed(1) + 'M';
+}
 
 function formatMicros(micros) {
   if (micros < 1000) {

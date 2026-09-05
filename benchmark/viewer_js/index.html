@@ -8,7 +8,12 @@
          node benchmark/viewer_js/run.js
      or open this file in any browser and read the results block.
 
-     Query parameters: ?chars=<body characters> (default 800000). -->
+     Query parameters: ?chars=<body characters> (default 800000).
+
+     Besides the comparability rows, the suite always emits the
+     phase-isolation rows (clean-doc apply, styles-suppressed apply,
+     search clear-only, pristine vs annotated relayout); see
+     harness.js for what each isolates. -->
 <html>
 <head>
   <meta charset="utf-8"/>
