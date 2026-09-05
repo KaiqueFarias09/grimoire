@@ -33,6 +33,11 @@ class BookServer {
   HttpServer? _httpServer;
   final Map<String, Object> _files = <String, Object>{};
   final Map<String, Uint8List> _assets = <String, Uint8List>{};
+  // The book is immutable after start() and the injected tags are
+  // static, so each HTML page only needs one rewrite per server.
+  final Map<String, String> _rewrittenPages = <String, String>{};
+  // MathJax bundles are megabytes; read them from disk once.
+  final Map<String, Uint8List> _mathJaxBytes = <String, Uint8List>{};
   List<ReadingOrderItem> _order = const <ReadingOrderItem>[];
 
   /// Where the downloaded MathJax cache lives. When null (not
@@ -51,6 +56,9 @@ class BookServer {
 
   /// Number of reading-order items.
   int get itemCount => _order.length;
+
+  /// Number of cached rewritten pages. Visible for testing.
+  int get rewrittenPageCount => _rewrittenPages.length;
 
   /// Whether [start] ran and [stop] has not.
   bool get isRunning => _httpServer != null;
@@ -143,22 +151,14 @@ class BookServer {
   }
 
   shelf.Response _serveBookFile(final shelf.Request request, final String rawPath) {
-    final content = _lookup(rawPath);
-    if (content == null) {
+    final entry = _lookup(rawPath);
+    if (entry == null) {
       return shelf.Response.notFound('No book file: $rawPath');
     }
+    final content = entry.value;
     if (content is String) {
       if (isHtmlName(rawPath)) {
-        var html = injectViewerAssets(
-          content,
-          cssUrl: '/__viewer__/viewer.css',
-          jsUrl: '/__viewer__/viewer.js',
-        );
-        // Calibre's heuristic: only math pages pay for MathJax.
-        if (containsMath(content)) {
-          html = injectMathJax(html, scriptBase: '/__mathjax__');
-        }
-        return shelf.Response.ok(html, headers: _htmlHeaders);
+        return shelf.Response.ok(_rewrittenPage(entry.key, content), headers: _htmlHeaders);
       }
       return shelf.Response.ok(
         content,
@@ -168,6 +168,24 @@ class BookServer {
     // Binary assets (audio, images): players seek with byte ranges.
     return _serveBinary(request, rawPath, content as Uint8List);
   }
+
+  /// Rewritten HTML for a page, cached by canonical path so repeat
+  /// GETs (and quirky-case variants of the same file) skip the regex
+  /// passes. The output is stable: the injected tags are static and
+  /// the MathJax choice only sniffs the stored content.
+  String _rewrittenPage(final String key, final String content) =>
+      _rewrittenPages.putIfAbsent(key, () {
+        var html = injectViewerAssets(
+          content,
+          cssUrl: '/__viewer__/viewer.css',
+          jsUrl: '/__viewer__/viewer.js',
+        );
+        // Calibre's heuristic: only math pages pay for MathJax.
+        if (containsMath(content)) {
+          html = injectMathJax(html, scriptBase: '/__mathjax__');
+        }
+        return html;
+      });
 
   shelf.Response _serveBinary(
     final shelf.Request request,
@@ -238,7 +256,9 @@ class BookServer {
     return (start: start, end: parsedEnd.clamp(start, total - 1));
   }
 
-  Object? _lookup(final String rawPath) => lookupBookFile(_files, rawPath)?.value;
+  /// Resolved book file with its canonical key (used as the rewrite
+  /// cache key so quirky-case paths share one entry).
+  MapEntry<String, Object>? _lookup(final String rawPath) => lookupBookFile(_files, rawPath);
 
   /// Files the `/__mathjax__/` route may serve.
   static const Set<String> _mathJaxWhitelist = {'tex-mml-svg.js', 'tex/mhchem.js'};
@@ -248,12 +268,20 @@ class BookServer {
     if (cachePath == null || cachePath.isEmpty || !_mathJaxWhitelist.contains(relative)) {
       return shelf.Response.notFound('No MathJax file: $relative');
     }
+    // Cached bytes win: the download cache may be cleaned up
+    // mid-session while late-loading pages still request the script.
+    final cached = _mathJaxBytes[relative];
+    if (cached != null) {
+      return shelf.Response.ok(cached, headers: {'Content-Type': 'application/javascript'});
+    }
     final file = File('$cachePath/$relative');
     if (!file.existsSync()) {
       return shelf.Response.notFound('No MathJax file: $relative');
     }
+    // A failed read throws into the request handler (500) and stays
+    // uncached, so the next request retries from disk.
     return shelf.Response.ok(
-      file.readAsBytesSync(),
+      _mathJaxBytes[relative] = file.readAsBytesSync(),
       headers: {'Content-Type': 'application/javascript'},
     );
   }

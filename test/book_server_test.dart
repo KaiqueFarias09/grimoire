@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
-import 'package:e_livre_viewer/src/features/serving/book_server.dart';
+import 'package:e_livre_viewer/src/features/serving/book_server_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/test_book.dart';
@@ -147,6 +147,30 @@ void main() {
     expect(await _body(plainPage), isNot(contains('window.MathJax=')));
   });
 
+  test('rewrites a html page once and reuses the cache on repeat gets', () async {
+    final server = BookServer(
+      assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+    );
+    await server.start(buildTestBook());
+    addTearDown(server.stop);
+    expect(server.rewrittenPageCount, 0);
+
+    final first = await _get(server.urlForPath('chapter1.html'));
+    final firstHtml = await _body(first);
+    expect(server.rewrittenPageCount, 1);
+
+    // Same page again: identical bytes, no second cache entry.
+    final second = await _get(server.urlForPath('chapter1.html'));
+    expect(await _body(second), firstHtml);
+    expect(server.rewrittenPageCount, 1);
+
+    // A quirky-case path resolves to the same canonical entry, so it
+    // must not duplicate the rewrite either.
+    final quirky = await _get(server.urlForPath('Chapter1.HTML'));
+    expect(await _body(quirky), firstHtml);
+    expect(server.rewrittenPageCount, 1);
+  });
+
   test('__mathjax__ serves the cache with a whitelist', () async {
     final server = BookServer(
       assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
@@ -171,6 +195,32 @@ void main() {
 
     final traversal = await _get(server.baseUrl.replace(path: '/__mathjax__/nope.js'));
     expect(traversal.statusCode, 404);
+  });
+
+  test('__mathjax__ serves identical bytes on repeat requests', () async {
+    final server = BookServer(
+      assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+    );
+    await server.start(buildTestBook());
+    addTearDown(server.stop);
+
+    final cache = await Directory.systemTemp.createTemp('mathjax-cache');
+    addTearDown(() => cache.delete(recursive: true));
+    File(
+      '${cache.path}/tex-mml-svg.js',
+    ).writeAsBytesSync(List<int>.generate(256, (final i) => i % 256));
+    server.mathJaxSource = MathJaxSource(cachePath: cache.path, scriptBase: '/__mathjax__');
+    final url = server.baseUrl.replace(path: '/__mathjax__/tex-mml-svg.js');
+
+    final first = await _bytes(await _get(url));
+    expect(first, hasLength(256));
+
+    // Remove the backing file: only an in-memory byte cache can still
+    // serve the second request with identical bytes.
+    File('${cache.path}/tex-mml-svg.js').deleteSync();
+    final second = await _get(url);
+    expect(second.statusCode, 200);
+    expect(await _bytes(second), first);
   });
 
   test('injectViewer handles html without a head', () {
