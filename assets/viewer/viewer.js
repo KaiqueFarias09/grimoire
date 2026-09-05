@@ -38,6 +38,9 @@
     remCache: null,
     lineHeightCache: null,
     textNodeCache: null, // { nodes, starts, total } — see getTextNodes()
+    batchDepth: 0, // 'batch' nesting; > 0 defers relayoutKeepingPosition
+    batchRelayoutPending: false,
+    searchMatches: null, // last applied [start, end] pairs — see applySearchMatches
   };
 
   function post(message) {
@@ -842,32 +845,85 @@
     return getTextNodes().total;
   }
 
-  function currentOffset() {
-    var nodes = getTextNodes().nodes;
-    var range = document.createRange();
-    var consumed = 0;
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      if (!node.length) {
-        continue;
+  // Index of the first candidate node for a range starting at `start`:
+  // the node beginning at or after it, stepped back one so the node
+  // straddling the boundary is not missed. Callers must still check the
+  // candidate's own end (node ends vary, so starts alone cannot prove
+  // overlap). O(log n) rect- and range-free probes replace the
+  // per-item full node walk.
+  function firstOverlapIndex(starts, start) {
+    var lo = 0;
+    var hi = starts.length;
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      if (starts[mid] < start) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
       }
-      range.selectNodeContents(node);
-      // Rects are viewport-relative: nodes of earlier columns sit at
-      // negative x (paged) or above the fold (scroll). The first node
-      // whose trailing edge entered the viewport carries the first
-      // visible character.
-      var rect = range.getBoundingClientRect();
-      var visible = isScrollMode()
-        ? rect.bottom > 4
-        : pageProgressionRtl()
-          ? rect.left < inlineSize() - 4
-          : rect.right > 4;
-      if (visible) {
-        return consumed + offsetWithinNode(node, 0);
-      }
-      consumed += node.length;
     }
-    return consumed;
+    if (lo > 0) {
+      lo -= 1;
+    }
+    return lo;
+  }
+
+  function currentOffset() {
+    var cache = getTextNodes();
+    var nodes = cache.nodes;
+    var range = document.createRange();
+    // The linear scan this bisection replaces stops at the first
+    // visible node in reading order, so a visible first node is always
+    // the answer — checking it first keeps transient states (RTL page
+    // progression over LTR-laid columns, where visible nodes sit both
+    // at the start and past the viewport) on exact linear semantics.
+    var first = 0;
+    while (first < nodes.length && !nodes[first].length) {
+      first++;
+    }
+    if (first >= nodes.length) {
+      return cache.total;
+    }
+    if (nodeIsVisible(range, nodes[first])) {
+      return cache.starts[first] + offsetWithinNode(nodes[first], 0);
+    }
+    // Visibility is otherwise monotone in reading order (earlier
+    // columns sit at negative x in paged mode, earlier rows above the
+    // fold in scroll mode), so the first visible node can be bisected:
+    // ~log2(n) rect reads instead of one per text node on the scan up
+    // to the viewport. Empty nodes never carry a visible character,
+    // mirroring the linear skip.
+    var lo = first;
+    var hi = nodes.length;
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      if (nodeIsVisible(range, nodes[mid])) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    if (lo >= nodes.length) {
+      return cache.total;
+    }
+    return cache.starts[lo] + offsetWithinNode(nodes[lo], 0);
+  }
+
+  function nodeIsVisible(range, node) {
+    if (!node.length) {
+      return false;
+    }
+    range.selectNodeContents(node);
+    // Rects are viewport-relative: nodes of earlier columns sit at
+    // negative x (paged) or above the fold (scroll). The first node
+    // whose trailing edge entered the viewport carries the first
+    // visible character.
+    var rect = range.getBoundingClientRect();
+    return isScrollMode()
+      ? rect.bottom > 4
+      : pageProgressionRtl()
+        ? rect.left < inlineSize() - 4
+        : rect.right > 4;
   }
 
   // Binary search for the first character at or after
@@ -1120,27 +1176,34 @@
 
   // --- highlights ---
 
-  function clearHighlightSpans() {
-    var spans = document.querySelectorAll('span[data-elv-hl]');
+  // Unwraps every span, then normalizes each affected parent once.
+  // Normalizing per span re-resolved the parent's whole child list
+  // every time, which on large clears costs several times the batched
+  // single normalize per parent.
+  function unwrapSpans(spans) {
+    var parents = [];
     for (var i = 0; i < spans.length; i++) {
-      unwrapSpan(spans[i]);
+      var span = spans[i];
+      var parent = span.parentNode;
+      if (!parent) {
+        continue;
+      }
+      while (span.firstChild) {
+        parent.insertBefore(span.firstChild, span);
+      }
+      parent.removeChild(span);
+      if (!parents.length || parents[parents.length - 1] !== parent) {
+        parents.push(parent);
+      }
     }
-    state.highlights = {};
-  }
-
-  function unwrapSpan(span) {
-    var parent = span.parentNode;
-    if (!parent) {
-      return;
+    for (var p = 0; p < parents.length; p++) {
+      parents[p].normalize();
     }
-    while (span.firstChild) {
-      parent.insertBefore(span.firstChild, span);
+    if (parents.length) {
+      // Moving the children out plus normalize merges text nodes back
+      // together; the cached walk must rescan.
+      markTextNodesDirty();
     }
-    parent.removeChild(span);
-    parent.normalize();
-    // Moving the children out plus normalize merges text nodes back
-    // together; the cached walk must rescan.
-    markTextNodesDirty();
   }
 
   // Parity: calibre range_utils.pyj:232-235 — surroundContents can
@@ -1161,13 +1224,69 @@
     }
   }
 
+  // Fields the wrap/unwrap pipeline keys an item on; deep-equal items
+  // can keep their spans across a re-apply.
+  function highlightEqual(a, b) {
+    return a.start === b.start && a.end === b.end &&
+      (a.decoration || 'background') === (b.decoration || 'background') &&
+      (a.colorLight || '') === (b.colorLight || '') &&
+      (a.colorDark || '') === (b.colorDark || '');
+  }
+
   function applyHighlights(items) {
     state.themeIsDark = detectThemeBrightness();
-    state.highlightItems = {};
-    for (var i = 0; i < items.length; i++) {
-      state.highlightItems[items[i].id] = items[i];
+    // The host re-sends the whole set on every highlight edit and on
+    // each engine-ready/page activation. Spans whose item is unchanged
+    // keep their ranges — re-wrapping them splits and re-merges every
+    // touched text node, which dominates the cost on large chapters.
+    var highlightItems = {};
+    var keptIds = {};
+    var toWrap = [];
+    var i;
+    for (i = 0; i < items.length; i++) {
+      var item = items[i];
+      highlightItems[item.id] = item;
+      var previous = state.highlightItems[item.id];
+      if (previous && highlightEqual(previous, item) &&
+        Object.prototype.hasOwnProperty.call(state.highlights, item.id)) {
+        keptIds[item.id] = true;
+      } else {
+        toWrap.push(item);
+      }
     }
-    clearHighlightSpans();
+    // A kept span overlapping a re-wrapped item must re-wrap too: the
+    // wrap fallback extracts through the kept span's interior, which
+    // only reproduces the full re-apply structure when every item of
+    // an overlap chain re-wraps together in document order.
+    var moved = true;
+    while (moved) {
+      moved = false;
+      for (var id in keptIds) {
+        if (!Object.prototype.hasOwnProperty.call(keptIds, id)) {
+          continue;
+        }
+        var keptItem = highlightItems[id];
+        for (i = 0; i < toWrap.length; i++) {
+          var changed = toWrap[i];
+          if (keptItem.start < changed.end && changed.start < keptItem.end) {
+            delete keptIds[id];
+            toWrap.push(keptItem);
+            moved = true;
+            break;
+          }
+        }
+      }
+    }
+    var allSpans = document.querySelectorAll('span[data-elv-hl]');
+    var staleSpans = [];
+    for (i = 0; i < allSpans.length; i++) {
+      var span = allSpans[i];
+      if (!keptIds[span.getAttribute('data-elv-hl')]) {
+        staleSpans.push(span);
+      }
+    }
+    unwrapSpans(staleSpans);
+    state.highlightItems = highlightItems;
     // One cached snapshot feeds every item — a per-item walk rescanned
     // the whole document once per highlight. All ranges are computed
     // up front: Ranges are live, so wrapping a later range keeps the
@@ -1176,18 +1295,23 @@
     var nodes = cache.nodes;
     var starts = cache.starts;
     var wraps = [];
-    for (var m = 0; m < items.length; m++) {
-      var item = items[m];
-      var start = item.start;
-      var end = item.end;
-      for (var i = 0; i < nodes.length; i++) {
+    for (var m = 0; m < toWrap.length; m++) {
+      var wrapItem = toWrap[m];
+      var start = wrapItem.start;
+      var end = wrapItem.end;
+      // Binary search the node holding `start`, then walk forward over
+      // the overlapping fragments only — a per-item scan of every node
+      // was O(items x nodes) on long chapters.
+      var i = firstOverlapIndex(starts, start);
+      for (; i < nodes.length && starts[i] < end; i++) {
         var nodeStart = starts[i];
-        var nodeEnd = nodeStart + nodes[i].length;
-        if (nodeEnd <= start || nodeStart >= end) {
+        var nodeLength = nodes[i].length;
+        if (nodeStart + nodeLength <= start) {
+          // The stepped-back neighbor ends at or before start.
           continue;
         }
         var withinStart = Math.max(0, start - nodeStart);
-        var withinEnd = Math.min(nodes[i].length, end - nodeStart);
+        var withinEnd = Math.min(nodeLength, end - nodeStart);
         if (withinEnd <= withinStart) {
           continue;
         }
@@ -1200,7 +1324,7 @@
           // (Calibre range_utils.pyj:175-180).
           continue;
         }
-        wraps.push({ start: nodeStart + withinStart, range: range, item: item, span: null });
+        wraps.push({ start: nodeStart + withinStart, range: range, item: wrapItem, span: null });
       }
     }
     // Reverse document order: wrapping a later range never shifts an
@@ -1222,14 +1346,21 @@
       normalizeWrapAncestor(spans);
     }
     // Per-item span lists in document order, like the per-item walk
-    // used to produce.
+    // used to produce. Kept ids carry their existing span lists over.
+    var highlights = {};
+    for (var id in keptIds) {
+      if (Object.prototype.hasOwnProperty.call(keptIds, id)) {
+        highlights[id] = state.highlights[id];
+      }
+    }
     for (var k = 0; k < wraps.length; k++) {
       var id = wraps[k].item.id;
-      if (!Object.prototype.hasOwnProperty.call(state.highlights, id)) {
-        state.highlights[id] = [];
+      if (!Object.prototype.hasOwnProperty.call(highlights, id)) {
+        highlights[id] = [];
       }
-      state.highlights[id].push(wraps[k].span);
+      highlights[id].push(wraps[k].span);
     }
+    state.highlights = highlights;
   }
 
   // Page background luminance decides which palette half a highlight
@@ -1248,13 +1379,26 @@
 
   // Parity: calibre src/pyj/range_utils.pyj:150-157 (wrap_range) —
   // surroundContents fails when the range crosses element boundaries;
-  // extract+insert never does.
+  // extract+insert never does. Highlight and search ranges are always
+  // intra-text-node, where two splitText calls and an insert produce
+  // the same tree without the fragment build — the surroundContents
+  // path stays for anything else.
   function wrapRange(range, wrapper) {
-    try {
-      range.surroundContents(wrapper);
-    } catch (error) {
-      wrapper.appendChild(range.extractContents());
-      range.insertNode(wrapper);
+    var container = range.startContainer;
+    if (container === range.endContainer && container.nodeType === Node.TEXT_NODE) {
+      var endOffset = range.endOffset;
+      var startOffset = range.startOffset;
+      var after = container.splitText(endOffset);
+      var middle = container.splitText(startOffset);
+      wrapper.appendChild(middle);
+      container.parentNode.insertBefore(wrapper, after);
+    } else {
+      try {
+        range.surroundContents(wrapper);
+      } catch (error) {
+        wrapper.appendChild(range.extractContents());
+        range.insertNode(wrapper);
+      }
     }
     // Either path splits text nodes, so node identity changes even
     // though the character sequence does not.
@@ -1311,9 +1455,7 @@
     if (!spans) {
       return;
     }
-    for (var i = 0; i < spans.length; i++) {
-      unwrapSpan(spans[i]);
-    }
+    unwrapSpans(spans);
     delete state.highlights[id];
   }
 
@@ -1340,10 +1482,7 @@
   }
 
   function ttsClear() {
-    var spans = document.querySelectorAll('span[data-elv-tts]');
-    for (var i = spans.length - 1; i >= 0; i--) {
-      unwrapSpan(spans[i]);
-    }
+    unwrapSpans(document.querySelectorAll('span[data-elv-tts]'));
   }
 
   // Same node/offset walk as the highlight wraps, without ids: the
@@ -1839,10 +1978,20 @@
       case 'batch':
         // Startup settings arrive packed into one postMessage; each
         // inner message re-enters this switch with the same contract.
+        // Every settings action relayouts to keep its position; inside
+        // a batch that means one full relayout per inner message, so
+        // the per-action relayout is deferred and exactly one runs
+        // after the last inner message.
         var batch = message.messages;
         if (batch && batch.length) {
+          state.batchDepth += 1;
           for (var bi = 0; bi < batch.length; bi++) {
             window.__elivre(batch[bi]);
+          }
+          state.batchDepth -= 1;
+          if (state.batchDepth === 0 && state.batchRelayoutPending) {
+            state.batchRelayoutPending = false;
+            relayoutKeepingPosition();
           }
         }
         break;
@@ -1850,6 +1999,11 @@
   };
 
   function relayoutKeepingPosition() {
+    if (state.batchDepth > 0) {
+      // Deferred to a single relayout after the batch's last message.
+      state.batchRelayoutPending = true;
+      return;
+    }
     var saved = currentOffset();
     layout();
     goToOffset(saved);
@@ -1860,43 +2014,50 @@
   // Persistent visual markers for every search match of the current
   // file (the selection shows the active one). Calibre wraps all
   // search results the same way (find.pyj / show_search_result).
-  function applySearchMatches(matches) {
-    var existing = document.body.querySelectorAll('span[data-elv-search]');
-    for (var e = 0; e < existing.length; e++) {
-      var parent = existing[e].parentNode;
-      existing[e].replaceWith.apply(
-        existing[e],
-        Array.prototype.slice.call(existing[e].childNodes)
-      );
-      if (parent && parent.normalize) {
-        parent.normalize();
+  function searchMatchesEqual(a, b) {
+    if (a === b) {
+      return true;
+    }
+    if (!a || !b || a.length !== b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i][0] !== b[i][0] || a[i][1] !== b[i][1]) {
+        return false;
       }
     }
-    if (existing.length) {
-      // replaceWith + normalize above merge text nodes; the cached
-      // walk must rescan before the snapshot below — and before any
-      // later offset read.
-      markTextNodesDirty();
+    return true;
+  }
+
+  function applySearchMatches(matches) {
+    // The host re-sends the active match set on every selection or page
+    // change; identical sets already have their marks in place and
+    // re-clearing them splits and re-merges every hit's text nodes.
+    if (searchMatchesEqual(state.searchMatches, matches)) {
+      return;
     }
+    unwrapSpans(document.body.querySelectorAll('span[data-elv-search]'));
     if (!matches.length) {
       return;
     }
     // Snapshot the text nodes once and wrap in reverse document order:
     // wrapping a later range never shifts an earlier one's offsets.
-    var nodes = getTextNodes().nodes;
+    var cache = getTextNodes();
+    var nodes = cache.nodes;
+    var starts = cache.starts;
     var ranges = [];
     for (var m = 0; m < matches.length; m++) {
       var start = matches[m][0];
       var end = matches[m][1];
-      // consumed is positional, not a running total across matches:
-      // restart the baseline at 0 for every match.
-      var consumed = 0;
-      for (var i = 0; i < nodes.length; i++) {
+      // Binary search the node holding `start` and walk forward only
+      // over the overlapping fragments; restarting the node scan per
+      // match was O(matches x nodes).
+      var i = firstOverlapIndex(starts, start);
+      for (; i < nodes.length && starts[i] < end; i++) {
         var node = nodes[i];
-        var nodeStart = consumed;
-        var nodeEnd = consumed + node.length;
-        if (nodeEnd <= start || nodeStart >= end) {
-          consumed = nodeEnd;
+        var nodeStart = starts[i];
+        if (nodeStart + node.length <= start) {
+          // The stepped-back neighbor ends at or before start.
           continue;
         }
         var range = document.createRange();
@@ -1905,7 +2066,6 @@
         if (!range.collapsed) {
           ranges.push(range);
         }
-        consumed = nodeEnd;
         // No break: a match can straddle several text nodes, so keep
         // scanning for every overlapping fragment.
       }
@@ -1916,6 +2076,13 @@
       span.className = 'elv-search-hit';
       wrapRange(ranges[r], span);
     }
+    // Own copy: the caller's array stays mutable and must not be able
+    // to desync the equality check above.
+    var stored = new Array(matches.length);
+    for (var s = 0; s < matches.length; s++) {
+      stored[s] = [matches[s][0], matches[s][1]];
+    }
+    state.searchMatches = stored;
   }
 
   function applyFontFamily(font) {
