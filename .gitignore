@@ -11,3 +11,6 @@ example/.steward/
 # Local agent tooling
 .standardctl/
 .zcode/
+
+# viewer.js benchmark driver
+benchmark/viewer_js/node_modules/

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!-- Standalone harness page for the injected viewer JS.
+     Loads the real assets/viewer/viewer.js against a generated
+     chapter DOM, times the message API operations headlessly, and
+     writes a JSON result block into <pre id="results">.
+
+     Run it with the sibling driver:
+         node benchmark/viewer_js/run.js
+     or open this file in any browser and read the results block.
+
+     Query parameters: ?chars=<body characters> (default 800000). -->
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>viewer.js benchmark</title>
+  <style>
+    body { margin: 0; }
+    p { margin: 0 0 1em 0; }
+    #results { white-space: pre; font: 12px monospace; }
+  </style>
+</head>
+<body>
+  <div id="chapter"></div>
+  <pre id="results">running…</pre>
+  <script src="harness.js"></script>
+</body>
+</html>
