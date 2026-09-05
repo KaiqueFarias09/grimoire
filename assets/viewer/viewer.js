@@ -37,6 +37,7 @@
     firstLayout: true,
     remCache: null,
     lineHeightCache: null,
+    textNodeCache: null, // { nodes, starts, total } — see getTextNodes()
   };
 
   function post(message) {
@@ -425,6 +426,9 @@
       }
       checkColumnSizes();
     }
+    // Page divs and body styles reshuffle text nodes under body; the
+    // offset model must rescan on its next read.
+    markTextNodesDirty();
   }
 
   function layoutScroll() {
@@ -438,6 +442,7 @@
     state.colSize = inlineSize();
     state.colGap = 0;
     state.colCount = Math.max(1, Math.ceil(document.body.scrollHeight / blockSize()));
+    markTextNodesDirty();
   }
 
   function fitImages() {
@@ -806,17 +811,39 @@
     return nodes;
   }
 
-  function totalChars() {
-    var nodes = textNodes();
-    var total = 0;
-    for (var i = 0; i < nodes.length; i++) {
-      total += nodes[i].length;
+  // textNodes() is the hottest walk in the file: position reports,
+  // offset jumps, selection mapping, every highlight, search mark and
+  // tts span all need the same list. Cache the walk plus a cumulative
+  // start-offset prefix so consumers index instead of re-walking. The
+  // cache holds live node references, so anything that splits, merges,
+  // adds or removes text nodes under body must markTextNodesDirty()
+  // before the next read — wrapping via extract+insert splits nodes
+  // and unwrap/normalize merges them, so node identity changes even
+  // when the character sequence does not.
+  function getTextNodes() {
+    if (!state.textNodeCache) {
+      var nodes = textNodes();
+      var starts = new Array(nodes.length);
+      var total = 0;
+      for (var i = 0; i < nodes.length; i++) {
+        starts[i] = total;
+        total += nodes[i].length;
+      }
+      state.textNodeCache = { nodes: nodes, starts: starts, total: total };
     }
-    return total;
+    return state.textNodeCache;
+  }
+
+  function markTextNodesDirty() {
+    state.textNodeCache = null;
+  }
+
+  function totalChars() {
+    return getTextNodes().total;
   }
 
   function currentOffset() {
-    var nodes = textNodes();
+    var nodes = getTextNodes().nodes;
     var range = document.createRange();
     var consumed = 0;
     for (var i = 0; i < nodes.length; i++) {
@@ -893,7 +920,7 @@
   }
 
   function goToOffset(target) {
-    var nodes = textNodes();
+    var nodes = getTextNodes().nodes;
     var consumed = 0;
     for (var i = 0; i < nodes.length; i++) {
       var node = nodes[i];
@@ -1020,15 +1047,13 @@
 
   function nodeStartOffset(node) {
     if (node.nodeType === Node.TEXT_NODE) {
-      var nodes = textNodes();
-      var consumed = 0;
-      for (var i = 0; i < nodes.length; i++) {
-        if (nodes[i] === node) {
-          return consumed;
+      var cache = getTextNodes();
+      for (var i = 0; i < cache.nodes.length; i++) {
+        if (cache.nodes[i] === node) {
+          return cache.starts[i];
         }
-        consumed += nodes[i].length;
       }
-      return consumed;
+      return cache.total;
     }
     var descendant = firstTextNode(node);
     return descendant ? nodeStartOffset(descendant) : 0;
@@ -1068,7 +1093,7 @@
   function setSelection(start, end) {
     var selection = window.getSelection();
     selection.removeAllRanges();
-    var nodes = textNodes();
+    var nodes = getTextNodes().nodes;
     var consumed = 0;
     var startRef = null;
     var endRef = null;
@@ -1113,6 +1138,27 @@
     }
     parent.removeChild(span);
     parent.normalize();
+    // Moving the children out plus normalize merges text nodes back
+    // together; the cached walk must rescan.
+    markTextNodesDirty();
+  }
+
+  // Parity: calibre range_utils.pyj:232-235 — surroundContents can
+  // leave empty text nodes around the wrapper, which would desync the
+  // character-offset model. One normalize of the shared ancestor
+  // covers a whole wrap batch.
+  function normalizeWrapAncestor(spans) {
+    var ancestor = spans[0].parentNode;
+    for (var i = 1; ancestor && i < spans.length; i++) {
+      var parent = spans[i].parentNode;
+      while (ancestor && parent && !ancestor.contains(parent)) {
+        ancestor = ancestor.parentNode;
+      }
+    }
+    if (ancestor && ancestor.normalize) {
+      ancestor.normalize();
+      markTextNodesDirty();
+    }
   }
 
   function applyHighlights(items) {
@@ -1122,8 +1168,67 @@
       state.highlightItems[items[i].id] = items[i];
     }
     clearHighlightSpans();
-    for (var i = 0; i < items.length; i++) {
-      applyHighlight(items[i]);
+    // One cached snapshot feeds every item — a per-item walk rescanned
+    // the whole document once per highlight. All ranges are computed
+    // up front: Ranges are live, so wrapping a later range keeps the
+    // earlier boundary points valid even where two items overlap.
+    var cache = getTextNodes();
+    var nodes = cache.nodes;
+    var starts = cache.starts;
+    var wraps = [];
+    for (var m = 0; m < items.length; m++) {
+      var item = items[m];
+      var start = item.start;
+      var end = item.end;
+      for (var i = 0; i < nodes.length; i++) {
+        var nodeStart = starts[i];
+        var nodeEnd = nodeStart + nodes[i].length;
+        if (nodeEnd <= start || nodeStart >= end) {
+          continue;
+        }
+        var withinStart = Math.max(0, start - nodeStart);
+        var withinEnd = Math.min(nodes[i].length, end - nodeStart);
+        if (withinEnd <= withinStart) {
+          continue;
+        }
+        var range = document.createRange();
+        range.setStart(nodes[i], withinStart);
+        range.setEnd(nodes[i], withinEnd);
+        if (range.collapsed) {
+          // Adjacent highlights leave collapsed ranges here; wrapping
+          // them would make the next overlap detection misfire
+          // (Calibre range_utils.pyj:175-180).
+          continue;
+        }
+        wraps.push({ start: nodeStart + withinStart, range: range, item: item, span: null });
+      }
+    }
+    // Reverse document order: wrapping a later range never shifts an
+    // earlier one's offsets.
+    wraps.sort(function (a, b) {
+      return b.start - a.start;
+    });
+    var spans = [];
+    for (var w = 0; w < wraps.length; w++) {
+      var span = document.createElement('span');
+      span.setAttribute('data-elv-hl', wraps[w].item.id);
+      span.className = 'elv-hl';
+      applyHighlightStyle(span, wraps[w].item);
+      wrapRange(wraps[w].range, span);
+      wraps[w].span = span;
+      spans.push(span);
+    }
+    if (spans.length) {
+      normalizeWrapAncestor(spans);
+    }
+    // Per-item span lists in document order, like the per-item walk
+    // used to produce.
+    for (var k = 0; k < wraps.length; k++) {
+      var id = wraps[k].item.id;
+      if (!Object.prototype.hasOwnProperty.call(state.highlights, id)) {
+        state.highlights[id] = [];
+      }
+      state.highlights[id].push(wraps[k].span);
     }
   }
 
@@ -1151,56 +1256,9 @@
       wrapper.appendChild(range.extractContents());
       range.insertNode(wrapper);
     }
-  }
-
-  function applyHighlight(item) {
-    var start = item.start;
-    var end = item.end;
-    var nodes = textNodes();
-    var consumed = 0;
-    var spans = [];
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      var nodeStart = consumed;
-      var nodeEnd = consumed + node.length;
-      if (nodeEnd <= start || nodeStart >= end) {
-        consumed = nodeEnd;
-        continue;
-      }
-      var withinStart = Math.max(0, start - nodeStart);
-      var withinEnd = Math.min(node.length, end - nodeStart);
-      if (withinEnd <= withinStart) {
-        consumed = nodeEnd;
-        continue;
-      }
-      var range = document.createRange();
-      range.setStart(node, withinStart);
-      range.setEnd(node, withinEnd);
-      if (range.collapsed) {
-        // Adjacent highlights leave collapsed ranges here; wrapping
-        // them would make the next overlap detection misfire
-        // (Calibre range_utils.pyj:175-180).
-        consumed = nodeEnd;
-        continue;
-      }
-      var span = document.createElement('span');
-      span.setAttribute('data-elv-hl', item.id);
-      span.className = 'elv-hl';
-      applyHighlightStyle(span, item);
-      wrapRange(range, span);
-      spans.push(span);
-      consumed = nodeEnd;
-    }
-    if (spans.length) {
-      // Parity: calibre range_utils.pyj:232-235 — surroundContents can
-      // leave empty text nodes around the wrapper, which would desync
-      // the character-offset model.
-      var ancestor = spans[0].parentNode;
-      if (ancestor && ancestor.normalize) {
-        ancestor.normalize();
-      }
-      state.highlights[item.id] = spans;
-    }
+    // Either path splits text nodes, so node identity changes even
+    // though the character sequence does not.
+    markTextNodesDirty();
   }
 
   // Parity: calibre src/pyj/read_book/highlights.pyj
@@ -1288,10 +1346,10 @@
     }
   }
 
-  // Same node/offset walk as applyHighlight, without ids: the marker
-  // kind is the whole set, cleared together.
+  // Same node/offset walk as the highlight wraps, without ids: the
+  // marker kind is the whole set, cleared together.
   function wrapOffsets(start, end, kind) {
-    var nodes = textNodes();
+    var nodes = getTextNodes().nodes;
     var consumed = 0;
     var spans = [];
     for (var i = 0; i < nodes.length; i++) {
@@ -1320,10 +1378,7 @@
       spans.push(span);
     }
     if (spans.length) {
-      var ancestor = spans[0].parentNode;
-      if (ancestor && ancestor.normalize) {
-        ancestor.normalize();
-      }
+      normalizeWrapAncestor(spans);
     }
   }
 
@@ -1765,14 +1820,14 @@
         var el = document.getElementById(id);
         var offset = -1;
         if (el) {
-          var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-          var node, off = 0;
-          while ((node = walker.nextNode())) {
-            if (el.contains(node)) {
-              offset = off;
+          // Same cached walk as every other offset consumer, so the
+          // reported offset lands in the canonical position space.
+          var cache = getTextNodes();
+          for (var li = 0; li < cache.nodes.length; li++) {
+            if (el.contains(cache.nodes[li])) {
+              offset = cache.starts[li];
               break;
             }
-            off += node.length;
           }
         }
         post({ type: 'fragmentOffset', id: id, offset: offset });
@@ -1780,6 +1835,16 @@
       }
       case 'removeHighlight':
         removeHighlight(String(message.id || ''));
+        break;
+      case 'batch':
+        // Startup settings arrive packed into one postMessage; each
+        // inner message re-enters this switch with the same contract.
+        var batch = message.messages;
+        if (batch && batch.length) {
+          for (var bi = 0; bi < batch.length; bi++) {
+            window.__elivre(batch[bi]);
+          }
+        }
         break;
     }
   };
@@ -1807,17 +1872,25 @@
         parent.normalize();
       }
     }
+    if (existing.length) {
+      // replaceWith + normalize above merge text nodes; the cached
+      // walk must rescan before the snapshot below — and before any
+      // later offset read.
+      markTextNodesDirty();
+    }
     if (!matches.length) {
       return;
     }
     // Snapshot the text nodes once and wrap in reverse document order:
     // wrapping a later range never shifts an earlier one's offsets.
-    var nodes = textNodes();
+    var nodes = getTextNodes().nodes;
     var ranges = [];
-    var consumed = 0;
     for (var m = 0; m < matches.length; m++) {
       var start = matches[m][0];
       var end = matches[m][1];
+      // consumed is positional, not a running total across matches:
+      // restart the baseline at 0 for every match.
+      var consumed = 0;
       for (var i = 0; i < nodes.length; i++) {
         var node = nodes[i];
         var nodeStart = consumed;
@@ -1833,7 +1906,8 @@
           ranges.push(range);
         }
         consumed = nodeEnd;
-        break;
+        // No break: a match can straddle several text nodes, so keep
+        // scanning for every overlapping fragment.
       }
     }
     for (var r = ranges.length - 1; r >= 0; r--) {
