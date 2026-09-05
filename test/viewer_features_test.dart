@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
@@ -357,6 +358,83 @@ void main() {
 
       await controller.setFontFamily(null);
       expect(controller.fontFamily, isNull);
+    });
+
+    test('settings application on ready emits a single batch message', () async {
+      await controller.setTheme(ViewerTheme.dark);
+      await controller.start();
+      // Wait for the initial ready but not for the preload timer, so
+      // slot 0 sees exactly its own ready-time messages.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      final engine = factory.engines[0];
+      // One round trip: the batch plus the (empty) highlight replay.
+      expect(engine.scripts, hasLength(2));
+      expect(engine.scripts[0], contains('"batch"'));
+      expect(engine.scripts[1], contains('applyHighlights'));
+
+      final script = engine.scripts[0];
+      final payload =
+          jsonDecode(script.substring(script.indexOf('{'), script.lastIndexOf('}') + 1))
+              as Map<String, dynamic>;
+      expect(payload['action'], 'batch');
+      final messages = List<Map<String, dynamic>>.from(payload['messages']! as List<dynamic>);
+      expect(
+        [for (final message in messages) message['action']],
+        [
+          'setVars',
+          'setOverrideColors',
+          'setViewport',
+          'setFontSize',
+          'setMargins',
+          'setLayoutMode',
+          'setColumns',
+          'setFontFamily',
+          'setTextJustify',
+          'setHyphenation',
+          'setStylesheet',
+          'setPageProgression',
+        ],
+      );
+      // Inner message shapes are unchanged.
+      expect((messages[0]['vars'] as Map<String, dynamic>), isNotEmpty);
+      expect(messages[3]['px'], 17);
+      expect((messages[4]['left'] as num).toInt(), 20);
+    });
+
+    test('importAnnotations merges by identity and keeps the newest', () async {
+      const color = '{"light":"#ffeb6b","dark":"#906e00"}';
+      const h1 =
+          '{"id":"h1","fileIndex":0,"start":0,"end":5,"text":"x",'
+          '"decoration":"background","color":$color,"createdAt":"2026-09-01T10:00:00Z"}';
+      await controller.importAnnotations(
+        '{"highlights": [$h1,'
+        // The same id twice in one import: the second is older and loses.
+        '{"id":"h9","fileIndex":0,"start":0,"end":2,"text":"x",'
+        '"decoration":"background","color":$color,"createdAt":"2026-09-03T10:00:00Z"},'
+        '{"id":"h9","fileIndex":0,"start":0,"end":3,"text":"x",'
+        '"decoration":"background","color":$color,"createdAt":"2026-09-02T10:00:00Z"}],'
+        '"bookmarks": ['
+        '{"id":"b1","title":"Spot","position":"eLv1:0:0","createdAt":"2026-09-01T10:00:00Z"},'
+        '{"id":"b2","title":"Keep","position":"eLv1:1:0","createdAt":"2026-09-01T10:00:00Z"}]}',
+      );
+      expect(controller.highlights.map((final h) => h.end), <int>[5, 2]);
+      expect(controller.bookmarks.map((final b) => b.title), <String>['Spot', 'Keep']);
+
+      await controller.importAnnotations(
+        '{"highlights": ['
+        // Same id, newer: replaces in place.
+        '{"id":"h1","fileIndex":0,"start":0,"end":6,"text":"x",'
+        '"decoration":"background","color":$color,"createdAt":"2026-09-04T10:00:00Z"}],'
+        '"bookmarks": ['
+        // Same title as b1, newer: replaces by title.
+        '{"id":"b3","title":"Spot","position":"eLv1:0:9","createdAt":"2026-09-04T10:00:00Z"},'
+        // Same position as b2, newer: replaces by position.
+        '{"id":"b4","title":"Fresh","position":"eLv1:1:0","createdAt":"2026-09-04T10:00:00Z"}]}',
+      );
+      expect(controller.highlights, hasLength(2));
+      expect(controller.highlights.first.end, 6);
+      expect(controller.bookmarks.map((final b) => b.id), <String>['b3', 'b4']);
     });
 
     test('quick highlight uses the remembered default style', () async {

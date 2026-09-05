@@ -989,10 +989,7 @@ class ViewerController extends ChangeNotifier {
     if (fileIndex == null) {
       return null;
     }
-    final htmlByPath = <String, String>{
-      for (final file in book.files.html) file.path: file.content,
-    };
-    final content = htmlByPath[book.readingOrder[fileIndex].name];
+    final content = _htmlByPath[book.readingOrder[fileIndex].name];
     if (content == null) {
       return null;
     }
@@ -1169,7 +1166,6 @@ class ViewerController extends ChangeNotifier {
     );
     _bookmarks.add(bookmark);
     _notifyAnnotationsChanged();
-    _notifyAnnotationsChanged();
     notifyListeners();
     return bookmark;
   }
@@ -1268,6 +1264,14 @@ class ViewerController extends ChangeNotifier {
     return at == -1 ? null : (at, at + highlight.text.length);
   }
 
+  /// Plain text per reading-order index, extracted once (the book is
+  /// immutable after construction).
+  final Map<int, String> _documentTextByFile = <int, String>{};
+
+  /// Raw HTML per file path, built on first use ([search] and footnote
+  /// resolution map hrefs through it).
+  Map<String, String>? _htmlByPathCache;
+
   String _contextAround(final int fileIndex, final int offset, {required final bool before}) {
     final text = _documentTextOf(fileIndex);
     if (before) {
@@ -1282,14 +1286,21 @@ class ViewerController extends ChangeNotifier {
     if (fileIndex < 0 || fileIndex >= book.readingOrder.length) {
       return '';
     }
-    final name = book.readingOrder[fileIndex].name;
-    for (final file in book.files.html) {
-      if (file.path == name) {
-        return documentText(file.content);
+    return _documentTextByFile.putIfAbsent(fileIndex, () {
+      final name = book.readingOrder[fileIndex].name;
+      for (final file in book.files.html) {
+        if (file.path == name) {
+          return documentText(file.content);
+        }
       }
-    }
-    return '';
+      return '';
+    });
   }
+
+  /// Raw HTML per file path (lazily built; the book is immutable).
+  Map<String, String> get _htmlByPath => _htmlByPathCache ??= <String, String>{
+    for (final file in book.files.html) file.path: file.content,
+  };
 
   /// The canonical character space of [fileIndex]'s content, or ''
   /// when the file is not HTML. Narration segments against this.
@@ -1406,9 +1417,8 @@ class ViewerController extends ChangeNotifier {
       notifyListeners();
       return results;
     }
-    final htmlByPath = <String, String>{
-      for (final file in book.files.html) file.path: file.content,
-    };
+    final htmlByPath = _htmlByPath;
+    final textBySection = <String, String>{};
     final markersByFile = <int, List<(int, int)>>{};
     for (final match
         in book
@@ -1420,7 +1430,11 @@ class ViewerController extends ChangeNotifier {
               maxMatches: 500,
             )
             .matches) {
-      final text = documentText(htmlByPath[match.sectionName] ?? '');
+      // Extract each section's text at most once per search.
+      final text = textBySection.putIfAbsent(
+        match.sectionName,
+        () => documentText(htmlByPath[match.sectionName] ?? ''),
+      );
       results.add(
         ViewerSearchResult(
           fileIndex: match.sectionIndex,
@@ -1868,19 +1882,37 @@ class ViewerController extends ChangeNotifier {
       for (final b in (decoded['bookmarks'] as List<dynamic>? ?? []))
         if (b is Map<String, dynamic>) ViewerBookmark.fromJson(b),
     ];
+    // Identity lookups built once (indexWhere per incoming item would
+    // be quadratic). First occurrence wins, matching indexWhere.
+    final highlightIndexById = <String, int>{
+      for (var i = 0; i < _highlights.length; i++) _highlights[i].id: i,
+    };
     for (final incoming in incomingHighlights) {
-      final at = _highlights.indexWhere((final h) => h.id == incoming.id);
+      final at = highlightIndexById[incoming.id] ?? -1;
       if (at < 0) {
+        highlightIndexById[incoming.id] = _highlights.length;
         _highlights.add(incoming);
       } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) > 0) {
         _highlights[at] = incoming;
       }
     }
+    // Bookmarks match on title OR position: the earliest index that
+    // matches either one, so take the smaller of the two lookups.
+    final bookmarkIndexByTitle = <String, int>{
+      for (var i = 0; i < _bookmarks.length; i++) _bookmarks[i].title: i,
+    };
+    final bookmarkIndexByPosition = <String, int>{
+      for (var i = 0; i < _bookmarks.length; i++) _bookmarks[i].position: i,
+    };
     for (final incoming in incomingBookmarks) {
-      final at = _bookmarks.indexWhere(
-        (final b) => b.title == incoming.title || b.position == incoming.position,
-      );
+      final byTitle = bookmarkIndexByTitle[incoming.title];
+      final byPosition = bookmarkIndexByPosition[incoming.position];
+      final at = byTitle == null
+          ? (byPosition ?? -1)
+          : (byPosition == null ? byTitle : math.min(byTitle, byPosition));
       if (at < 0) {
+        bookmarkIndexByTitle.putIfAbsent(incoming.title, () => _bookmarks.length);
+        bookmarkIndexByPosition.putIfAbsent(incoming.position, () => _bookmarks.length);
         _bookmarks.add(incoming);
       } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) > 0) {
         _bookmarks[at] = incoming;
@@ -2165,37 +2197,42 @@ class ViewerController extends ChangeNotifier {
   }
 
   Future<void> _applySettingsTo(final int slot) async {
-    await _sendTo(slot, <String, Object?>{'action': 'setVars', 'vars': _theme.cssVars()});
+    // One round trip instead of twelve: the page side applies each
+    // entry in order through the existing switch (the 'batch' case in
+    // window.__elivre). Message shapes are unchanged.
     await _sendTo(slot, <String, Object?>{
-      'action': 'setOverrideColors',
-      'enabled': _theme.overrideBookColors,
-    });
-    await _sendTo(slot, <String, Object?>{
-      'action': 'setViewport',
-      'width': _logicalViewportWidth,
-      'height': _logicalViewportHeight,
-    });
-    await _sendTo(slot, <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx});
-    await _sendTo(slot, <String, Object?>{
-      'action': 'setMargins',
-      'left': _margins.left,
-      'top': _margins.top,
-      'right': _margins.right,
-      'bottom': _margins.bottom,
-    });
-    await _sendTo(slot, <String, Object?>{
-      'action': 'setLayoutMode',
-      'scroll': _layoutMode == ViewerLayoutMode.scroll,
-    });
-    await _sendTo(slot, <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen});
-    await _sendTo(slot, <String, Object?>{'action': 'setFontFamily', 'font': _fontFamily ?? ''});
-    await _sendTo(slot, <String, Object?>{'action': 'setTextJustify', 'enabled': _justify});
-    await _sendTo(slot, <String, Object?>{'action': 'setHyphenation', 'enabled': _hyphenate});
-    await _sendTo(slot, <String, Object?>{'action': 'setStylesheet', 'css': _userStylesheet ?? ''});
-    await _sendTo(slot, <String, Object?>{
-      'action': 'setPageProgression',
-      'rtl': rtlPageProgression,
-      'reverseZones': _reversePageTurnZones,
+      'action': 'batch',
+      'messages': [
+        <String, Object?>{'action': 'setVars', 'vars': _theme.cssVars()},
+        <String, Object?>{'action': 'setOverrideColors', 'enabled': _theme.overrideBookColors},
+        <String, Object?>{
+          'action': 'setViewport',
+          'width': _logicalViewportWidth,
+          'height': _logicalViewportHeight,
+        },
+        <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx},
+        <String, Object?>{
+          'action': 'setMargins',
+          'left': _margins.left,
+          'top': _margins.top,
+          'right': _margins.right,
+          'bottom': _margins.bottom,
+        },
+        <String, Object?>{
+          'action': 'setLayoutMode',
+          'scroll': _layoutMode == ViewerLayoutMode.scroll,
+        },
+        <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen},
+        <String, Object?>{'action': 'setFontFamily', 'font': _fontFamily ?? ''},
+        <String, Object?>{'action': 'setTextJustify', 'enabled': _justify},
+        <String, Object?>{'action': 'setHyphenation', 'enabled': _hyphenate},
+        <String, Object?>{'action': 'setStylesheet', 'css': _userStylesheet ?? ''},
+        <String, Object?>{
+          'action': 'setPageProgression',
+          'rtl': rtlPageProgression,
+          'reverseZones': _reversePageTurnZones,
+        },
+      ],
     });
   }
 
@@ -2462,15 +2499,24 @@ class ViewerController extends ChangeNotifier {
   }
 
   /// Jumps to a CFI in the current book (single-file subset: no `!`
-  /// indirection). Returns false when the CFI cannot be resolved.
+  /// indirection). The current file is tried first, then the remaining
+  /// ones in reading order. Returns false when the CFI cannot be
+  /// resolved.
   Future<bool> goToCfi(final String cfi) async {
     final parsed = EpubCfi.tryParse(cfi);
     if (parsed == null) {
       return false;
     }
-    // Find the file whose text space contains it: try the current file
-    // first, then scan (the steps are file-local).
-    for (var fileIndex = 0; fileIndex < book.readingOrder.length; fileIndex++) {
+    // Find the file whose text space contains it: the current file
+    // first (a CFI usually targets where the reader is), then the
+    // rest in reading order (the steps are file-local).
+    final current = _position.fileIndex;
+    final orderIndexes = <int>[
+      if (current >= 0 && current < book.readingOrder.length) current,
+      for (var i = 0; i < book.readingOrder.length; i++)
+        if (i != current) i,
+    ];
+    for (final fileIndex in orderIndexes) {
       if (!book.readingOrder[fileIndex].isHtml) {
         continue;
       }
