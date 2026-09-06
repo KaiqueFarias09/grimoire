@@ -2,6 +2,22 @@
 
 ### Added
 
+- **PDF support, both reading modes**: PDFs open through the same
+  `ViewerController` (eLivre's pure-Dart pipeline extracts the text,
+  reflows it into one HTML section per page and keeps the original
+  bytes). Reflow mode reads like any other book — pagination,
+  themes, search, highlights and narration over the canonical
+  per-page text space. Facsimile mode renders the original pages
+  pixel-faithfully with pdf.js (3.11.174 pinned, the last UMD build;
+  lazily downloaded to a version-keyed cache, CDN on the web —
+  nothing bundled, zero pub dependencies) behind a transparent text
+  layer whose spans carry the same canonical text, so selection,
+  search hits and highlights land on the identical character offsets
+  in both modes. `PdfReadingMode` (reflow | facsimile) with
+  `setPdfReadingMode` — the position survives the switch because
+  section `i` is page `i` in both modes; scanned PDFs default to
+  facsimile automatically. `pdfJsEnabled` / `pdfJsCachePath` mirror
+  the MathJax configuration hooks.
 - **Search modes**: `controller.search(query, {mode, caseSensitive,
   nearChars})` exposes Calibre's contains / whole words / regex /
   near queries (matching lives in e_livre). The overlay gains a mode

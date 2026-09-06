@@ -33,6 +33,7 @@ class _Fixture {
 const List<_Fixture> _fixtures = <_Fixture>[
   _Fixture('assets/books/alice-kf8.azw3', 'Alice (AZW3 / KF8)'),
   _Fixture('assets/books/sample1.epub', 'Geography of Bliss (EPUB)'),
+  _Fixture('assets/books/dickens-sample.pdf', 'Dickens (PDF)'),
 ];
 
 class LibraryPage extends StatefulWidget {
@@ -72,39 +73,54 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
-  Future<void> _open(
-    final BuildContext context,
-    final _Fixture fixture,
-  ) async {
+  Future<void> _open(final BuildContext context, final _Fixture fixture) async {
     final messenger = ScaffoldMessenger.of(context);
-    final bytes = Uint8List.fromList(
-        (await rootBundle.load(fixture.asset)).buffer.asUint8List());
+    final bytes = Uint8List.fromList((await rootBundle.load(fixture.asset)).buffer.asUint8List());
     try {
       final book = await BookReader.openFromBytes(bytes);
       if (!context.mounted) {
         return;
       }
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => ReaderPage(book: book),
-        ),
-      );
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => ReaderPage(book: book)));
     } on Exception catch (error) {
       messenger.showSnackBar(SnackBar(content: Text('$error')));
     }
   }
 }
 
-class ReaderPage extends StatelessWidget {
+class ReaderPage extends StatefulWidget {
   const ReaderPage({required this.book, super.key});
 
   final Book book;
 
   @override
+  State<ReaderPage> createState() => _ReaderPageState();
+}
+
+class _ReaderPageState extends State<ReaderPage> {
+  // PDFs get an externally owned controller so the reading-mode
+  // toggle below can drive it; other formats let ELivreView manage
+  // its own.
+  late final ViewerController? _pdfController = widget.book is PdfBook
+      ? ViewerController(widget.book)
+      : null;
+
+  @override
+  void dispose() {
+    _pdfController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(final BuildContext context) {
+    final pdfController = _pdfController;
+
     return Scaffold(
       body: ELivreView(
-        book: book,
+        book: widget.book,
+        controller: pdfController,
         onSelection: (selection) {
           // Dictionary hook: the host app decides what to do with the
           // selected text.
@@ -116,6 +132,23 @@ class ReaderPage extends StatelessWidget {
           );
         },
       ),
+      // Toggles a PDF between the reflowed and the pixel-faithful
+      // reading modes; the reading position survives the switch.
+      floatingActionButton: pdfController == null
+          ? null
+          : ListenableBuilder(
+              listenable: pdfController,
+              builder: (final context, final _) {
+                final isFacsimile = pdfController.pdfReadingMode == PdfReadingMode.facsimile;
+                return FloatingActionButton(
+                  tooltip: isFacsimile ? 'Switch to reflowed text' : 'Switch to facsimile pages',
+                  onPressed: () => pdfController.setPdfReadingMode(
+                    isFacsimile ? PdfReadingMode.reflow : PdfReadingMode.facsimile,
+                  ),
+                  child: Icon(isFacsimile ? Icons.text_fields : Icons.image),
+                );
+              },
+            ),
     );
   }
 }

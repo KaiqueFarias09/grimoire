@@ -2,9 +2,9 @@
 
 A Calibre-style ebook reader widget for Flutter, built on
 [eLivre](https://pub.dev/packages/e_livre). Renders EPUB, MOBI, AZW3
-(KF8), FB2 and comic archives (CBZ/CBR) with paginated or scrolling
-layouts, themes, highlights, bookmarks, in-book search and a
-text-selection hook for dictionary lookups.
+(KF8), FB2, comic archives (CBZ/CBR) and PDF with paginated or
+scrolling layouts, themes, highlights, bookmarks, in-book search and
+a text-selection hook for dictionary lookups.
 
 Platforms: **Android, iOS, macOS** (webview_flutter), **Windows,
 Linux** (flutter_inappwebview, auto-selected) and **Web** (a native
@@ -149,6 +149,7 @@ handles loopback internally).
 | Positions | EPUB CFI → reflow-stable char offsets (`eLv1:` serialization) |
 | Highlights | range CFI → char-offset ranges + context-text fuzzy relocation |
 | Search | Web Worker text scan → Dart regex over the same text model |
+| PDF | text extracted and reflowed by eLivre; facsimile pages render via lazily-downloaded pdf.js with a text layer pinned to the same canonical text space |
 
 ## License
 
