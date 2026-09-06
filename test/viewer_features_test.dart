@@ -502,6 +502,156 @@ void main() {
       expect(engine.scripts.where((final s) => s.contains('ttsClear')), isNotEmpty);
     });
 
+    group('passive word marks', () {
+      Future<FakeViewerEngine> startedEngine() async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        return factory.engines[controller.activeEngineIndex];
+      }
+
+      List<Map<String, dynamic>> payloadsOf(final Iterable<String> scripts) => [
+        for (final script in scripts)
+          jsonDecode(
+            script.substring(script.indexOf('{'), script.lastIndexOf('}') + 1),
+          ) as Map<String, dynamic>,
+      ];
+
+      test('marks reach the engine as start/end/state payloads', () async {
+        final engine = await startedEngine();
+
+        await controller.setWordMarks(0, const [
+          ViewerWordMark(start: 0, end: 7, state: 'unknown'),
+          ViewerWordMark(start: 18, end: 22, state: 'learning'),
+        ]);
+
+        final messages = payloadsOf(
+          engine.scripts.where((final s) => s.contains('applyWordMarks')),
+        );
+        expect(messages, hasLength(1));
+        expect(messages.first['action'], 'applyWordMarks');
+        expect(messages.first['marks'], [
+          {'start': 0, 'end': 7, 'state': 'unknown'},
+          {'start': 18, 'end': 22, 'state': 'learning'},
+        ]);
+      });
+
+      test('invalid ranges are dropped and an all-invalid set sends nothing', () async {
+        final engine = await startedEngine();
+
+        await controller.setWordMarks(0, const [
+          ViewerWordMark(start: 5, end: 5, state: 'unknown'),
+          ViewerWordMark(start: 9, end: 2, state: 'unknown'),
+          ViewerWordMark(start: -1, end: 4, state: 'unknown'),
+        ]);
+        expect(
+          engine.scripts.where((final s) => s.contains('applyWordMarks')),
+          isEmpty,
+        );
+
+        // A later valid set works and clears the page of stale marks.
+        await controller.setWordMarks(0, const [ViewerWordMark(start: 0, end: 3, state: 'learning')]);
+        expect(
+          payloadsOf(engine.scripts.where((final s) => s.contains('applyWordMarks'))),
+          hasLength(1),
+        );
+      });
+
+      test('marks of the active file replay when its engine goes ready again', () async {
+        final engine = await startedEngine();
+        engine.scripts.clear();
+
+        await controller.setWordMarks(0, const [ViewerWordMark(start: 2, end: 8, state: 'unknown')]);
+        engine.scripts.clear();
+
+        // Simulate a chapter re-load: the page boots and reports ready.
+        await engine.loadUrl(Uri.parse('http://localhost/book/chapter1.html'));
+        await Future<void>.delayed(Duration.zero);
+
+        final replays = payloadsOf(
+          engine.scripts.where((final s) => s.contains('applyWordMarks')),
+        );
+        expect(replays, hasLength(1));
+        expect((replays.first['marks']! as List<dynamic>).first, {
+          'start': 2,
+          'end': 8,
+          'state': 'unknown',
+        });
+      });
+
+      test('marks of an inactive file wait for its engine to load', () async {
+        await controller.start();
+        // File 1 is not loaded anywhere yet: the set only lands in the
+        // controller store, nothing reaches the active engine.
+        await controller.setWordMarks(
+          1,
+          const [ViewerWordMark(start: 0, end: 4, state: 'learning')],
+        );
+        final activeEngine = factory.engines[controller.activeEngineIndex];
+        expect(
+          activeEngine.scripts.where((final s) => s.contains('applyWordMarks')),
+          isEmpty,
+        );
+
+        // The preloader loads file 1 into the spare engine; its ready
+        // event replays that file's marks there.
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        final spareEngine = factory.engines[1 - controller.activeEngineIndex];
+        expect(
+          payloadsOf(spareEngine.scripts.where((final s) => s.contains('applyWordMarks'))),
+          hasLength(1),
+        );
+      });
+
+      test('clearWordMarks unwraps the page and stops replays', () async {
+        final engine = await startedEngine();
+        await controller.setWordMarks(0, const [ViewerWordMark(start: 0, end: 4, state: 'unknown')]);
+
+        await controller.clearWordMarks(fileIndex: 0);
+        expect(engine.scripts.where((final s) => s.contains('clearWordMarks')), isNotEmpty);
+        engine.scripts.clear();
+
+        await engine.loadUrl(Uri.parse('http://localhost/book/chapter1.html'));
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
+      });
+
+      test('clearWordMarks without a file index clears every file', () async {
+        final engine = await startedEngine();
+        await controller.setWordMarks(0, const [ViewerWordMark(start: 0, end: 4, state: 'unknown')]);
+        await controller.setWordMarks(1, const [ViewerWordMark(start: 0, end: 4, state: 'learning')]);
+
+        // The stored sets for both files go away and the loaded page is
+        // cleared once.
+        await controller.clearWordMarks();
+        expect(
+          engine.scripts.where((final s) => s.contains('"clearWordMarks"')),
+          hasLength(1),
+        );
+        engine.scripts.clear();
+
+        // No replay on either file's next activation.
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        for (final candidate in factory.engines) {
+          expect(candidate.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
+        }
+      });
+
+      test('ViewerWordMark equality covers range and state', () {
+        expect(
+          const ViewerWordMark(start: 1, end: 2, state: 'unknown'),
+          const ViewerWordMark(start: 1, end: 2, state: 'unknown'),
+        );
+        expect(
+          const ViewerWordMark(start: 1, end: 2, state: 'unknown'),
+          isNot(const ViewerWordMark(start: 1, end: 2, state: 'learning')),
+        );
+        expect(
+          const ViewerWordMark(start: 1, end: 2, state: 'unknown').toJson(),
+          {'start': 1, 'end': 2, 'state': 'unknown'},
+        );
+      });
+    });
+
     test('bookServerUrlFor serves book file paths after start', () async {
       expect(controller.bookServerUrlFor('images/cover.png'), isNull);
       await controller.start();
@@ -647,7 +797,7 @@ void main() {
     test('rtl page progression reaches the engines', () async {
       expect(controller.rtlPageProgression, isFalse);
 
-      final rtlBook = buildTestBook(pageProgressionDirection: 'rtl');
+      final rtlBook = buildTestBook(pageProgressionDirection: PageProgressionDirection.rtl);
       final rtlController = ViewerController(rtlBook, engineFactory: factory);
       addTearDown(rtlController.dispose);
       expect(rtlController.rtlPageProgression, isTrue);

@@ -3,7 +3,10 @@ import 'dart:typed_data';
 import 'package:e_livre/e_livre.dart';
 
 /// Builds a small in-memory EPUB-shaped book for tests.
-EpubBook buildTestBook({final String? pageProgressionDirection}) {
+EpubBook buildTestBook({
+  final PageProgressionDirection pageProgressionDirection =
+      PageProgressionDirection.unspecified,
+}) {
   const chapter1 =
       '<!DOCTYPE html><html><head>'
       '<title>One</title></head>'

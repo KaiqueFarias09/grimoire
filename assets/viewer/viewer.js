@@ -41,6 +41,7 @@
     batchDepth: 0, // 'batch' nesting; > 0 defers relayoutKeepingPosition
     batchRelayoutPending: false,
     searchMatches: null, // last applied [start, end] pairs — see applySearchMatches
+    wordMarks: null, // last applied [start, end, state] triples — see applyWordMarks
   };
 
   function post(message) {
@@ -1485,6 +1486,97 @@
     unwrapSpans(document.querySelectorAll('span[data-elv-tts]'));
   }
 
+  // --- passive word marks (host vocabulary states) ---
+
+  // Persistent study markers for whole word ranges (unknown/learning
+  // vocabulary in the host app). Passive by contract: taps on these
+  // spans are NOT intercepted (onTap only looks at [data-elv-hl] and
+  // anchors), nothing scrolls, and re-applying replaces the set.
+  // Spans survive every in-page relayout (font, margins, columns are
+  // CSS-only); when the host swaps chapters it reloads the file, so
+  // the CONTROLLER re-sends the active file's set on engine-ready —
+  // hosts only need to re-send after changing the mark set itself.
+  function wordMarksEqual(a, b) {
+    if (a === b) {
+      return true;
+    }
+    if (!a || !b || a.length !== b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i][0] !== b[i][0] || a[i][1] !== b[i][1] || a[i][2] !== b[i][2]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function applyWordMarks(marks) {
+    // Same stored-copy equality guard as applySearchMatches: the host
+    // re-sends the whole set on chapter activation; identical sets
+    // already have their spans in place and re-wrapping splits and
+    // re-merges every touched text node.
+    var normalized = [];
+    for (var m = 0; m < marks.length; m++) {
+      var mark = marks[m];
+      var start = mark.start | 0;
+      var end = mark.end | 0;
+      if (end <= start || start < 0) {
+        continue;
+      }
+      var stateName = String(mark.state || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!stateName) {
+        stateName = 'unknown';
+      }
+      normalized.push([start, end, stateName]);
+    }
+    if (wordMarksEqual(state.wordMarks, normalized)) {
+      return;
+    }
+    unwrapSpans(document.body.querySelectorAll('span[data-elv-wm]'));
+    state.wordMarks = normalized;
+    if (!normalized.length) {
+      return;
+    }
+    // Snapshot the text nodes once and wrap in reverse document order:
+    // wrapping a later range never shifts an earlier one's offsets.
+    var cache = getTextNodes();
+    var nodes = cache.nodes;
+    var starts = cache.starts;
+    var ranges = [];
+    for (var n = 0; n < normalized.length; n++) {
+      var markStart = normalized[n][0];
+      var markEnd = normalized[n][1];
+      // Binary search the node holding `markStart`, then walk forward
+      // only over the overlapping fragments (same shape as applyHighlights).
+      var i = firstOverlapIndex(starts, markStart);
+      for (; i < nodes.length && starts[i] < markEnd; i++) {
+        var nodeStart = starts[i];
+        var nodeLength = nodes[i].length;
+        if (nodeStart + nodeLength <= markStart) {
+          continue;
+        }
+        var range = document.createRange();
+        range.setStart(nodes[i], Math.max(0, markStart - nodeStart));
+        range.setEnd(nodes[i], Math.min(nodeLength, markEnd - nodeStart));
+        if (!range.collapsed) {
+          ranges.push({ range: range, state: normalized[n][2] });
+        }
+      }
+    }
+    for (var r = ranges.length - 1; r >= 0; r--) {
+      var span = document.createElement('span');
+      span.setAttribute('data-elv-wm', ranges[r].state);
+      span.className = 'elv-wm elv-wm-' + ranges[r].state;
+      wrapRange(ranges[r].range, span);
+    }
+  }
+
+  function clearWordMarks() {
+    unwrapSpans(document.body.querySelectorAll('span[data-elv-wm]'));
+    state.wordMarks = [];
+  }
+
   // Same node/offset walk as the highlight wraps, without ids: the
   // marker kind is the whole set, cleared together.
   function wrapOffsets(start, end, kind) {
@@ -1953,6 +2045,12 @@
         break;
       case 'ttsClear':
         ttsClear();
+        break;
+      case 'applyWordMarks':
+        applyWordMarks(message.marks || []);
+        break;
+      case 'clearWordMarks':
+        clearWordMarks();
         break;
       case 'locateFragment': {
         var id = String(message.id || '');

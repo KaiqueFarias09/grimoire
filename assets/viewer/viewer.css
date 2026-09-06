@@ -95,3 +95,17 @@ body.elv-hyphenate {
    that read on both light and dark themes. */
 .elv-tts { background-color: rgba(128, 128, 128, 0.30); }
 .elv-tts-word { background-color: rgba(128, 128, 128, 0.55); border-radius: 2px; }
+
+/* Passive word marks (host vocabulary states, e.g. unknown/learning):
+   underlines instead of backgrounds so study hints never fight the
+   highlights/search paint; colors read on both themes. */
+.elv-wm {
+  text-decoration-line: underline;
+  text-decoration-skip-ink: none;
+  text-decoration-color: rgba(128, 128, 128, 0.65);
+}
+.elv-wm-unknown { text-decoration-color: rgba(216, 84, 74, 0.75); }
+.elv-wm-learning {
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(224, 156, 42, 0.85);
+}

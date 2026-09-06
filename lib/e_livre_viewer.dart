@@ -40,6 +40,7 @@ export 'src/controller/viewer_controller.dart'
         ViewerController,
         ViewerSearchResult,
         ViewerSelection,
+        ViewerWordMark,
         ViewerHighlight,
         ViewerHighlightColor,
         ViewerHighlightDecoration,

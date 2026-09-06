@@ -407,6 +407,38 @@ class ViewerSearchResult {
   final String excerpt;
 }
 
+/// A passive word mark: a word range in a file's text model plus the
+/// vocabulary state to render (the host's taxonomy — e.g.
+/// `unknown`/`learning`; anything class-name safe). Marks never
+/// intercept taps and never scroll the page.
+@immutable
+class ViewerWordMark {
+  /// Creates a mark for the half-open range [start]..[end].
+  const ViewerWordMark({required this.start, required this.end, required this.state});
+
+  /// Character range start (documentText space).
+  final int start;
+
+  /// Character range end (exclusive).
+  final int end;
+
+  /// State name rendering as the `elv-wm-<state>` CSS class.
+  final String state;
+
+  /// Payload for the viewer JS ([setWordMarks]).
+  Map<String, Object?> toJson() => <String, Object?>{'start': start, 'end': end, 'state': state};
+
+  @override
+  bool operator ==(final Object other) =>
+      other is ViewerWordMark &&
+      other.start == start &&
+      other.end == end &&
+      other.state == state;
+
+  @override
+  int get hashCode => Object.hash(start, end, state);
+}
+
 /// A text selection reported by the viewer.
 @immutable
 class ViewerSelection {
@@ -1361,6 +1393,58 @@ class ViewerController extends ChangeNotifier {
     await _send(const <String, Object?>{'action': 'ttsClear'});
   }
 
+  // --- passive word marks ---
+
+  /// Word marks per reading-order index, replaced wholesale by
+  /// [setWordMarks] and replayed on engine-ready like highlights and
+  /// search markers.
+  final Map<int, List<ViewerWordMark>> _wordMarksByFile = <int, List<ViewerWordMark>>{};
+
+  /// Replaces the passive word marks of [fileIndex] (idempotent on the
+  /// page side: an identical re-apply keeps its spans). Marks are
+  /// library-internal: they never intercept taps, never scroll, and
+  /// are cleared by [clearWordMarks]. Passing an empty list clears
+  /// [fileIndex]'s marks. Ranges that are empty, inverted or negative
+  /// are dropped.
+  Future<void> setWordMarks(final int fileIndex, final List<ViewerWordMark> marks) async {
+    final valid = <ViewerWordMark>[
+      for (final mark in marks)
+        if (mark.start >= 0 && mark.end > mark.start) mark,
+    ];
+    _wordMarksByFile[fileIndex] = valid;
+    if (_loadedFile[_active] == fileIndex) {
+      await _applyWordMarksToEngine(_active, fileIndex);
+    }
+  }
+
+  /// Removes the word marks of [fileIndex], or every file's marks when
+  /// null, and unwraps them in the page when loaded.
+  Future<void> clearWordMarks({final int? fileIndex}) async {
+    final clearedFiles = fileIndex == null
+        ? List<int>.of(_wordMarksByFile.keys)
+        : <int>[fileIndex];
+    for (final cleared in clearedFiles) {
+      _wordMarksByFile.remove(cleared);
+    }
+    if (fileIndex == null || _loadedFile[_active] == fileIndex) {
+      await _send(const <String, Object?>{'action': 'clearWordMarks'});
+    }
+  }
+
+  /// Re-marks the stored word marks of [fileIndex] on the engine
+  /// [slot] (chapter swaps load fresh pages without marks). Empty sets
+  /// send nothing, mirroring [_applySearchMarkersToEngine].
+  Future<void> _applyWordMarksToEngine(final int slot, final int fileIndex) async {
+    final marks = _wordMarksByFile[fileIndex];
+    if (marks == null || marks.isEmpty) {
+      return;
+    }
+    await _sendTo(slot, <String, Object?>{
+      'action': 'applyWordMarks',
+      'marks': [for (final mark in marks) mark.toJson()],
+    });
+  }
+
   /// The loopback URL serving the book file at [path] (audio,
   /// images), or null before [start]. Narration players stream
   /// overlay audio from here.
@@ -2064,6 +2148,7 @@ class ViewerController extends ChangeNotifier {
         if (fileIndex != null) {
           await _applyHighlightsToEngine(slot, fileIndex);
           await _applySearchMarkersToEngine(slot, fileIndex);
+          await _applyWordMarksToEngine(slot, fileIndex);
         }
         if (_swapOnReadySlot == slot) {
           _swapOnReadySlot = null;
