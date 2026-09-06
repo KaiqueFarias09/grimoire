@@ -511,9 +511,8 @@ void main() {
 
       List<Map<String, dynamic>> payloadsOf(final Iterable<String> scripts) => [
         for (final script in scripts)
-          jsonDecode(
-            script.substring(script.indexOf('{'), script.lastIndexOf('}') + 1),
-          ) as Map<String, dynamic>,
+          jsonDecode(script.substring(script.indexOf('{'), script.lastIndexOf('}') + 1))
+              as Map<String, dynamic>,
       ];
 
       test('marks reach the engine as start/end/state payloads', () async {
@@ -543,13 +542,12 @@ void main() {
           ViewerWordMark(start: 9, end: 2, state: 'unknown'),
           ViewerWordMark(start: -1, end: 4, state: 'unknown'),
         ]);
-        expect(
-          engine.scripts.where((final s) => s.contains('applyWordMarks')),
-          isEmpty,
-        );
+        expect(engine.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
 
         // A later valid set works and clears the page of stale marks.
-        await controller.setWordMarks(0, const [ViewerWordMark(start: 0, end: 3, state: 'learning')]);
+        await controller.setWordMarks(0, const [
+          ViewerWordMark(start: 0, end: 3, state: 'learning'),
+        ]);
         expect(
           payloadsOf(engine.scripts.where((final s) => s.contains('applyWordMarks'))),
           hasLength(1),
@@ -560,16 +558,16 @@ void main() {
         final engine = await startedEngine();
         engine.scripts.clear();
 
-        await controller.setWordMarks(0, const [ViewerWordMark(start: 2, end: 8, state: 'unknown')]);
+        await controller.setWordMarks(0, const [
+          ViewerWordMark(start: 2, end: 8, state: 'unknown'),
+        ]);
         engine.scripts.clear();
 
         // Simulate a chapter re-load: the page boots and reports ready.
         await engine.loadUrl(Uri.parse('http://localhost/book/chapter1.html'));
         await Future<void>.delayed(Duration.zero);
 
-        final replays = payloadsOf(
-          engine.scripts.where((final s) => s.contains('applyWordMarks')),
-        );
+        final replays = payloadsOf(engine.scripts.where((final s) => s.contains('applyWordMarks')));
         expect(replays, hasLength(1));
         expect((replays.first['marks']! as List<dynamic>).first, {
           'start': 2,
@@ -582,15 +580,11 @@ void main() {
         await controller.start();
         // File 1 is not loaded anywhere yet: the set only lands in the
         // controller store, nothing reaches the active engine.
-        await controller.setWordMarks(
-          1,
-          const [ViewerWordMark(start: 0, end: 4, state: 'learning')],
-        );
+        await controller.setWordMarks(1, const [
+          ViewerWordMark(start: 0, end: 4, state: 'learning'),
+        ]);
         final activeEngine = factory.engines[controller.activeEngineIndex];
-        expect(
-          activeEngine.scripts.where((final s) => s.contains('applyWordMarks')),
-          isEmpty,
-        );
+        expect(activeEngine.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
 
         // The preloader loads file 1 into the spare engine; its ready
         // event replays that file's marks there.
@@ -604,7 +598,9 @@ void main() {
 
       test('clearWordMarks unwraps the page and stops replays', () async {
         final engine = await startedEngine();
-        await controller.setWordMarks(0, const [ViewerWordMark(start: 0, end: 4, state: 'unknown')]);
+        await controller.setWordMarks(0, const [
+          ViewerWordMark(start: 0, end: 4, state: 'unknown'),
+        ]);
 
         await controller.clearWordMarks(fileIndex: 0);
         expect(engine.scripts.where((final s) => s.contains('clearWordMarks')), isNotEmpty);
@@ -617,16 +613,17 @@ void main() {
 
       test('clearWordMarks without a file index clears every file', () async {
         final engine = await startedEngine();
-        await controller.setWordMarks(0, const [ViewerWordMark(start: 0, end: 4, state: 'unknown')]);
-        await controller.setWordMarks(1, const [ViewerWordMark(start: 0, end: 4, state: 'learning')]);
+        await controller.setWordMarks(0, const [
+          ViewerWordMark(start: 0, end: 4, state: 'unknown'),
+        ]);
+        await controller.setWordMarks(1, const [
+          ViewerWordMark(start: 0, end: 4, state: 'learning'),
+        ]);
 
         // The stored sets for both files go away and the loaded page is
         // cleared once.
         await controller.clearWordMarks();
-        expect(
-          engine.scripts.where((final s) => s.contains('"clearWordMarks"')),
-          hasLength(1),
-        );
+        expect(engine.scripts.where((final s) => s.contains('"clearWordMarks"')), hasLength(1));
         engine.scripts.clear();
 
         // No replay on either file's next activation.
@@ -645,10 +642,11 @@ void main() {
           const ViewerWordMark(start: 1, end: 2, state: 'unknown'),
           isNot(const ViewerWordMark(start: 1, end: 2, state: 'learning')),
         );
-        expect(
-          const ViewerWordMark(start: 1, end: 2, state: 'unknown').toJson(),
-          {'start': 1, 'end': 2, 'state': 'unknown'},
-        );
+        expect(const ViewerWordMark(start: 1, end: 2, state: 'unknown').toJson(), {
+          'start': 1,
+          'end': 2,
+          'state': 'unknown',
+        });
       });
     });
 
@@ -968,6 +966,81 @@ void main() {
         const margins = ViewerMargins(left: -5, maxTextHeight: -3);
         expect(margins.left, 0);
         expect(margins.maxTextHeight, 0);
+      });
+    });
+
+    group('PDF books', () {
+      late FakeViewerEngineFactory factory;
+      late ViewerController controller;
+
+      setUp(() {
+        factory = FakeViewerEngineFactory();
+        controller = ViewerController(buildPdfTestBook(), engineFactory: factory);
+      });
+
+      tearDown(() {
+        controller.dispose();
+      });
+
+      test('start loads the reflowed first page', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        expect(controller.isPdfMode, isTrue);
+        expect(controller.isComicMode, isFalse);
+        expect(factory.engines[0].loadedUrls.first.path, contains('/book/page_1.html'));
+      });
+
+      test('text PDFs read reflowed, scanned ones default to facsimile', () {
+        expect(controller.pdfReadingMode, PdfReadingMode.reflow);
+
+        final scanned = ViewerController(
+          buildPdfTestBook(withTextLayer: false),
+          engineFactory: FakeViewerEngineFactory(),
+        );
+        expect(scanned.pdfReadingMode, PdfReadingMode.reflow);
+        scanned.dispose();
+      });
+
+      test('scanned default applies after start', () async {
+        final scannedFactory = FakeViewerEngineFactory();
+        final scanned = ViewerController(
+          buildPdfTestBook(withTextLayer: false),
+          engineFactory: scannedFactory,
+        );
+        await scanned.start();
+
+        expect(scanned.pdfReadingMode, PdfReadingMode.facsimile);
+        scanned.dispose();
+      });
+
+      test('position carries no CFI for PDFs', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        expect(controller.positionCfi, isNull);
+      });
+
+      test('switching mode keeps the position', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        final before = controller.position;
+
+        await controller.setPdfReadingMode(PdfReadingMode.facsimile);
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        expect(controller.pdfReadingMode, PdfReadingMode.facsimile);
+        expect(controller.position.fileIndex, before.fileIndex);
+        expect(controller.position.charOffset, before.charOffset);
+      });
+
+      test('search reaches the reflowed pages', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        final results = await controller.search('Second');
+        expect(results, isNotEmpty);
+        expect(results.first.fileIndex, 1);
       });
     });
   });

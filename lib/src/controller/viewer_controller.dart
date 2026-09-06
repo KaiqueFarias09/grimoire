@@ -15,6 +15,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'dart:ui' show Color, Rect;
 
+import '../features/pdf/pdf_reading_mode.dart';
+
+export '../features/pdf/pdf_reading_mode.dart';
+
 /// How the reader lays out pages.
 /// How much CPU the reader may spend measuring real book-wide page
 /// counts. Measurement loads each reading-order item into a dedicated
@@ -430,10 +434,7 @@ class ViewerWordMark {
 
   @override
   bool operator ==(final Object other) =>
-      other is ViewerWordMark &&
-      other.start == start &&
-      other.end == end &&
-      other.state == state;
+      other is ViewerWordMark && other.start == start && other.end == end && other.state == state;
 
   @override
   int get hashCode => Object.hash(start, end, state);
@@ -742,6 +743,25 @@ class ViewerController extends ChangeNotifier {
 
   /// Whether the book renders as comic pages (image-only items).
   bool get isComicMode => book.readingOrder.any((final item) => !item.isHtml);
+
+  /// Whether this book is a PDF (either reading mode).
+  bool get isPdfMode => book is PdfBook;
+
+  /// The PDF reading mode — reflowed text or pixel-faithful pages.
+  ///
+  /// Only meaningful for PDFs; other formats always read reflowed.
+  PdfReadingMode get pdfReadingMode => _pdfReadingMode;
+  PdfReadingMode _pdfReadingMode = PdfReadingMode.reflow;
+
+  /// Switches the PDF reading mode, reloading the current page at
+  /// the same position: section `i` is page `i` in both modes, so
+  /// the character offsets carry over unchanged.
+  Future<void> setPdfReadingMode(final PdfReadingMode mode) async {
+    if (!isPdfMode || mode == _pdfReadingMode) return;
+    _pdfReadingMode = mode;
+    notifyListeners();
+    await goToPosition(position);
+  }
 
   /// Taps on highlights (resolved against [highlights]).
   Stream<ViewerHighlight> get highlightTapEvents => _highlightTaps.stream;
@@ -1099,6 +1119,11 @@ class ViewerController extends ChangeNotifier {
     }
     _started = true;
 
+    if (isPdfMode && !(book as PdfBook).hasTextLayer) {
+      // Scanned document: nothing to reflow.
+      _pdfReadingMode = PdfReadingMode.facsimile;
+    }
+
     final server = BookServer();
     await server.start(book);
     _server = server;
@@ -1253,8 +1278,10 @@ class ViewerController extends ChangeNotifier {
   /// Dual-write: every highlight serializes its EPUB CFI alongside the
   /// char offsets (interop with Calibre/Readium tooling).
   String? _highlightCfi(final int fileIndex, final int start) {
+    final doc = _cfiDocFor(fileIndex);
+    if (doc == null) return null;
     try {
-      return _cfiDocFor(fileIndex).cfiForOffset(start).encode();
+      return doc.cfiForOffset(start).encode();
     } on Object {
       return null;
     }
@@ -1420,9 +1447,7 @@ class ViewerController extends ChangeNotifier {
   /// Removes the word marks of [fileIndex], or every file's marks when
   /// null, and unwraps them in the page when loaded.
   Future<void> clearWordMarks({final int? fileIndex}) async {
-    final clearedFiles = fileIndex == null
-        ? List<int>.of(_wordMarksByFile.keys)
-        : <int>[fileIndex];
+    final clearedFiles = fileIndex == null ? List<int>.of(_wordMarksByFile.keys) : <int>[fileIndex];
     for (final cleared in clearedFiles) {
       _wordMarksByFile.remove(cleared);
     }
@@ -2562,7 +2587,8 @@ class ViewerController extends ChangeNotifier {
 
   final Map<int, EpubCfiDocument> _cfiDocs = <int, EpubCfiDocument>{};
 
-  EpubCfiDocument _cfiDocFor(final int fileIndex) {
+  EpubCfiDocument? _cfiDocFor(final int fileIndex) {
+    if (book is! EpubBook) return null;
     return _cfiDocs.putIfAbsent(fileIndex, () {
       final name = book.readingOrder[fileIndex].name;
       final html = book.files.html
@@ -2576,6 +2602,7 @@ class ViewerController extends ChangeNotifier {
   /// `eLv1:`; both address the same characters).
   String? get positionCfi {
     final doc = _cfiDocFor(_position.fileIndex);
+    if (doc == null) return null;
     try {
       return doc.cfiForOffset(_position.charOffset).encode();
     } on Object {
@@ -2605,7 +2632,11 @@ class ViewerController extends ChangeNotifier {
       if (!book.readingOrder[fileIndex].isHtml) {
         continue;
       }
-      final offset = _cfiDocFor(fileIndex).offsetForCfi(parsed);
+      final doc = _cfiDocFor(fileIndex);
+      if (doc == null) {
+        continue;
+      }
+      final offset = doc.offsetForCfi(parsed);
       if (offset != null) {
         _beginJump();
         final pending = _PendingNavigation(offset: offset);

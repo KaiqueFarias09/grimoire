@@ -4,8 +4,7 @@ import 'package:e_livre/e_livre.dart';
 
 /// Builds a small in-memory EPUB-shaped book for tests.
 EpubBook buildTestBook({
-  final PageProgressionDirection pageProgressionDirection =
-      PageProgressionDirection.unspecified,
+  final PageProgressionDirection pageProgressionDirection = PageProgressionDirection.unspecified,
 }) {
   const chapter1 =
       '<!DOCTYPE html><html><head>'
@@ -86,5 +85,74 @@ EpubBook buildTestBook({
       ),
       guide: null,
     ),
+  );
+}
+
+/// Builds a small in-memory PDF book for tests: two reflowed pages
+/// whose canonical text matches the page HTML exactly, mirroring
+/// what `parsePdfBook` produces for a text PDF.
+PdfBook buildPdfTestBook({final bool withTextLayer = true}) {
+  const page1 =
+      '<!DOCTYPE html><html><head><title></title></head>'
+      '<body class="elv-pdf"><p id="page_1">First page text.</p></body></html>';
+  const page2 =
+      '<!DOCTYPE html><html><head><title></title></head>'
+      '<body class="elv-pdf"><p id="page_2">Second page text.</p></body></html>';
+  final line1 = const PdfTextLine(
+    text: 'First page text.',
+    x: 72,
+    y: 72,
+    width: 200,
+    height: 12,
+    fontSize: 12,
+  );
+  final line2 = const PdfTextLine(
+    text: 'Second page text.',
+    x: 72,
+    y: 72,
+    width: 200,
+    height: 12,
+    fontSize: 12,
+  );
+
+  return PdfBook(
+    bytes: Uint8List.fromList('%PDF-1.7'.codeUnits),
+    metadata: const BookMetadata(format: BookFormat.pdf, title: 'Test PDF'),
+    pages: [
+      const PdfPage(objectNumber: 5, mediaBox: [0, 0, 612, 792]),
+      const PdfPage(objectNumber: 6, mediaBox: [0, 0, 612, 792]),
+    ],
+    navigation: Navigation(
+      title: '',
+      navPoints: [
+        NavPoint(
+          classAttribute: 'pdf-outline',
+          id: 'pdf-outline-1',
+          playOrder: '1',
+          label: 'Page two',
+          content: 'page_2.html#page_2',
+        ),
+      ],
+    ),
+    // Scanned PDFs still emit one (empty) section per page, keeping
+    // the page/section index alignment.
+    pageFiles: [
+      TextFile(
+        content: withTextLayer ? page1 : '',
+        name: 'page_1.html',
+        type: 'html',
+        path: 'page_1.html',
+      ),
+      TextFile(
+        content: withTextLayer ? page2 : '',
+        name: 'page_2.html',
+        type: 'html',
+        path: 'page_2.html',
+      ),
+    ],
+    pageTexts: [
+      PdfPageText(lines: withTextLayer ? [line1] : const []),
+      PdfPageText(lines: withTextLayer ? [line2] : const []),
+    ],
   );
 }

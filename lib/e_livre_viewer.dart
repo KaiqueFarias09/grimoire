@@ -41,6 +41,7 @@ export 'src/controller/viewer_controller.dart'
         ViewerSearchResult,
         ViewerSelection,
         ViewerWordMark,
+        PdfReadingMode,
         ViewerHighlight,
         ViewerHighlightColor,
         ViewerHighlightDecoration,
