@@ -153,6 +153,19 @@ class ChromeToggleEvent extends ViewerEvent {
   ChromeToggleEvent({super.source});
 }
 
+/// A horizontal swipe on a fixed-layout page (comic image page or
+/// PDF facsimile) asked the host to turn the page. Fixed-layout
+/// files are one file per page, so the host navigates the reading
+/// order instead of the JS column machinery.
+class PageTurnEvent extends ViewerEvent {
+  /// Creates a page-turn request.
+  PageTurnEvent({required this.forward, super.source});
+
+  /// `true` for a forward swipe (in reading order; RTL page
+  /// progression is already resolved by the JS layer).
+  final bool forward;
+}
+
 /// Codec + event stream for the viewer bridge.
 ///
 /// Keeps no webview reference: engines receive messages through
@@ -258,6 +271,8 @@ class ViewerBridge {
         );
       case 'chromeToggle':
         return ChromeToggleEvent(source: source);
+      case 'pageTurn':
+        return PageTurnEvent(forward: map['forward'] == true, source: source);
       case 'fontSizeBump':
         return FontSizeBumpEvent(delta: _asInt(map['delta']), source: source);
       case 'viewImage':

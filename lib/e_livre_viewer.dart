@@ -12,6 +12,7 @@ export 'src/features/bridge/viewer_bridge.dart'
         LinkTapEvent,
         HighlightTapEvent,
         ChromeToggleEvent,
+        PageTurnEvent,
         FontSizeBumpEvent,
         ShortcutEvent,
         ViewImageEvent,

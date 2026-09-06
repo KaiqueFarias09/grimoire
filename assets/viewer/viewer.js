@@ -1697,6 +1697,7 @@
     pinchStart: null,
     lastTapAt: 0,
     moved: false,
+    start: null, // single-touch origin for swipe page turns
   };
 
   function comicImage() {
@@ -1751,6 +1752,9 @@
           };
         }
         var ids = Object.keys(comic.pointers);
+        // Single-touch origin for swipe page turns; two or more
+        // fingers cancel it (that is a pinch, not a swipe).
+        comic.start = ids.length === 1 ? comic.pointers[ids[0]] : null;
         if (ids.length === 2) {
           var a = comic.pointers[ids[0]];
           var b = comic.pointers[ids[1]];
@@ -1803,6 +1807,28 @@
         comic.pinchStart = null;
       }
       if (ids.length === 0 && !comic.moved) {
+        // Horizontal swipe page turn (comics and facsimile alike):
+        // thresholds identical to installTextGestures (>= 64px of
+        // travel, vertical ratio < 0.35). comic.moved only flips for
+        // pinch and zoomed pan, so an unzoomed swipe lands here while
+        // short taps keep falling through to the double-tap zoom.
+        if (comic.start) {
+          var swipe = event.changedTouches[0];
+          var dx = swipe.clientX - comic.start.x;
+          var dy = swipe.clientY - comic.start.y;
+          var adx = Math.abs(dx);
+          var ady = Math.abs(dy);
+          if (Math.max(adx, ady) >= 64 && ady / Math.max(adx, ady) < 0.35) {
+            comic.start = null;
+            comic.lastTapAt = 0;
+            var forward = dx < 0;
+            if (pageProgressionRtl()) {
+              forward = !forward;
+            }
+            post({ type: 'pageTurn', forward: forward });
+            return;
+          }
+        }
         var now = Date.now();
         if (now - comic.lastTapAt < 300) {
           comic.scale = comic.scale > 1 ? 1 : 2.5;

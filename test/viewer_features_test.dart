@@ -1109,5 +1109,111 @@ void main() {
         expect(urls, contains('/__pdfpage__/0'));
       });
     });
+
+    group('fixed layout pages', () {
+      late FakeViewerEngineFactory factory;
+      late ViewerController controller;
+
+      setUp(() {
+        factory = FakeViewerEngineFactory();
+        controller = ViewerController(buildPdfTestBook(), engineFactory: factory);
+      });
+
+      tearDown(() {
+        controller.dispose();
+      });
+
+      void postPageTurn(final bool forward) {
+        factory.engines[controller.activeEngineIndex].postRaw(
+          '{"type":"pageTurn","forward":$forward}',
+        );
+      }
+
+      test('swipe pageTurn events decode and navigate pages', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        final turns = <PageTurnEvent>[];
+        final sub = controller.bridge.events.listen((final event) {
+          if (event is PageTurnEvent) {
+            turns.add(event);
+          }
+        });
+        addTearDown(sub.cancel);
+
+        // The exact JSON the JS layer posts for a leftward swipe,
+        // through the raw string channel (ViewerBridge.accept decodes).
+        postPageTurn(true);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(turns, hasLength(1));
+        expect(turns.first.forward, isTrue);
+        expect(controller.position.fileIndex, 1);
+        expect(controller.activeEngineIndex, 1);
+      });
+
+      test('pageTurn clamps at the reading order limits', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        expect(controller.position.fileIndex, 0);
+
+        // Backward on the first page: ignored.
+        postPageTurn(false);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.position.fileIndex, 0);
+
+        // Forward reaches the second (last) page.
+        postPageTurn(true);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.position.fileIndex, 1);
+
+        // Forward on the last page: ignored.
+        postPageTurn(true);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.position.fileIndex, 1);
+
+        // Backward works again.
+        postPageTurn(false);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.position.fileIndex, 0);
+      });
+
+      test('goToPdfPage clamps into the page range', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        await controller.goToPdfPage(5);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.position.fileIndex, 1);
+
+        await controller.goToPdfPage(-3);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.position.fileIndex, 0);
+      });
+
+      test('positionPageLocator reflects the page index and total', () async {
+        expect(ViewerController(buildTestBook()).positionPageLocator, isNull);
+
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        expect(controller.positionPageLocator, const PageLocator(pageIndex: 0, total: 2));
+
+        await controller.goToPdfPage(1);
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.positionPageLocator, const PageLocator(pageIndex: 1, total: 2));
+      });
+
+      test('word marks reach the engine on a reflowed PDF page', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        final engine = factory.engines[controller.activeEngineIndex];
+
+        await controller.setWordMarks(0, const [
+          ViewerWordMark(start: 0, end: 7, state: 'learning'),
+        ]);
+
+        expect(engine.scripts.where((final s) => s.contains('applyWordMarks')), isNotEmpty);
+      });
+    });
   });
 }
