@@ -769,6 +769,35 @@ class ViewerController extends ChangeNotifier {
     await goToPosition(position);
   }
 
+  /// The current position as a [PageLocator] — flat page index for
+  /// page-based formats. PDFs report
+  /// `PageLocator(pageIndex: position.fileIndex, total: pageCount)`
+  /// (section `i` is page `i`); formats without flat pages report
+  /// null.
+  PageLocator? get positionPageLocator {
+    final pdf = book;
+    if (pdf is! PdfBook) {
+      return null;
+    }
+    return PageLocator(pageIndex: _position.fileIndex, total: pdf.pageCount);
+  }
+
+  /// Jumps to a zero-based PDF page (reflow and facsimile share the
+  /// page index: section `i` is page `i`), landing at offset 0.
+  /// Values outside `0..pageCount-1` clamp; non-PDF books ignore the
+  /// call.
+  Future<void> goToPdfPage(final int pageIndex) async {
+    final pdf = book;
+    if (pdf is! PdfBook || pdf.pageCount == 0) {
+      return;
+    }
+    final target = pageIndex.clamp(0, pdf.pageCount - 1);
+    _beginJump();
+    const pending = _PendingNavigation(offset: 0);
+    _completeJump(target, pending);
+    await _navigate(target, pending);
+  }
+
   /// Taps on highlights (resolved against [highlights]).
   Stream<ViewerHighlight> get highlightTapEvents => _highlightTaps.stream;
 
@@ -2266,6 +2295,16 @@ class ViewerController extends ChangeNotifier {
       case ChromeToggleEvent():
         if (event.source == _active) {
           toggleChrome();
+        }
+      case final PageTurnEvent turn:
+        // Fixed-layout pages are one reading-order item per page
+        // (comics and PDFs), so a swipe is a cross-file turn, not a
+        // column move. Out-of-range turns are ignored.
+        if (event.source == _active) {
+          final target = _position.fileIndex + (turn.forward ? 1 : -1);
+          if (target >= 0 && target < (_server?.itemCount ?? 0)) {
+            await _navigate(target, const _PendingNavigation(offset: 0));
+          }
         }
       case FontSizeBumpEvent bump:
         if (event.source == _active) {
