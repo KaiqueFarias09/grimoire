@@ -4,6 +4,7 @@ import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:path_provider/path_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,10 +49,12 @@ class _LibraryPageState extends State<LibraryPage> {
   void initState() {
     super.initState();
     // Auto-open the first book for device validation.
-    Future<void>.delayed(const Duration(seconds: 2)).then((_) {
-      if (mounted) {
-        _open(context, _fixtures.first);
-      }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(seconds: 2)).then((_) {
+        if (mounted) {
+          _open(context, _fixtures.first);
+        }
+      });
     });
   }
 
@@ -78,12 +81,18 @@ class _LibraryPageState extends State<LibraryPage> {
     final bytes = Uint8List.fromList((await rootBundle.load(fixture.asset)).buffer.asUint8List());
     try {
       final book = await BookReader.openFromBytes(bytes);
+      // Directory.systemTemp is not writable inside Android apps, so
+      // hand the viewer's lazy pdf.js/MathJax caches a directory
+      // that is.
+      final cachePath = (await getTemporaryDirectory()).path;
       if (!context.mounted) {
         return;
       }
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => ReaderPage(book: book)));
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ReaderPage(book: book, cachePath: cachePath),
+        ),
+      );
     } on Exception catch (error) {
       messenger.showSnackBar(SnackBar(content: Text('$error')));
     }
@@ -91,9 +100,12 @@ class _LibraryPageState extends State<LibraryPage> {
 }
 
 class ReaderPage extends StatefulWidget {
-  const ReaderPage({required this.book, super.key});
+  const ReaderPage({required this.book, required this.cachePath, super.key});
 
   final Book book;
+
+  /// Writable directory for the viewer's lazy-downloaded components.
+  final String cachePath;
 
   @override
   State<ReaderPage> createState() => _ReaderPageState();
@@ -104,7 +116,9 @@ class _ReaderPageState extends State<ReaderPage> {
   // toggle below can drive it; other formats let ELivreView manage
   // its own.
   late final ViewerController? _pdfController = widget.book is PdfBook
-      ? ViewerController(widget.book)
+      ? (ViewerController(widget.book)
+          ..mathJaxCachePath = widget.cachePath
+          ..pdfJsCachePath = widget.cachePath)
       : null;
 
   @override
