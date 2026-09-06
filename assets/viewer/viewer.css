@@ -62,6 +62,49 @@ body.elv-comic img {
   object-fit: contain;
 }
 
+/* PDF facsimile pages: the pdf.js canvas and the transparent text
+   layer scale together inside the stage. */
+body.elv-facsimile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#elv-pdf-stage {
+  position: relative;
+  transform-origin: center center;
+  flex: none;
+}
+
+#elv-pdf-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+#elv-pdf-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#elv-pdf-text span {
+  position: absolute;
+  color: transparent;
+  background: transparent;
+  white-space: pre;
+  line-height: 1;
+  cursor: text;
+}
+
+#elv-pdf-text span::selection {
+  background-color: rgba(255, 220, 0, 0.35);
+}
+
 /* Optional strong color override applied by setOverrideBookColors. */
 body.elv-override-colors * {
   color: var(--elv-fg) !important;

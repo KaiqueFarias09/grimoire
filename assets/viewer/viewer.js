@@ -88,8 +88,14 @@
     return state.layoutMode === 'scroll';
   }
 
+  // Fixed-layout pages: comic image pages and PDF facsimile pages
+  // share the scroll layout, the pinch/pan gestures and the "manage
+  // your own sizing" exemptions.
   function isComic() {
-    return document.body.classList.contains('elv-comic');
+    return (
+      document.body.classList.contains('elv-comic') ||
+      document.body.classList.contains('elv-facsimile')
+    );
   }
 
   // Parity: calibre viewport.pyj — RTL page progression negates X at
@@ -1694,7 +1700,11 @@
   };
 
   function comicImage() {
-    return document.body.querySelector('img');
+    // The facsimile stage transforms exactly like the comic image.
+    return (
+      document.getElementById('elv-pdf-stage') ||
+      document.body.querySelector('img')
+    );
   }
 
   function clampComic() {
@@ -1703,8 +1713,10 @@
     if (!img) {
       return;
     }
-    var maxX = Math.max(0, (img.naturalWidth * comic.scale - window.innerWidth) / 2);
-    var maxY = Math.max(0, (img.naturalHeight * comic.scale - window.innerHeight) / 2);
+    var w = img.naturalWidth || img.offsetWidth;
+    var h = img.naturalHeight || img.offsetHeight;
+    var maxX = Math.max(0, (w * comic.scale - window.innerWidth) / 2);
+    var maxY = Math.max(0, (h * comic.scale - window.innerHeight) / 2);
     comic.tx = Math.max(-maxX, Math.min(maxX, comic.tx));
     comic.ty = Math.max(-maxY, Math.min(maxY, comic.ty));
   }

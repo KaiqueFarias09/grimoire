@@ -6,6 +6,7 @@ import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_loader.dart';
 import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
+import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_loader.dart';
 import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:e_livre_viewer/src/features/rendering/composition/viewer_engine_selector.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server.dart';
@@ -514,6 +515,7 @@ class ViewerController extends ChangeNotifier {
     this.onExternalLink,
     final ViewerEngineFactory? engineFactory,
     final MathJaxLoader? mathJaxLoader,
+    final PdfJsLoader? pdfJsLoader,
   }) : _theme = theme,
        _fontSizePx = fontSizePx,
        _margins = ViewerMargins.uniform(marginsPx),
@@ -523,6 +525,7 @@ class ViewerController extends ChangeNotifier {
        _justify = justify,
        _hyphenate = hyphenate,
        _mathJaxLoader = mathJaxLoader ?? MathJaxLoader(),
+       _pdfJsLoader = pdfJsLoader ?? PdfJsLoader(),
        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
     readingState = ReadingState.of(book);
     _buildChapterTitles();
@@ -609,8 +612,10 @@ class ViewerController extends ChangeNotifier {
   final List<_HistoryEntry> _history = <_HistoryEntry>[];
   int _historyIndex = -1;
   Map<int, String> _chapterTitlesByFile = const <int, String>{};
-  MathJaxLoader _mathJaxLoader;
+  final MathJaxLoader _mathJaxLoader;
+  final PdfJsLoader _pdfJsLoader;
   bool _mathJaxEnabled = true;
+  bool _pdfJsEnabled = true;
 
   ViewerTheme _theme;
   int _fontSizePx;
@@ -759,6 +764,7 @@ class ViewerController extends ChangeNotifier {
   Future<void> setPdfReadingMode(final PdfReadingMode mode) async {
     if (!isPdfMode || mode == _pdfReadingMode) return;
     _pdfReadingMode = mode;
+    _server?.pdfReadingMode = mode;
     notifyListeners();
     await goToPosition(position);
   }
@@ -830,6 +836,27 @@ class ViewerController extends ChangeNotifier {
   /// cache; hosts wanting a mirror inject a MathJaxLoader with a
   /// custom baseUrl instead.
   String? mathJaxCachePath;
+
+  /// Whether PDF facsimile pages get pdf.js rendering (downloaded
+  /// lazily on first use; nothing bundled). Default: true. When
+  /// disabled (or while the download is in flight), facsimile pages
+  /// still show their text layer.
+  bool get pdfJsEnabled => _pdfJsEnabled;
+
+  set pdfJsEnabled(final bool enabled) {
+    if (enabled == _pdfJsEnabled) {
+      return;
+    }
+    _pdfJsEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Where the pdf.js download cache lives (default: the system temp
+  /// directory). Set before [start]; hosts wanting a durable cache
+  /// point it at an app-cache subdirectory. On the web there is no
+  /// cache; hosts wanting a mirror inject a PdfJsLoader with a
+  /// custom baseUrl instead.
+  String? pdfJsCachePath;
 
   /// Page turns: fires when the reading location moves to another
   /// page (paged mode), chapter (any mode), or whole-percent progress
@@ -1133,6 +1160,12 @@ class ViewerController extends ChangeNotifier {
       unawaited(_ensureMathJax());
     }
 
+    if (isPdfMode && _pdfJsEnabled) {
+      // Nothing downloads unless a PDF actually opens.
+      unawaited(_ensurePdfJs());
+    }
+    _server?.pdfReadingMode = _pdfReadingMode;
+
     _engines = _engineFactory.createPair(
       (final message, final source) => bridge.accept(message, source: source),
     );
@@ -1375,6 +1408,17 @@ class ViewerController extends ChangeNotifier {
       notifyListeners();
     } on Object {
       // Offline or CDN unreachable: native MathML applies meanwhile.
+    }
+  }
+
+  Future<void> _ensurePdfJs() async {
+    try {
+      final source = await _pdfJsLoader.ensureAvailable(cachePath: pdfJsCachePath);
+      _server?.pdfJsSource = source;
+      notifyListeners();
+    } on Object {
+      // Offline or CDN unreachable: facsimile pages keep retrying
+      // their script load, the text layer stays usable meanwhile.
     }
   }
 

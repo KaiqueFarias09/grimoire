@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
+import 'package:e_livre_viewer/src/features/pdf/pdf_reading_mode.dart';
+import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -309,4 +311,69 @@ Future<List<int>> _bytes(final HttpClientResponse response) async {
     builder.addAll(chunk);
   }
   return builder;
+
+  group('pdf routes', () {
+    test('facsimile pages serve the text layer with pdf.js boot', () async {
+      final server = BookServer(
+        assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+      );
+      await server.start(buildPdfTestBook());
+      server.pdfReadingMode = PdfReadingMode.facsimile;
+      addTearDown(server.stop);
+
+      final response = await _get(server.urlForItem(0));
+      expect(response.statusCode, 200);
+      final html = await _body(response);
+      expect(html, contains('elv-facsimile'));
+      expect(html, contains('First page text.'));
+      expect(html, contains('pdf.min.js'));
+      expect(html, contains(server.pdfDocumentUrl.toString()));
+      // The canonical invariant holds for the served page too.
+      expect(documentText(html), 'First page text.');
+    });
+
+    test('the document route serves the raw bytes with ranges', () async {
+      final server = BookServer(
+        assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+      );
+      await server.start(buildPdfTestBook());
+      addTearDown(server.stop);
+
+      final client = HttpClient();
+      try {
+        final request = await client.getUrl(server.pdfDocumentUrl)
+          ..followRedirects = false
+          ..headers.set(HttpHeaders.rangeHeader, 'bytes=2-5');
+        final response = await request.close();
+        expect(response.statusCode, HttpStatus.partialContent);
+        final body = await response.transform(utf8.decoder).join();
+        expect(body, 'DF-1');
+      } finally {
+        client.close(force: true);
+      }
+    });
+
+    test('pdfjs files need the loader source and the whitelist', () async {
+      final server = BookServer(
+        assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+      );
+      await server.start(buildPdfTestBook());
+      addTearDown(server.stop);
+
+      final missing = await _get(server.baseUrl.replace(path: '/__pdfjs__/pdf.min.js'));
+      expect(missing.statusCode, 404);
+
+      final cache = await Directory.systemTemp.createTemp('pdfjs-cache');
+      addTearDown(() => cache.delete(recursive: true));
+      File('${cache.path}/pdf.min.js').writeAsStringSync('// pdf.js');
+      server.pdfJsSource = PdfJsSource(cachePath: cache.path, scriptBase: '/__pdfjs__');
+
+      final served = await _get(server.baseUrl.replace(path: '/__pdfjs__/pdf.min.js'));
+      expect(served.statusCode, 200);
+      expect(await _body(served), '// pdf.js');
+
+      final outside = await _get(server.baseUrl.replace(path: '/__pdfjs__/evil.js'));
+      expect(outside.statusCode, 404);
+    });
+  });
 }

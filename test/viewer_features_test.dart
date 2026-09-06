@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -1041,6 +1042,71 @@ void main() {
         final results = await controller.search('Second');
         expect(results, isNotEmpty);
         expect(results.first.fileIndex, 1);
+      });
+    });
+
+    group('PDF facsimile', () {
+      late FakeViewerEngineFactory factory;
+      late ViewerController controller;
+
+      setUp(() {
+        factory = FakeViewerEngineFactory();
+        controller = ViewerController(buildPdfTestBook(), engineFactory: factory);
+      });
+
+      tearDown(() {
+        controller.dispose();
+      });
+
+      test('synthetic page keeps the canonical text invariant', () {
+        const lines = [
+          PdfTextLine(text: 'First page text.', x: 72, y: 72, width: 200, height: 12, fontSize: 12),
+          PdfTextLine(text: 'Line & <two>', x: 72, y: 96, width: 220, height: 12, fontSize: 12),
+        ];
+        final html = syntheticPdfPageHtml(
+          pageIndex: 0,
+          lines: lines,
+          documentUrl: 'http://localhost:1/__pdfdoc__',
+          scriptBase: '/__pdfjs__',
+          cssUrl: '/__viewer__/viewer.css',
+          jsUrl: '/__viewer__/viewer.js',
+        );
+
+        expect(documentText(html), lines.map((final l) => l.text).join('\n'));
+        expect(html, contains('elv-facsimile'));
+        expect(html, contains('__pdfdoc__'));
+        expect(html, contains("scriptBase = '/__pdfjs__'"));
+        expect(html, contains('pdf.min.js'));
+        expect(html, contains('Line &amp; &lt;two&gt;'));
+        expect(html, contains('top:72px'));
+      });
+
+      test('scanned books load the facsimile page route', () async {
+        final scannedFactory = FakeViewerEngineFactory();
+        final scanned = ViewerController(
+          buildPdfTestBook(withTextLayer: false),
+          engineFactory: scannedFactory,
+        );
+        await scanned.start();
+
+        expect(scanned.pdfReadingMode, PdfReadingMode.facsimile);
+        expect(scannedFactory.engines[0].loadedUrls.first.path, startsWith('/__pdfpage__/0'));
+        scanned.dispose();
+      });
+
+      test('switching to facsimile reloads through the page route', () async {
+        await controller.start();
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        await controller.setPdfReadingMode(PdfReadingMode.facsimile);
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+
+        final urls = factory.engines
+            .expand((final e) => e.loadedUrls.map((final u) => u.path))
+            .where((final path) => path.startsWith('/__pdfpage__/'))
+            .toList();
+        expect(urls, isNotEmpty);
+        expect(urls, contains('/__pdfpage__/0'));
       });
     });
   });

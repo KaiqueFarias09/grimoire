@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
+import 'package:e_livre_viewer/src/features/pdf/pdf_reading_mode.dart';
+import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
 import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:shelf/shelf.dart' as shelf;
@@ -39,11 +41,21 @@ class BookServer {
   // MathJax bundles are megabytes; read them from disk once.
   final Map<String, Uint8List> _mathJaxBytes = <String, Uint8List>{};
   List<ReadingOrderItem> _order = const <ReadingOrderItem>[];
+  PdfBook? _pdfBook;
+
+  /// The PDF reading mode the item URLs resolve under. The
+  /// controller updates it when the user switches modes.
+  PdfReadingMode pdfReadingMode = PdfReadingMode.reflow;
 
   /// Where the downloaded MathJax cache lives. When null (not
   /// downloaded yet, or the book has no math), `/__mathjax__/`
   /// returns 404 and pages fall back to native MathML rendering.
   MathJaxSource? mathJaxSource;
+
+  /// Where the downloaded pdf.js runtime lives. When null (not
+  /// downloaded yet), `/__pdfjs__/` returns 404 and facsimile pages
+  /// retry until the download lands.
+  PdfJsSource? pdfJsSource;
 
   /// Base URL of the server (e.g. `http://localhost:41234`).
   Uri get baseUrl {
@@ -69,6 +81,7 @@ class BookServer {
       throw StateError('BookServer already started.');
     }
     _order = book.readingOrder;
+    _pdfBook = book is PdfBook ? book : null;
     _files
       ..clear()
       ..addAll({
@@ -98,11 +111,18 @@ class BookServer {
       throw RangeError.index(index, _order);
     }
     final item = _order[index];
+    if (_pdfBook != null && pdfReadingMode == PdfReadingMode.facsimile) {
+      return baseUrl.replace(path: '/__pdfpage__/$index');
+    }
     if (item.isHtml) {
       return baseUrl.replace(path: '/book/${_encodePath(item.name)}');
     }
     return baseUrl.replace(path: '/__page__/$index');
   }
+
+  /// URL of the raw PDF document (facsimile pages feed it to
+  /// pdf.js, which reads it in byte-range chunks).
+  Uri get pdfDocumentUrl => baseUrl.replace(path: '/__pdfdoc__');
 
   /// URL of a raw book file path (e.g. for image src resolution).
   Uri urlForPath(final String path) => baseUrl.replace(path: '/book/${_encodePath(path)}');
@@ -128,6 +148,15 @@ class BookServer {
       if (path.startsWith('__mathjax__/')) {
         return _serveMathJax(path.substring('__mathjax__/'.length));
       }
+      if (path.startsWith('__pdfpage__/')) {
+        return _syntheticPdfPage(int.tryParse(path.substring('__pdfpage__/'.length)));
+      }
+      if (path == '__pdfdoc__') {
+        return _servePdfDocument(request);
+      }
+      if (path.startsWith('__pdfjs__/')) {
+        return _servePdfJs(path.substring('__pdfjs__/'.length));
+      }
       if (path.startsWith('book/')) {
         return _serveBookFile(request, Uri.decodeComponent(path.substring('book/'.length)));
       }
@@ -148,6 +177,55 @@ class BookServer {
       jsUrl: '/__viewer__/viewer.js',
     );
     return shelf.Response.ok(html, headers: _htmlHeaders);
+  }
+
+  shelf.Response _syntheticPdfPage(final int? index) {
+    final pdf = _pdfBook;
+    if (pdf == null || index == null || index < 0 || index >= _order.length) {
+      return shelf.Response.notFound('No such PDF page');
+    }
+    final pageText = index < pdf.pageTexts.length
+        ? pdf.pageTexts[index]
+        : const PdfPageText(lines: <PdfTextLine>[]);
+    final html = syntheticPdfPageHtml(
+      pageIndex: index,
+      lines: pageText.lines,
+      documentUrl: pdfDocumentUrl.toString(),
+      scriptBase: pdfJsSource?.scriptBase ?? '/__pdfjs__',
+      cssUrl: '/__viewer__/viewer.css',
+      jsUrl: '/__viewer__/viewer.js',
+    );
+
+    return shelf.Response.ok(html, headers: _htmlHeaders);
+  }
+
+  shelf.Response _servePdfDocument(final shelf.Request request) {
+    final pdf = _pdfBook;
+    if (pdf == null) {
+      return shelf.Response.notFound('Not a PDF book');
+    }
+    // pdf.js reads the document in range chunks; reuse the binary
+    // range machinery the audio/image assets already have.
+    return _serveBinary(request, 'document.pdf', pdf.bytes);
+  }
+
+  /// Files the `/__pdfjs__/` route may serve.
+  static const Set<String> _pdfJsWhitelist = {'pdf.min.js', 'pdf.worker.min.js'};
+
+  shelf.Response _servePdfJs(final String relative) {
+    final cachePath = pdfJsSource?.cachePath;
+    if (cachePath == null || cachePath.isEmpty || !_pdfJsWhitelist.contains(relative)) {
+      return shelf.Response.notFound('No pdf.js file: $relative');
+    }
+    final file = File('$cachePath/$relative');
+    if (!file.existsSync()) {
+      return shelf.Response.notFound('No pdf.js file: $relative');
+    }
+
+    return shelf.Response.ok(
+      file.readAsBytesSync(),
+      headers: {'Content-Type': 'application/javascript'},
+    );
   }
 
   shelf.Response _serveBookFile(final shelf.Request request, final String rawPath) {

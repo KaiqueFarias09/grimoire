@@ -6,6 +6,9 @@ import 'dart:typed_data';
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_loader.dart';
+import 'package:e_livre_viewer/src/features/pdf/pdf_reading_mode.dart';
+import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
+import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_loader.dart';
 import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:web/web.dart' as web;
@@ -36,10 +39,23 @@ class BookServer {
   final Map<String, Object> _files = <String, Object>{};
   final Map<String, String> _blobUrls = <String, String>{};
   final Map<int, String> _comicPages = <int, String>{};
+  final Map<int, String> _pdfPages = <int, String>{};
   final Set<String> _createdUrls = <String>{};
   final Set<String> _building = <String>{};
   List<ReadingOrderItem> _order = const <ReadingOrderItem>[];
+  PdfBook? _pdfBook;
+  String? _pdfDocumentUrl;
   bool _started = false;
+
+  /// The PDF reading mode the item URLs resolve under. The
+  /// controller updates it when the user switches modes.
+  PdfReadingMode pdfReadingMode = PdfReadingMode.reflow;
+
+  /// Carries the pdf.js script base once the loader ran (see
+  /// [PdfJsLoader.ensureAvailable]). Null or empty scriptBase means
+  /// the pinned CDN. [PdfJsSource.cachePath] is ignored (no disk on
+  /// the web).
+  PdfJsSource? pdfJsSource;
 
   /// Carries the MathJax script base once the loader ran (see
   /// [MathJaxLoader.ensureAvailable]). Null or empty scriptBase
@@ -65,6 +81,12 @@ class BookServer {
     }
     _started = true;
     _order = book.readingOrder;
+    _pdfBook = book is PdfBook ? book : null;
+    if (_pdfBook != null) {
+      // The whole document crosses as one blob; pdf.js loads it
+      // without range requests on the web.
+      _pdfDocumentUrl = _register(_pdfBook!.bytes, 'application/pdf');
+    }
     _files
       ..clear()
       ..addAll({
@@ -86,6 +108,8 @@ class BookServer {
     _createdUrls.clear();
     _blobUrls.clear();
     _comicPages.clear();
+    _pdfPages.clear();
+    _pdfDocumentUrl = null;
     _files.clear();
     _started = false;
   }
@@ -96,6 +120,9 @@ class BookServer {
       throw RangeError.index(index, _order);
     }
     final item = _order[index];
+    if (_pdfBook != null && pdfReadingMode == PdfReadingMode.facsimile) {
+      return Uri.parse(_pdfPageUrl(index));
+    }
     if (item.isHtml) {
       return Uri.parse(_urlFor(_canonicalOrThrow(item.name, 'reading order item')));
     }
@@ -225,6 +252,32 @@ class BookServer {
       jsUrl: _assetUrl('viewer.js'),
     );
     return _comicPages[index] = _register(utf8.encode(html), 'text/html; charset=utf-8');
+  }
+
+  String _pdfPageUrl(final int index) {
+    final existing = _pdfPages[index];
+    if (existing != null) {
+      return existing;
+    }
+    final pdf = _pdfBook!;
+    final pageText = index < pdf.pageTexts.length
+        ? pdf.pageTexts[index]
+        : const PdfPageText(lines: <PdfTextLine>[]);
+    final html = syntheticPdfPageHtml(
+      pageIndex: index,
+      lines: pageText.lines,
+      documentUrl: _pdfDocumentUrl ?? '',
+      scriptBase: _pdfJsBase,
+      cssUrl: _assetUrl('viewer.css'),
+      jsUrl: _assetUrl('viewer.js'),
+    );
+
+    return _pdfPages[index] = _register(utf8.encode(html), 'text/html; charset=utf-8');
+  }
+
+  String get _pdfJsBase {
+    final base = pdfJsSource?.scriptBase;
+    return base == null || base.isEmpty ? PdfJsLoader.defaultBaseUrl : base;
   }
 
   String _notFoundUrl() {
