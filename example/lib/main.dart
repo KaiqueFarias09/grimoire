@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
@@ -45,17 +46,25 @@ class LibraryPage extends StatefulWidget {
 }
 
 class _LibraryPageState extends State<LibraryPage> {
+  Timer? _autoOpenTimer;
+
   @override
   void initState() {
     super.initState();
     // Auto-open the first book for device validation.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future<void>.delayed(const Duration(seconds: 2)).then((_) {
+      _autoOpenTimer = Timer(const Duration(seconds: 2), () {
         if (mounted) {
           _open(context, _fixtures.first);
         }
       });
     });
+  }
+
+  @override
+  void dispose() {
+    _autoOpenTimer?.cancel();
+    super.dispose();
   }
 
   @override
