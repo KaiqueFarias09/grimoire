@@ -2,6 +2,13 @@
 
 ### Added
 
+- **Fixed-layout page turning**: comics and PDF facsimile pages now
+  turn on a horizontal swipe (same 64px/0.35 thresholds as the text
+  gesture layer, RTL-aware), driven by a new `PageTurnEvent` through
+  the bridge. `goToPdfPage(index)` jumps PDFs to a page and
+  `positionPageLocator` exposes the current position as a
+  `PageLocator` for hosts; word marks are verified to apply to
+  reflowed PDF pages.
 - **PDF support, both reading modes**: PDFs open through the same
   `ViewerController` (eLivre's pure-Dart pipeline extracts the text,
   reflows it into one HTML section per page and keeps the original
