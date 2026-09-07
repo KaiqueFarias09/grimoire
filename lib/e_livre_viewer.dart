@@ -21,6 +21,7 @@ export 'src/features/bridge/viewer_bridge.dart'
         FragmentOffsetEvent;
 export 'src/features/mathjax/mathjax_loader.dart' show MathJaxLoader;
 export 'src/features/narration/text_segmentation.dart' show TextSegment, segmentText;
+export 'src/features/serving/book_content.dart' show BookJavaScriptPolicy;
 export 'package:e_livre/e_livre.dart' show SearchMode;
 export 'src/features/annotations/export_html.dart'
     show ViewerHtmlExportOptions, ViewerHtmlPartFormatter;

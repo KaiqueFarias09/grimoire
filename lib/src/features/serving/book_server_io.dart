@@ -22,8 +22,10 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 class BookServer {
   /// Creates a server for later [start]. [assetLoader] serves the
   /// bundled viewer assets (injectable for tests).
-  BookServer({final Future<Uint8List> Function(String name)? assetLoader})
-    : _assetLoader = assetLoader ?? _rootBundleLoader;
+  BookServer({
+    this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
+    final Future<Uint8List> Function(String name)? assetLoader,
+  }) : _assetLoader = assetLoader ?? _rootBundleLoader;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/e_livre_viewer/assets/viewer/$name');
@@ -31,6 +33,11 @@ class BookServer {
   }
 
   final Future<Uint8List> Function(String name) _assetLoader;
+
+  /// Controls JavaScript authored by book HTML. The default removes
+  /// book scripts while leaving eLivreViewer's injected viewer and
+  /// bridge scripts functional.
+  final BookJavaScriptPolicy bookJavaScriptPolicy;
 
   HttpServer? _httpServer;
   final Map<String, Object> _files = <String, Object>{};
@@ -253,8 +260,9 @@ class BookServer {
   /// the MathJax choice only sniffs the stored content.
   String _rewrittenPage(final String key, final String content) =>
       _rewrittenPages.putIfAbsent(key, () {
-        var html = injectViewerAssets(
-          content,
+        var html = sanitizeBookHtml(content, policy: bookJavaScriptPolicy);
+        html = injectViewerAssets(
+          html,
           cssUrl: '/__viewer__/viewer.css',
           jsUrl: '/__viewer__/viewer.js',
         );
@@ -368,8 +376,11 @@ class BookServer {
   /// [html] at their loopback URLs.
   ///
   /// Visible for testing.
-  String injectViewer(final String html) =>
-      injectViewerAssets(html, cssUrl: '/__viewer__/viewer.css', jsUrl: '/__viewer__/viewer.js');
+  String injectViewer(final String html) => injectViewerAssets(
+    sanitizeBookHtml(html, policy: bookJavaScriptPolicy),
+    cssUrl: '/__viewer__/viewer.css',
+    jsUrl: '/__viewer__/viewer.js',
+  );
 
   static const Map<String, String> _htmlHeaders = <String, String>{
     'Content-Type': 'text/html; charset=utf-8',

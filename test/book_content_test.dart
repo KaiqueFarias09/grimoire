@@ -4,6 +4,57 @@ import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('sanitizeBookHtml', () {
+    test('safe mode removes executable book markup and preserves content', () {
+      const html =
+          '<html><head><style>.page { color: red; }</style></head>'
+          '<body onload="bookBoot()" data-onload="keep">'
+          '<script>window.bookScript = true;</script>'
+          '<a href="javascript:alert(1)" onclick="bookClick()">blocked</a>'
+          '<a href="https://example.com">external</a><a href="#chapter">anchor</a>'
+          '<img src="cover.png" alt="cover" onerror="bookError()"/>'
+          '</body></html>';
+
+      final sanitized = sanitizeBookHtml(html);
+
+      expect(sanitized, isNot(contains('<script')));
+      expect(sanitized, isNot(contains('bookScript')));
+      expect(sanitized, isNot(contains(' onload=')));
+      expect(sanitized, isNot(contains('onclick=')));
+      expect(sanitized, isNot(contains('onerror=')));
+      expect(sanitized, isNot(contains('javascript:')));
+      expect(sanitized, contains('<style>.page { color: red; }</style>'));
+      expect(sanitized, contains('data-onload="keep"'));
+      expect(sanitized, contains('href="https://example.com"'));
+      expect(sanitized, contains('href="#chapter"'));
+      expect(sanitized, contains('src="cover.png"'));
+      expect(sanitized, contains('>blocked</a>'));
+    });
+
+    test('safe mode catches encoded and whitespace-obscured JavaScript URLs', () {
+      const html =
+          '<a href="java&#x73;cript&#x3a;alert(1)">one</a>'
+          '<svg><image xlink:href="java\nscript:alert(2)"/></svg>'
+          '<img src="cover.png" onload=run() style="color: red"/>';
+
+      final sanitized = sanitizeBookHtml(html);
+
+      expect(sanitized, isNot(contains('href="')));
+      expect(sanitized, isNot(contains('onload=')));
+      expect(sanitized, contains('src="cover.png"'));
+      expect(sanitized, contains('style="color: red"'));
+    });
+
+    test('trusted policy preserves book-authored scripts', () {
+      const html =
+          '<script>window.bookScript = true;</script>'
+          '<button onclick="bookClick()">Run</button>'
+          '<a href="javascript:bookLink()">link</a>';
+
+      expect(sanitizeBookHtml(html, policy: BookJavaScriptPolicy.allowBookScripts), html);
+    });
+  });
+
   group('resolveBookPath', () {
     test('resolves sibling and nested references', () {
       expect(

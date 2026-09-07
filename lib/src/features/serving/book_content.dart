@@ -6,8 +6,24 @@
 /// logic lives here with no dart:io dependency.
 library;
 
-import 'package:e_livre/e_livre.dart' show PdfTextLine;
+import 'package:e_livre/e_livre.dart' show Book, PdfTextLine;
 import 'package:mime/mime.dart' as mime;
+
+/// Controls JavaScript authored by the book's HTML.
+///
+/// The policy applies only to content supplied by the [Book]. The
+/// viewer, bridge, MathJax and PDF scripts injected by eLivreViewer
+/// remain functional in either mode.
+enum BookJavaScriptPolicy {
+  /// Removes book-authored script elements, inline event handlers and
+  /// executable JavaScript URLs before the page reaches the WebView.
+  /// This is the default and should be used for untrusted books.
+  disabled,
+
+  /// Preserves book-authored JavaScript. Use this only for a book
+  /// whose HTML and scripts are trusted by the host application.
+  allowBookScripts,
+}
 
 /// Whether [content] is a MathML document (Calibre's sniff).
 bool containsMath(final String content) => content.toLowerCase().contains('<math');
@@ -84,6 +100,263 @@ String resolveBookPath(final String ref, {required final String fromPath}) {
     segments.add(part);
   }
   return segments.join('/');
+}
+
+/// Sanitizes book-authored executable HTML while preserving document
+/// markup, styles, images and ordinary links.
+///
+/// The sanitizer is intentionally applied only to the HTML copy sent
+/// to a viewer. It does not mutate the parsed [Book], so document text
+/// and source content remain available to the host unchanged.
+String sanitizeBookHtml(
+  final String html, {
+  final BookJavaScriptPolicy policy = BookJavaScriptPolicy.disabled,
+}) {
+  if (policy == BookJavaScriptPolicy.allowBookScripts) {
+    return html;
+  }
+
+  final output = StringBuffer();
+  var cursor = 0;
+  while (cursor < html.length) {
+    final tagStart = html.indexOf('<', cursor);
+    if (tagStart < 0) {
+      output.write(html.substring(cursor));
+      break;
+    }
+    output.write(html.substring(cursor, tagStart));
+
+    if (html.startsWith('<!--', tagStart)) {
+      final commentEnd = html.indexOf('-->', tagStart + 4);
+      if (commentEnd < 0) {
+        output.write(html.substring(tagStart));
+        break;
+      }
+      output.write(html.substring(tagStart, commentEnd + 3));
+      cursor = commentEnd + 3;
+      continue;
+    }
+
+    final tagEnd = _findHtmlTagEnd(html, tagStart);
+    if (tagEnd < 0) {
+      final tail = html.substring(tagStart);
+      if (_htmlTagName(tail) == 'script') {
+        // An unclosed script element consumes the rest of the HTML in
+        // a browser, so dropping the tail is the safe interpretation.
+        break;
+      }
+      output.write(_sanitizeHtmlTag(tail));
+      break;
+    }
+
+    final tag = html.substring(tagStart, tagEnd + 1);
+    final tagName = _htmlTagName(tag);
+    if (tagName == 'script') {
+      // Drop unmatched closing tags as well as complete script
+      // elements. An opening tag without a closing tag consumes the
+      // remaining source, just like the HTML parser does.
+      cursor = tagEnd + 1;
+      if (_isClosingHtmlTag(tag)) {
+        continue;
+      }
+      final closing = RegExp(
+        r'</\s*script\b[^>]*>',
+        caseSensitive: false,
+      ).firstMatch(html.substring(cursor));
+      if (closing == null) {
+        break;
+      }
+      cursor += closing.end;
+      continue;
+    }
+
+    output.write(_isClosingHtmlTag(tag) ? tag : _sanitizeHtmlTag(tag));
+    cursor = tagEnd + 1;
+  }
+  return output.toString();
+}
+
+int _findHtmlTagEnd(final String html, final int tagStart) {
+  String? quote;
+  for (var index = tagStart + 1; index < html.length; index++) {
+    final character = html[index];
+    if (quote != null) {
+      if (character == quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character == '"' || character == "'") {
+      quote = character;
+    } else if (character == '>') {
+      return index;
+    }
+  }
+  return -1;
+}
+
+String? _htmlTagName(final String tag) {
+  final match = RegExp(r'^<\s*/?\s*([A-Za-z][A-Za-z0-9:-]*)').firstMatch(tag);
+  return match?.group(1)?.toLowerCase();
+}
+
+bool _isClosingHtmlTag(final String tag) => RegExp(r'^<\s*/').hasMatch(tag);
+
+String _sanitizeHtmlTag(final String tag) {
+  final nameMatch = RegExp(r'^<\s*/?\s*([A-Za-z][A-Za-z0-9:-]*)').firstMatch(tag);
+  if (nameMatch == null || _isClosingHtmlTag(tag)) {
+    return tag;
+  }
+
+  final output = StringBuffer(tag.substring(0, nameMatch.end));
+  var cursor = nameMatch.end;
+  while (cursor < tag.length) {
+    final attributeStart = cursor;
+    while (cursor < tag.length && _isHtmlWhitespace(tag.codeUnitAt(cursor))) {
+      cursor++;
+    }
+    if (cursor >= tag.length) {
+      break;
+    }
+    if (tag[cursor] == '>' || tag[cursor] == '/') {
+      output.write(tag.substring(attributeStart));
+      break;
+    }
+
+    final nameStart = cursor;
+    while (cursor < tag.length &&
+        !_isHtmlWhitespace(tag.codeUnitAt(cursor)) &&
+        tag[cursor] != '=' &&
+        tag[cursor] != '>' &&
+        tag[cursor] != '/') {
+      cursor++;
+    }
+    if (cursor == nameStart) {
+      output.write(tag[cursor]);
+      cursor++;
+      continue;
+    }
+
+    final attributeName = tag.substring(nameStart, cursor).toLowerCase();
+    final afterName = _skipHtmlWhitespace(tag, cursor);
+    var attributeEnd = afterName;
+    String? value;
+    if (afterName < tag.length && tag[afterName] == '=') {
+      var valueStart = _skipHtmlWhitespace(tag, afterName + 1);
+      if (valueStart < tag.length && (tag[valueStart] == '"' || tag[valueStart] == "'")) {
+        final quote = tag[valueStart];
+        valueStart++;
+        var valueEnd = valueStart;
+        while (valueEnd < tag.length && tag[valueEnd] != quote) {
+          valueEnd++;
+        }
+        value = tag.substring(valueStart, valueEnd);
+        attributeEnd = valueEnd < tag.length ? valueEnd + 1 : valueEnd;
+      } else {
+        var valueEnd = valueStart;
+        while (valueEnd < tag.length &&
+            !_isHtmlWhitespace(tag.codeUnitAt(valueEnd)) &&
+            tag[valueEnd] != '>') {
+          valueEnd++;
+        }
+        value = tag.substring(valueStart, valueEnd);
+        attributeEnd = valueEnd;
+      }
+    }
+
+    final attribute = tag.substring(attributeStart, attributeEnd);
+    if (!_isUnsafeBookAttribute(attributeName, value)) {
+      output.write(attribute);
+    }
+    cursor = attributeEnd;
+  }
+  return output.toString();
+}
+
+int _skipHtmlWhitespace(final String value, int cursor) {
+  while (cursor < value.length && _isHtmlWhitespace(value.codeUnitAt(cursor))) {
+    cursor++;
+  }
+  return cursor;
+}
+
+bool _isHtmlWhitespace(final int codeUnit) => codeUnit <= 0x20;
+
+const Set<String> _javascriptUrlAttributes = <String>{
+  'action',
+  'archive',
+  'background',
+  'cite',
+  'classid',
+  'codebase',
+  'data',
+  'formaction',
+  'href',
+  'longdesc',
+  'manifest',
+  'poster',
+  'profile',
+  'src',
+  'srcset',
+  'usemap',
+  'xlink:href',
+  'xml:base',
+};
+
+bool _isUnsafeBookAttribute(final String name, final String? value) {
+  if (name.startsWith('on') || name == 'srcdoc') {
+    return true;
+  }
+  if (value == null) {
+    return false;
+  }
+  if (_javascriptUrlAttributes.contains(name)) {
+    if (name == 'srcset') {
+      return value.split(',').any(_isJavascriptUrl);
+    }
+    return _isJavascriptUrl(value);
+  }
+  if (name == 'style') {
+    final normalized = _normalizePotentialUrl(value);
+    return normalized.contains('javascript:') ||
+        RegExp(r'expression\s*\(', caseSensitive: false).hasMatch(value);
+  }
+  return false;
+}
+
+bool _isJavascriptUrl(final String value) =>
+    _normalizePotentialUrl(value).startsWith('javascript:');
+
+String _normalizePotentialUrl(final String value) {
+  final decoded = value.replaceAllMapped(
+    RegExp(r'&(?:#x([0-9a-f]+)|#([0-9]+)|colon);?', caseSensitive: false),
+    (final match) {
+      final hex = match.group(1);
+      final decimal = match.group(2);
+      if (hex != null) {
+        final codeUnit = int.tryParse(hex, radix: 16);
+        if (codeUnit != null && codeUnit <= 0x10ffff) {
+          return String.fromCharCode(codeUnit);
+        }
+      } else if (decimal != null) {
+        final codeUnit = int.tryParse(decimal);
+        if (codeUnit != null && codeUnit <= 0x10ffff) {
+          return String.fromCharCode(codeUnit);
+        }
+      } else {
+        return ':';
+      }
+      return match.group(0)!;
+    },
+  );
+  final output = StringBuffer();
+  for (final codeUnit in decoded.codeUnits) {
+    if (codeUnit <= 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) {
+      continue;
+    }
+    output.writeCharCode(codeUnit);
+  }
+  return output.toString().toLowerCase();
 }
 
 /// Rewrites resource references inside [html] to absolute URLs.

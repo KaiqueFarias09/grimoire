@@ -7,6 +7,7 @@ import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_loader.dart';
 import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_loader.dart';
+import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:e_livre_viewer/src/features/rendering/composition/viewer_engine_selector.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server.dart';
@@ -513,6 +514,7 @@ class ViewerController extends ChangeNotifier {
     final bool justify = false,
     final bool hyphenate = false,
     this.onExternalLink,
+    this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     final ViewerEngineFactory? engineFactory,
     final MathJaxLoader? mathJaxLoader,
     final PdfJsLoader? pdfJsLoader,
@@ -534,6 +536,12 @@ class ViewerController extends ChangeNotifier {
 
   /// The parsed book being read.
   final Book book;
+
+  /// Controls JavaScript authored by book HTML. The default disables
+  /// book scripts while keeping eLivreViewer's injected viewer and
+  /// bridge scripts functional. Use [BookJavaScriptPolicy.allowBookScripts]
+  /// only for trusted books.
+  final BookJavaScriptPolicy bookJavaScriptPolicy;
 
   /// The typed JS bridge (codec + event stream).
   final ViewerBridge bridge = ViewerBridge();
@@ -1180,7 +1188,7 @@ class ViewerController extends ChangeNotifier {
       _pdfReadingMode = PdfReadingMode.facsimile;
     }
 
-    final server = BookServer();
+    final server = BookServer(bookJavaScriptPolicy: bookJavaScriptPolicy);
     await server.start(book);
     _server = server;
     if (_mathJaxEnabled &&

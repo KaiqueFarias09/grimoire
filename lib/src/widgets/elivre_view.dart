@@ -2,6 +2,7 @@ import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
+import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:e_livre_viewer/src/widgets/reader_shell.dart';
 import 'dart:async';
 
@@ -33,6 +34,7 @@ class ELivreView extends StatefulWidget {
     this.onViewImage,
     this.onFootnoteTap,
     this.showShell = true,
+    this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     super.key,
   });
 
@@ -73,6 +75,14 @@ class ELivreView extends StatefulWidget {
   /// [controller].
   final bool showShell;
 
+  /// Controls JavaScript authored by book HTML when this widget
+  /// creates its own [ViewerController]. The default disables book
+  /// scripts while preserving eLivreViewer's injected viewer and
+  /// bridge scripts. Use [BookJavaScriptPolicy.allowBookScripts] only
+  /// for trusted books. When [controller] is supplied, configure its
+  /// policy through [ViewerController.bookJavaScriptPolicy].
+  final BookJavaScriptPolicy bookJavaScriptPolicy;
+
   @override
   State<ELivreView> createState() => _ELivreViewState();
 }
@@ -83,7 +93,11 @@ class _ELivreViewState extends State<ELivreView> {
   bool _wired = false;
 
   ViewerController get _controller =>
-      widget.controller ?? (_ownedController ??= ViewerController(widget.book));
+      widget.controller ??
+      (_ownedController ??= ViewerController(
+        widget.book,
+        bookJavaScriptPolicy: widget.bookJavaScriptPolicy,
+      ));
 
   @override
   void initState() {

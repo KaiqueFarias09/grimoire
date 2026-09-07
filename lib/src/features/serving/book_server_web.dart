@@ -26,8 +26,10 @@ import 'package:web/web.dart' as web;
 class BookServer {
   /// Creates a host for later [start]. [assetLoader] serves the
   /// bundled viewer assets (injectable for tests).
-  BookServer({final Future<Uint8List> Function(String name)? assetLoader})
-    : _assetLoader = assetLoader ?? _rootBundleLoader;
+  BookServer({
+    this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
+    final Future<Uint8List> Function(String name)? assetLoader,
+  }) : _assetLoader = assetLoader ?? _rootBundleLoader;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/e_livre_viewer/assets/viewer/$name');
@@ -35,6 +37,11 @@ class BookServer {
   }
 
   final Future<Uint8List> Function(String name) _assetLoader;
+
+  /// Controls JavaScript authored by book HTML. The default removes
+  /// book scripts while leaving eLivreViewer's injected viewer and
+  /// bridge scripts functional.
+  final BookJavaScriptPolicy bookJavaScriptPolicy;
 
   final Map<String, Object> _files = <String, Object>{};
   final Map<String, String> _blobUrls = <String, String>{};
@@ -169,7 +176,8 @@ class BookServer {
   }
 
   String _prepareHtml(final String path, final String html) {
-    var prepared = rewriteHtmlResources(html, pagePath: path, resolve: _resolveOrNull);
+    var prepared = sanitizeBookHtml(html, policy: bookJavaScriptPolicy);
+    prepared = rewriteHtmlResources(prepared, pagePath: path, resolve: _resolveOrNull);
     prepared = injectViewerAssets(
       prepared,
       cssUrl: _assetUrl('viewer.css'),
@@ -217,7 +225,7 @@ class BookServer {
     final css = _blobUrls['__viewer__/viewer.css'];
     final js = _blobUrls['__viewer__/viewer.js'];
     return injectViewerAssets(
-      html,
+      sanitizeBookHtml(html, policy: bookJavaScriptPolicy),
       cssUrl: css ?? '/__viewer__/viewer.css',
       jsUrl: js ?? '/__viewer__/viewer.js',
     );

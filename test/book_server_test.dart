@@ -6,6 +6,7 @@ import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
 import 'package:e_livre_viewer/src/features/pdf/pdf_reading_mode.dart';
 import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
+import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:e_livre_viewer/src/features/serving/book_server_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -41,6 +42,65 @@ void main() {
     expect(html, contains('viewport'));
     // The book content survives the rewrite.
     expect(html, contains('Chapter one text here.'));
+  });
+
+  test('safe policy strips book JavaScript before viewer injection', () async {
+    final book = buildTestBook();
+    final first = book.files.html.first;
+    book.files.html[0] = TextFile(
+      name: first.name,
+      type: first.type,
+      path: first.path,
+      content:
+          '<html><head><script>book-script()</script></head>'
+          '<body onload="bookBoot()"><p>Visible text.</p>'
+          '<a href="javascript:bookLink()" onclick="bookClick()">blocked</a>'
+          '<a href="https://example.com">external</a>'
+          '<img src="images/cover.png" style="color: red"/></body></html>',
+    );
+    final server = BookServer(
+      assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+    );
+    await server.start(book);
+    addTearDown(server.stop);
+
+    final html = await _body(await _get(server.urlForPath('chapter1.html')));
+
+    expect(html, contains('/__viewer__/viewer.js'));
+    expect(html, contains('Visible text.'));
+    expect(html, isNot(contains('book-script')));
+    expect(html, isNot(contains('onload=')));
+    expect(html, isNot(contains('onclick=')));
+    expect(html, isNot(contains('javascript:')));
+    expect(html, contains('href="https://example.com"'));
+    expect(html, contains('src="images/cover.png"'));
+    expect(html, contains('style="color: red"'));
+    expect(book.files.html.first.content, contains('book-script'));
+  });
+
+  test('trusted policy preserves book JavaScript', () async {
+    final book = buildTestBook();
+    final first = book.files.html.first;
+    book.files.html[0] = TextFile(
+      name: first.name,
+      type: first.type,
+      path: first.path,
+      content:
+          '<html><body><script>book-script()</script>'
+          '<button onclick="bookClick()">Run</button></body></html>',
+    );
+    final server = BookServer(
+      bookJavaScriptPolicy: BookJavaScriptPolicy.allowBookScripts,
+      assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+    );
+    await server.start(book);
+    addTearDown(server.stop);
+
+    final html = await _body(await _get(server.urlForPath('chapter1.html')));
+
+    expect(html, contains('book-script'));
+    expect(html, contains('onclick="bookClick()"'));
+    expect(html, contains('/__viewer__/viewer.js'));
   });
 
   test('serves css with a text mime', () async {
@@ -291,26 +351,6 @@ void main() {
       client.close(force: true);
     }
   });
-}
-
-Future<HttpClientResponse> _getRange(final Uri url, final String range) async {
-  final client = HttpClient();
-  try {
-    final request = await client.getUrl(url)
-      ..followRedirects = false
-      ..headers.set(HttpHeaders.rangeHeader, range);
-    return await request.close();
-  } finally {
-    client.close(force: true);
-  }
-}
-
-Future<List<int>> _bytes(final HttpClientResponse response) async {
-  final builder = <int>[];
-  await for (final chunk in response) {
-    builder.addAll(chunk);
-  }
-  return builder;
 
   group('pdf routes', () {
     test('facsimile pages serve the text layer with pdf.js boot', () async {
@@ -376,4 +416,24 @@ Future<List<int>> _bytes(final HttpClientResponse response) async {
       expect(outside.statusCode, 404);
     });
   });
+}
+
+Future<HttpClientResponse> _getRange(final Uri url, final String range) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(url)
+      ..followRedirects = false
+      ..headers.set(HttpHeaders.rangeHeader, range);
+    return await request.close();
+  } finally {
+    client.close(force: true);
+  }
+}
+
+Future<List<int>> _bytes(final HttpClientResponse response) async {
+  final builder = <int>[];
+  await for (final chunk in response) {
+    builder.addAll(chunk);
+  }
+  return builder;
 }
