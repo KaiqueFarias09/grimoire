@@ -49,6 +49,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.1"
+  convert:
+    dependency: transitive
+    description:
+      name: convert
+      sha256: b30acd5944035672bc15c6b7a8b47d773e41e2f17de064350988c5d02adb1c68
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.2"
   crypto:
     dependency: transitive
     description:
@@ -71,7 +79,7 @@ packages:
       path: "../eLivre"
       relative: true
     source: path
-    version: "3.2.0"
+    version: "3.3.0"
   fake_async:
     dependency: transitive
     description:
@@ -80,6 +88,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.3"
+  file:
+    dependency: transitive
+    description:
+      name: file
+      sha256: a3b4f84adafef897088c160faf7dfffb7696046cb13ae90b508c2cbc95d3b8d4
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.0.1"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -167,6 +183,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  glob:
+    dependency: transitive
+    description:
+      name: glob
+      sha256: "218aeb56050c714f62a3182775320dfa04602b55074873e24e31bbd39bda96fb"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   html:
     dependency: transitive
     description:
@@ -183,6 +207,70 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+  koni_archive:
+    dependency: transitive
+    description:
+      name: koni_archive
+      sha256: "30c137e5c6be00eeed17831ae28794e119bd031d1aca6762971e055e13d2b6c9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
+  koni_archive_core:
+    dependency: transitive
+    description:
+      name: koni_archive_core
+      sha256: "93efbf70824bcf1016707cc7b04a70f79e90e2f5040be6fb23fda01de9f9e8ce"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
+  koni_codecs:
+    dependency: transitive
+    description:
+      name: koni_codecs
+      sha256: b152dc74b49f0c6fe6039753c4f9c08a0a6b098333bc6c914e537103e46815a2
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
+  koni_gzip:
+    dependency: transitive
+    description:
+      name: koni_gzip
+      sha256: b0d9863ca958bf2406d50a9eec050f86ae0f5a6551510e5d0d28980073a998d8
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
+  koni_rar:
+    dependency: transitive
+    description:
+      name: koni_rar
+      sha256: faa2566574ccd04548b4e0db38286d82fa6515ad0c9406fd91abbf76fce15301
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
+  koni_sevenz:
+    dependency: transitive
+    description:
+      name: koni_sevenz
+      sha256: "3e94cec6f394e7c01c0191a91b85ae9c269fe574e60cd538922be572f08d2732"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
+  koni_tar:
+    dependency: transitive
+    description:
+      name: koni_tar
+      sha256: c1f0cb8b0b27f724460213fc5ba193abc6d3f7e4eb336830da8d4fcb7b6ff8c0
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
+  koni_zip:
+    dependency: transitive
+    description:
+      name: koni_zip
+      sha256: "3d50b5a07e75bcbff31868a5568167122f75a418f2dd0e40d54f300139c815b0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -271,6 +359,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  pointycastle:
+    dependency: transitive
+    description:
+      name: pointycastle
+      sha256: "92aa3841d083cc4b0f4709b5c74fd6409a3e6ba833ffc7dc6a8fee096366acf5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.0"
   shelf:
     dependency: "direct main"
     description:
