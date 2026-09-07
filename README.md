@@ -2,9 +2,10 @@
 
 A Calibre-style ebook reader widget for Flutter, built on
 [eLivre](https://pub.dev/packages/e_livre). Renders EPUB, MOBI, AZW3
-(KF8), FB2, comic archives (CBZ/CBR) and PDF with paginated or
-scrolling layouts, themes, highlights, bookmarks, in-book search and
-a text-selection hook for dictionary lookups.
+(KF8), FB2/FBZ, TXT/TXZ, HTML/HTMLZ, DOCX, AZW4, comic archives
+(CBZ/CBR/CB7/CBC), ODT and PDF with paginated or scrolling layouts,
+themes, highlights, bookmarks, in-book search and a text-selection hook
+for dictionary lookups.
 
 Platforms: **Android, iOS, macOS** (webview_flutter), **Windows,
 Linux** (flutter_inappwebview, auto-selected) and **Web** (a native
@@ -17,13 +18,62 @@ rendered in dual webviews (one visible + one preloading the next
 chapter for instant transitions) and paginated with a CSS
 multi-column layer using the same math Calibre uses.
 
+## Supported formats
+
+All formats are parsed by eLivre and enter the viewer through its shared
+HTML, resource, navigation and search pipeline. Reflowable formats use the
+normal paginated or scrolling reader; comics and PDF facsimile pages use the
+fixed-layout path where applicable.
+
+| Format | Viewer behavior | Limitations |
+| --- | --- | --- |
+| EPUB 2 and 3 | Reflowed HTML with CSS, images, fonts, navigation, links, search and selection. | Output is reading-oriented reflow, not a pixel-perfect copy of every EPUB renderer; DRM/encrypted assets follow eLivre's boundaries. |
+| MOBI 6 and AZW3 (KF8) | Extracted content, styles, images, fonts and navigation are rendered by the same reader. | DRM-protected books and unsupported or malformed Kindle structures are rejected or may lose unsupported features. |
+| FB2 and FBZ | XML metadata, sections, styles, notes and internal links become reflowable HTML. | Semantic document structure is preserved; original page layout is not. |
+| TXT and TXTZ | UTF-8/UTF-16 text becomes safe XHTML; TXTZ can include multiple text sections, an OPF sidecar, CSS, images and fonts. | Markdown/Textile support is basic, not a full extension engine; plain TXT metadata is limited without a recognized header or OPF. |
+| HTML and HTMLZ | Source-preserving HTML/XHTML, head metadata and heading-based navigation are served directly. | HTMLZ selects one top-level `index.*` document as the spine; other HTML files remain resources. Book JavaScript is disabled by default by the viewer policy; this is not a complete HTML security sanitizer. |
+| DOCX | Common WordprocessingML paragraphs, styles, headings, lists, tables, hyperlinks and embedded images are converted to reflowable HTML. | It does not reproduce full Word layout; footnotes, tracked changes, equations, charts, advanced numbering and complex drawings may be lost. |
+| AZW4 | The embedded PDF is available through the viewer's PDF reflow and facsimile modes, with the original PDF bytes retained. | A valid unencrypted PDF payload is required; DRM is rejected, and this does not add a separate PDF renderer. |
+| CBZ and CBR | Image pages use comic mode with natural ordering, cover metadata and zoom/pan behavior. | CBR supports only eLivre's readable RAR variants; encrypted, split, solid, PPMd and virtual-machine archives are unsupported. |
+| CB7 | 7-Zip image pages, `ComicInfo.xml` metadata and natural ordering use comic mode. | Parsing is asynchronous and bounded per entry; encrypted entries and unsupported codecs are rejected. |
+| CBC | Calibre `comics.txt` collections resolve nested CBZ, CBR and CB7 files in declaration order. | The result is one flattened `ComicBook` page sequence, not a nested collection TOC. |
+| ODT | OpenDocument paragraphs, headings, inline styles, links, lists, tables, images and metadata become reflowable HTML. | It is not exact LibreOffice pagination; advanced styles, tracked changes, fields and complex drawings are outside the contract. |
+| PDF | Text PDFs support reflow mode; facsimile mode renders original pages with the canonical text layer, and scanned PDFs can select facsimile automatically. | It is a reading-oriented PDF path, not a general renderer; facsimile fidelity depends on supported codecs/operators and encrypted files need a supported password. |
+
+TXT/TXZ, HTML/HTMLZ, DOCX, AZW4 and ODT use eLivre's `DocumentBook`
+contract, so the viewer does not need a separate renderer for each format.
+CB7/CBC parsing is asynchronous and is awaited by the byte/path opening APIs.
+
+## JavaScript in book HTML
+
+Book-authored JavaScript is disabled by default. With
+`BookJavaScriptPolicy.disabled`, the viewer removes script elements, inline
+event handlers, `srcdoc`, executable `javascript:` URLs and common unsafe CSS
+constructs before serving the HTML. The viewer's own pagination, bridge,
+MathJax and PDF scripts are injected afterwards and continue to work.
+
+Applications may opt in with `BookJavaScriptPolicy.allowBookScripts` only for
+books they fully trust:
+
+```dart
+ELivreView(
+  book: book,
+  bookJavaScriptPolicy: BookJavaScriptPolicy.allowBookScripts,
+);
+```
+
+This is a content policy and defense-in-depth measure, not a general-purpose
+HTML sanitizer or a replacement for the WebView/browser sandbox. Keep the
+safe default for arbitrary HTML, and treat the opt-in mode as equivalent to
+running third-party code in the reader.
+
 ## Usage
 
 ```dart
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 
-final book = await EBook.openFromPath('/books/wonderland.azw3');
+final book = await BookReader.openFromPath('/books/wonderland.azw3');
 
 ELivreView(
   book: book,
