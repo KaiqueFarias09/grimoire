@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
@@ -55,7 +56,7 @@ class _LibraryPageState extends State<LibraryPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoOpenTimer = Timer(const Duration(seconds: 2), () {
         if (mounted) {
-          _open(context, _fixtures.first);
+          unawaited(_open(context, _fixtures.first));
         }
       });
     });
@@ -86,14 +87,16 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Future<void> _open(final BuildContext context, final _Fixture fixture) async {
+    _autoOpenTimer?.cancel();
     final messenger = ScaffoldMessenger.of(context);
     final bytes = Uint8List.fromList((await rootBundle.load(fixture.asset)).buffer.asUint8List());
     try {
       final book = await BookReader.openFromBytes(bytes);
       // Directory.systemTemp is not writable inside Android apps, so
       // hand the viewer's lazy pdf.js/MathJax caches a directory
-      // that is.
-      final cachePath = (await getTemporaryDirectory()).path;
+      // that is. Web loaders ignore the path and do not touch the file
+      // system, so avoid calling the filesystem-only plugin there.
+      final cachePath = kIsWeb ? '' : (await getTemporaryDirectory()).path;
       if (!context.mounted) {
         return;
       }
