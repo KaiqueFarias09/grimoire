@@ -3,10 +3,12 @@
 .pub-cache/
 .pub/
 build/
+.flutter-plugins-dependencies
 .fvm/
 *.iml
 .idea/
 example/.steward/
+.steward/
 
 # Local agent tooling
 .standardctl/
