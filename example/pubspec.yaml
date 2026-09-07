@@ -28,6 +28,13 @@ dependency_overrides:
   # proguard-android.txt). 6.2.0-beta.3 ships the fix; drop this
   # override when 6.2 goes stable.
   flutter_inappwebview: 6.2.0-beta.3
+  # Xcode 26 rejects the beta macOS provider's availability annotation.
+  # Pin the upstream PR until it is merged and released.
+  flutter_inappwebview_macos:
+    git:
+      url: https://github.com/wangqiang1588/flutter_inappwebview.git
+      ref: fc33a449b9290b127a471808e22eb7b0edebad92
+      path: flutter_inappwebview_macos
 
 flutter:
   uses-material-design: true
