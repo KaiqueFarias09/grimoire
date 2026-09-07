@@ -37,6 +37,15 @@ const List<_Fixture> _fixtures = <_Fixture>[
   _Fixture('assets/books/alice-kf8.azw3', 'Alice (AZW3 / KF8)'),
   _Fixture('assets/books/sample1.epub', 'Geography of Bliss (EPUB)'),
   _Fixture('assets/books/dickens-sample.pdf', 'Dickens (PDF)'),
+  _Fixture('assets/books/synthetic.txt', 'Synthetic TXT'),
+  _Fixture('assets/books/synthetic.txtz', 'Synthetic TXTZ'),
+  _Fixture('assets/books/synthetic.html', 'Synthetic HTML'),
+  _Fixture('assets/books/synthetic.htmlz', 'Synthetic HTMLZ'),
+  _Fixture('assets/books/synthetic.docx', 'Synthetic DOCX'),
+  _Fixture('assets/books/synthetic.azw4', 'Synthetic AZW4 (PDF-backed)'),
+  _Fixture('assets/books/synthetic-pages.cb7', 'Synthetic CB7'),
+  _Fixture('assets/books/synthetic-collection.cbc', 'Synthetic CBC'),
+  _Fixture('assets/books/synthetic.odt', 'Synthetic ODT'),
 ];
 
 class LibraryPage extends StatefulWidget {
@@ -89,8 +98,9 @@ class _LibraryPageState extends State<LibraryPage> {
   Future<void> _open(final BuildContext context, final _Fixture fixture) async {
     _autoOpenTimer?.cancel();
     final messenger = ScaffoldMessenger.of(context);
-    final bytes = Uint8List.fromList((await rootBundle.load(fixture.asset)).buffer.asUint8List());
     try {
+      final bytes = Uint8List.fromList((await rootBundle.load(fixture.asset)).buffer.asUint8List());
+      // openFromBytes keeps CB7/CBC on their asynchronous parser path.
       final book = await BookReader.openFromBytes(bytes);
       // Directory.systemTemp is not writable inside Android apps, so
       // hand the viewer's lazy pdf.js/MathJax caches a directory
@@ -124,9 +134,9 @@ class ReaderPage extends StatefulWidget {
 }
 
 class _ReaderPageState extends State<ReaderPage> {
-  // PDFs get an externally owned controller so the reading-mode
-  // toggle below can drive it; other formats let ELivreView manage
-  // its own.
+  // PDF-backed books, including AZW4, get an externally owned
+  // controller so the reading-mode toggle below can drive it; other
+  // formats let ELivreView manage its own.
   late final ViewerController? _pdfController = widget.book is PdfBook
       ? (ViewerController(widget.book)
           ..mathJaxCachePath = widget.cachePath
