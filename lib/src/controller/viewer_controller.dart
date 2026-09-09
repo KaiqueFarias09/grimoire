@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show Rect;
 
@@ -7,6 +6,7 @@ import 'package:e_livre/e_livre.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
+import '../features/annotations/annotation_controller.dart';
 import '../features/annotations/viewer_annotations.dart';
 import '../features/bridge/viewer_bridge.dart';
 import '../features/mathjax/mathjax_loader.dart';
@@ -66,6 +66,8 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
       readingOrderPaths: <String>[for (final item in book.readingOrder) item.name],
       host: this,
     );
+    _annotations = AnnotationController(overlay: _ViewerAnnotationOverlay(this))
+      ..addListener(notifyListeners);
     readingState = ReadingState.of(book);
     _buildChapterTitles();
     _subscription = bridge.events.listen(_onEvent);
@@ -145,12 +147,7 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   ViewerEngine? _measureEngine;
   ViewerSelection? _lastSelection;
   List<ViewerSearchResult> _searchResults = const <ViewerSearchResult>[];
-  final List<ViewerBookmark> _bookmarks = <ViewerBookmark>[];
-  final List<ViewerHighlight> _highlights = <ViewerHighlight>[];
-  final StreamController<ViewerHighlight> _highlightTaps =
-      StreamController<ViewerHighlight>.broadcast();
-  ViewerHighlightColor _defaultHighlightColor = ViewerHighlightColor.yellow;
-  ViewerHighlightDecoration _defaultHighlightDecoration = ViewerHighlightDecoration.background;
+  late final AnnotationController _annotations;
   bool _chromeVisible = false;
   bool _useHostChrome = false;
   bool _started = false;
@@ -203,9 +200,6 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
       _sendTo(slot, <String, Object?>{'action': 'setViewport', 'width': width, 'height': height});
     }
   }
-
-  int _bookmarkCounter = 0;
-  int _highlightCounter = 0;
 
   /// The current reading position.
   ViewerPosition get position => _position;
@@ -296,10 +290,10 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   bool get hasSelection => _lastSelection != null && _lastSelection!.text.isNotEmpty;
 
   /// Bookmarks in creation order.
-  List<ViewerBookmark> get bookmarks => List<ViewerBookmark>.unmodifiable(_bookmarks);
+  List<ViewerBookmark> get bookmarks => _annotations.bookmarks;
 
   /// Highlights in creation order.
-  List<ViewerHighlight> get highlights => List<ViewerHighlight>.unmodifiable(_highlights);
+  List<ViewerHighlight> get highlights => _annotations.highlights;
 
   /// Whether the book renders as comic pages (image-only items).
   bool get isComicMode => book.readingOrder.any((final item) => !item.isHtml);
@@ -356,32 +350,24 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   }
 
   /// Taps on highlights (resolved against [highlights]).
-  Stream<ViewerHighlight> get highlightTapEvents => _highlightTaps.stream;
+  Stream<ViewerHighlight> get highlightTapEvents => _annotations.highlightTapEvents;
 
   /// The color [addHighlightFromSelection] applies when called
   /// without one. The built-in selection bar updates it from the
   /// user's taps, so quick highlights remember the choice (Calibre's
   /// default highlight style).
-  ViewerHighlightColor get defaultHighlightColor => _defaultHighlightColor;
+  ViewerHighlightColor get defaultHighlightColor => _annotations.defaultColor;
 
   set defaultHighlightColor(final ViewerHighlightColor color) {
-    if (color == _defaultHighlightColor) {
-      return;
-    }
-    _defaultHighlightColor = color;
-    notifyListeners();
+    _annotations.defaultColor = color;
   }
 
   /// The decoration [addHighlightFromSelection] applies when called
   /// without one; see [defaultHighlightColor].
-  ViewerHighlightDecoration get defaultHighlightDecoration => _defaultHighlightDecoration;
+  ViewerHighlightDecoration get defaultHighlightDecoration => _annotations.defaultDecoration;
 
   set defaultHighlightDecoration(final ViewerHighlightDecoration decoration) {
-    if (decoration == _defaultHighlightDecoration) {
-      return;
-    }
-    _defaultHighlightDecoration = decoration;
-    notifyListeners();
+    _annotations.defaultDecoration = decoration;
   }
 
   /// Whether the host app owns all reader chrome. When true the
@@ -732,7 +718,7 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
     if (start != null && last != null && !_readingSessions.isClosed) {
       _readingSessions.add(ReadingSessionEvent(startedAt: start, endedAt: last));
     }
-    _highlightTaps.close();
+    _annotations.dispose();
     _pageChanges.close();
     _readingSessions.close();
     bridge.dispose();
@@ -785,27 +771,11 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   // --- bookmarks ---
 
   /// Bookmarks the current position.
-  ViewerBookmark addBookmark([final String? title]) {
-    _bookmarkCounter++;
-    final bookmark = ViewerBookmark(
-      id: 'bm-$_bookmarkCounter-${DateTime.now().millisecondsSinceEpoch}',
-      title: title?.isNotEmpty == true
-          ? title!
-          : 'Bookmark $_bookmarkCounter · ${(progress * 100).round()}%',
-      position: _position.serialize(),
-      createdAtIso: DateTime.now().toIso8601String(),
-    );
-    _bookmarks.add(bookmark);
-    _notifyAnnotationsChanged();
-    notifyListeners();
-    return bookmark;
-  }
+  ViewerBookmark addBookmark([final String? title]) =>
+      _annotations.addBookmark(title: title, position: _position.serialize(), progress: progress);
 
   /// Removes a bookmark.
-  void removeBookmark(final String id) {
-    _bookmarks.removeWhere((final bookmark) => bookmark.id == id);
-    notifyListeners();
-  }
+  void removeBookmark(final String id) => _annotations.removeBookmark(id);
 
   /// Jumps to a bookmark.
   Future<void> goToBookmark(final ViewerBookmark bookmark) {
@@ -827,26 +797,16 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
     if (selection == null || selection.text.isEmpty) {
       return null;
     }
-    _highlightCounter++;
-    final highlight = ViewerHighlight(
-      id: 'hl-$_highlightCounter-${DateTime.now().millisecondsSinceEpoch}',
-      fileIndex: selection.fileIndex,
-      start: selection.start,
-      end: selection.end,
-      text: selection.text,
+    return _annotations.addHighlight(
+      selection: selection,
       before: _contextAround(selection.fileIndex, selection.start, before: true),
       after: _contextAround(selection.fileIndex, selection.end, before: false),
-      color: color ?? _defaultHighlightColor,
-      decoration: decoration ?? _defaultHighlightDecoration,
-      createdAtIso: DateTime.now().toIso8601String(),
+      slot: _navigation.activeSlot,
+      color: color,
+      decoration: decoration,
       note: note,
       cfi: _highlightCfi(selection.fileIndex, selection.start),
     );
-    _highlights.add(highlight);
-    await _applyHighlightsToEngine(_navigation.activeSlot, selection.fileIndex);
-    _notifyAnnotationsChanged();
-    notifyListeners();
-    return highlight;
   }
 
   /// Dual-write: every highlight serializes its EPUB CFI alongside the
@@ -862,17 +822,11 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   }
 
   /// Removes a highlight and unwraps it in the page.
-  Future<void> removeHighlight(final String id) async {
-    final index = _highlights.indexWhere((final highlight) => highlight.id == id);
-    if (index == -1) {
-      return;
-    }
-    final highlight = _highlights.removeAt(index);
-    if (_navigation.activeFileIndex == highlight.fileIndex) {
-      await _send(<String, Object?>{'action': 'removeHighlight', 'id': id});
-    }
-    notifyListeners();
-  }
+  Future<void> removeHighlight(final String id) => _annotations.removeHighlight(
+    id,
+    activeFileIndex: _navigation.activeFileIndex,
+    activeSlot: _navigation.activeSlot,
+  );
 
   /// Jumps to a highlight and flashes its selection.
   Future<void> goToHighlight(final ViewerHighlight highlight) => _navigation.jumpTo(
@@ -886,15 +840,7 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   /// file: exact offsets win, then the highlighted text relocates
   /// them; `null` when the text no longer exists.
   static (int, int)? relocateHighlight(final ViewerHighlight highlight, final String text) {
-    if (highlight.text.isEmpty || text.isEmpty) {
-      return null;
-    }
-    if (highlight.end <= text.length &&
-        text.substring(highlight.start, highlight.end) == highlight.text) {
-      return (highlight.start, highlight.end);
-    }
-    final at = text.indexOf(highlight.text);
-    return at == -1 ? null : (at, at + highlight.text.length);
+    return AnnotationController.relocateHighlight(highlight, text);
   }
 
   /// Plain text per reading-order index, extracted once (the book is
@@ -961,23 +907,6 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
       // Offline or CDN unreachable: facsimile pages keep retrying
       // their script load, the text layer stays usable meanwhile.
     }
-  }
-
-  Future<void> _applyHighlightsToEngine(final int slot, final int fileIndex) async {
-    final items = <Map<String, Object?>>[
-      for (final highlight in _highlights.where(
-        (final highlight) => highlight.fileIndex == fileIndex,
-      ))
-        <String, Object?>{
-          'id': highlight.id,
-          'start': highlight.start,
-          'end': highlight.end,
-          'decoration': highlight.decoration.wireName,
-          'colorLight': highlight.color.lightHex,
-          'colorDark': highlight.color.darkHex,
-        },
-    ];
-    await _sendTo(slot, <String, Object?>{'action': 'applyHighlights', 'items': items});
   }
 
   /// Marks [start]..[end] as the narration focus (read-aloud or
@@ -1169,7 +1098,6 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   );
 
   final StreamController<String> _imagePopups = StreamController<String>.broadcast();
-  final StreamController<void> _annotationsChanged = StreamController<void>.broadcast();
 
   final Completer<void> _readyCompleter = Completer<void>();
 
@@ -1184,11 +1112,7 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
 
   /// Fires whenever highlights or bookmarks mutate — the host saves
   /// [exportAnnotations] output here (no more polling).
-  Stream<void> get annotationsChanged => _annotationsChanged.stream;
-
-  void _notifyAnnotationsChanged() {
-    _annotationsChanged.add(null);
-  }
+  Stream<void> get annotationsChanged => _annotations.changes;
 
   /// Image sources the reader wants enlarged (tap on an inline image).
   Stream<String> get imagePopupEvents => _imagePopups.stream;
@@ -1500,32 +1424,12 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   Future<ViewerHighlight?> previousAnnotation() => _stepAnnotation(-1);
 
   Future<ViewerHighlight?> _stepAnnotation(final int direction) async {
-    final ordered = [..._highlights]
-      ..sort((final a, final b) {
-        final byFile = a.fileIndex.compareTo(b.fileIndex);
-        return byFile != 0 ? byFile : a.start.compareTo(b.start);
-      });
-    if (ordered.isEmpty) {
+    final highlight = _annotations.adjacentHighlight(_position, direction);
+    if (highlight == null) {
       return null;
     }
-    ViewerHighlight found;
-    if (direction > 0) {
-      found = ordered.firstWhere(
-        (final h) =>
-            h.fileIndex > _position.fileIndex ||
-            (h.fileIndex == _position.fileIndex && h.start > _position.charOffset),
-        orElse: () => ordered.first,
-      );
-    } else {
-      found = ordered.lastWhere(
-        (final h) =>
-            h.fileIndex < _position.fileIndex ||
-            (h.fileIndex == _position.fileIndex && h.start < _position.charOffset),
-        orElse: () => ordered.last,
-      );
-    }
-    await goToHighlight(found);
-    return found;
+    await goToHighlight(highlight);
+    return highlight;
   }
 
   /// Restyles an existing highlight in place: any subset of [color]
@@ -1534,87 +1438,29 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
     final String id, {
     final ViewerHighlightColor? color,
     final ViewerHighlightDecoration? decoration,
-  }) async {
-    final index = _highlights.indexWhere((final h) => h.id == id);
-    if (index < 0) {
-      return;
-    }
-    _highlights[index] = _highlights[index].copyWith(color: color, decoration: decoration);
-    await _applyHighlightsToEngine(_navigation.activeSlot, _highlights[index].fileIndex);
-    notifyListeners();
-  }
+  }) => _annotations.updateHighlightStyle(
+    id,
+    activeSlot: _navigation.activeSlot,
+    color: color,
+    decoration: decoration,
+  );
 
   /// Attaches a note to an existing highlight.
-  Future<void> addNoteToHighlight(final String id, final String note) async {
-    final index = _highlights.indexWhere((final h) => h.id == id);
-    if (index < 0) {
-      return;
-    }
-    _highlights[index] = _highlights[index].copyWith(note: note);
-    notifyListeners();
+  Future<void> addNoteToHighlight(final String id, final String note) {
+    _annotations.addNoteToHighlight(id, note);
+    return Future<void>.value();
   }
 
   /// Serializes all annotations for persistence (host-owned storage).
-  String exportAnnotations() => jsonEncode(<String, Object?>{
-    'highlights': [for (final h in _highlights) h.toJson()],
-    'bookmarks': [for (final b in _bookmarks) b.toJson()],
-  });
+  String exportAnnotations() => _annotations.exportAnnotations();
 
   /// Imports annotations, merging by identity and keeping the newest
   /// timestamp (the ported Calibre merge semantics, annot_merge.dart).
-  Future<void> importAnnotations(final String json) async {
-    final decoded = jsonDecode(json);
-    if (decoded is! Map<String, dynamic>) {
-      return;
-    }
-    final incomingHighlights = <ViewerHighlight>[
-      for (final h in (decoded['highlights'] as List<dynamic>? ?? []))
-        if (h is Map<String, dynamic>)
-          if (ViewerHighlight.fromJson(h) case final parsedHighlight?) parsedHighlight,
-    ];
-    final incomingBookmarks = <ViewerBookmark>[
-      for (final b in (decoded['bookmarks'] as List<dynamic>? ?? []))
-        if (b is Map<String, dynamic>) ViewerBookmark.fromJson(b),
-    ];
-    // Identity lookups built once (indexWhere per incoming item would
-    // be quadratic). First occurrence wins, matching indexWhere.
-    final highlightIndexById = <String, int>{
-      for (var i = 0; i < _highlights.length; i++) _highlights[i].id: i,
-    };
-    for (final incoming in incomingHighlights) {
-      final at = highlightIndexById[incoming.id] ?? -1;
-      if (at < 0) {
-        highlightIndexById[incoming.id] = _highlights.length;
-        _highlights.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) > 0) {
-        _highlights[at] = incoming;
-      }
-    }
-    // Bookmarks match on title OR position: the earliest index that
-    // matches either one, so take the smaller of the two lookups.
-    final bookmarkIndexByTitle = <String, int>{
-      for (var i = 0; i < _bookmarks.length; i++) _bookmarks[i].title: i,
-    };
-    final bookmarkIndexByPosition = <String, int>{
-      for (var i = 0; i < _bookmarks.length; i++) _bookmarks[i].position: i,
-    };
-    for (final incoming in incomingBookmarks) {
-      final byTitle = bookmarkIndexByTitle[incoming.title];
-      final byPosition = bookmarkIndexByPosition[incoming.position];
-      final at = byTitle == null
-          ? (byPosition ?? -1)
-          : (byPosition == null ? byTitle : math.min(byTitle, byPosition));
-      if (at < 0) {
-        bookmarkIndexByTitle.putIfAbsent(incoming.title, () => _bookmarks.length);
-        bookmarkIndexByPosition.putIfAbsent(incoming.position, () => _bookmarks.length);
-        _bookmarks.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) > 0) {
-        _bookmarks[at] = incoming;
-      }
-    }
-    await _applyHighlightsToEngine(_navigation.activeSlot, _position.fileIndex);
-    notifyListeners();
-  }
+  Future<void> importAnnotations(final String json) => _annotations.importAnnotations(
+    json,
+    activeSlot: _navigation.activeSlot,
+    activeFileIndex: _position.fileIndex,
+  );
 
   void toggleChrome() {
     if (_useHostChrome) {
@@ -1707,7 +1553,7 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
         }
         final fileIndex = ready.fileIndex;
         if (fileIndex != null) {
-          await _applyHighlightsToEngine(slot, fileIndex);
+          await _annotations.applyHighlightsToEngine(slot, fileIndex);
           await _applySearchMarkersToEngine(slot, fileIndex);
           await _applyWordMarksToEngine(slot, fileIndex);
         }
@@ -1828,12 +1674,7 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
         if (event.source != _navigation.activeSlot) {
           return;
         }
-        for (final highlight in _highlights) {
-          if (highlight.id == tap.id) {
-            _highlightTaps.add(highlight);
-            return;
-          }
-        }
+        _annotations.acceptHighlightTap(tap.id);
     }
   }
 
@@ -2133,4 +1974,34 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
     final contextEnd = end + 40 > text.length ? text.length : end + 40;
     return text.substring(contextStart, contextEnd).replaceAll(RegExp(r'\s+'), ' ').trim();
   }
+}
+
+final class _ViewerAnnotationOverlay implements AnnotationOverlayPort {
+  const _ViewerAnnotationOverlay(this._controller);
+
+  final ViewerController _controller;
+
+  @override
+  Future<void> applyHighlights(
+    final int slot,
+    final int fileIndex,
+    final List<ViewerHighlight> highlights,
+  ) => _controller._sendTo(slot, <String, Object?>{
+    'action': 'applyHighlights',
+    'items': <Map<String, Object?>>[
+      for (final highlight in highlights)
+        <String, Object?>{
+          'id': highlight.id,
+          'start': highlight.start,
+          'end': highlight.end,
+          'decoration': highlight.decoration.wireName,
+          'colorLight': highlight.color.lightHex,
+          'colorDark': highlight.color.darkHex,
+        },
+    ],
+  });
+
+  @override
+  Future<void> removeHighlight(final int slot, final String id) =>
+      _controller._sendTo(slot, <String, Object?>{'action': 'removeHighlight', 'id': id});
 }
