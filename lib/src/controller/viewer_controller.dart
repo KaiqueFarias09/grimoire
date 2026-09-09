@@ -29,9 +29,11 @@ export '../features/pdf/pdf_reading_mode.dart';
 export '../features/search/viewer_search.dart';
 export '../features/settings/viewer_settings.dart';
 
+part 'page_measurement_controller.dart';
+
 /// Drives the reader: two preloading webview engines, the book
 /// server, positions, bookmarks, highlights, search and settings.
-class ViewerController extends ChangeNotifier {
+class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
   /// Creates a controller for [book].
   ViewerController(
     this.book, {
@@ -59,6 +61,7 @@ class ViewerController extends ChangeNotifier {
        _mathJaxLoader = mathJaxLoader ?? MathJaxLoader(),
        _pdfJsLoader = pdfJsLoader ?? PdfJsLoader(),
        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
+    _pageMeasurement = _PageMeasurementController(book: book, host: this);
     readingState = ReadingState.of(book);
     _buildChapterTitles();
     _subscription = bridge.events.listen(_onEvent);
@@ -103,27 +106,46 @@ class ViewerController extends ChangeNotifier {
 
   // --- book-wide page measurement (Opção 2: medição lazy com cache) ---
 
+  late final _PageMeasurementController _pageMeasurement;
+
   /// Controls the background measuring cost. See [BookPageCountMode].
-  BookPageCountMode pageCountMode = BookPageCountMode.measureAhead;
+  BookPageCountMode get pageCountMode => _pageMeasurement.pageCountMode;
+
+  set pageCountMode(final BookPageCountMode value) {
+    _pageMeasurement.pageCountMode = value;
+  }
 
   /// Spacing between background measurements. Larger = gentler.
-  Duration pageMeasureBatchDelay = const Duration(milliseconds: 250);
+  Duration get pageMeasureBatchDelay => _pageMeasurement.batchDelay;
+
+  set pageMeasureBatchDelay(final Duration value) {
+    _pageMeasurement.batchDelay = value;
+  }
 
   /// Optional persistent cache hooks (host-owned storage). The key is
   /// a layout fingerprint; the value is JSON `[columns per item]`.
-  String? Function(String key)? loadPageCache;
-  Future<void> Function(String key, String json)? savePageCache;
+  String? Function(String key)? get loadPageCache => _pageMeasurement.loadCache;
+
+  set loadPageCache(final String? Function(String key)? value) {
+    _pageMeasurement.loadCache = value;
+  }
+
+  /// Persists measured columns for a layout fingerprint.
+  Future<void> Function(String key, String json)? get savePageCache => _pageMeasurement.saveCache;
+
+  /// Updates the host-owned persistent cache saver.
+  set savePageCache(final Future<void> Function(String key, String json)? value) {
+    _pageMeasurement.saveCache = value;
+  }
 
   /// Progress callback (measured, total) after each item measured.
-  void Function(int measured, int total)? onPageMeasureProgress;
+  void Function(int measured, int total)? get onPageMeasureProgress => _pageMeasurement.onProgress;
+
+  set onPageMeasureProgress(final void Function(int measured, int total)? value) {
+    _pageMeasurement.onProgress = value;
+  }
 
   ViewerEngine? _measureEngine;
-  List<int?> _measuredColumns = <int?>[];
-  int _measureCursor = -1; // file index currently loading, -1 = idle
-  String _pageCacheKey = '';
-  bool _pageCacheLoaded = false;
-  Timer? _measureTimer;
-  int _layoutSignature = -1;
   ViewerSelection? _lastSelection;
   List<ViewerSearchResult> _searchResults = const <ViewerSearchResult>[];
   final List<ViewerBookmark> _bookmarks = <ViewerBookmark>[];
@@ -747,7 +769,7 @@ class ViewerController extends ChangeNotifier {
   @mustCallSuper
   @override
   void dispose() {
-    _measureTimer?.cancel();
+    _pageMeasurement.dispose();
     _disposed = true;
     _subscription?.cancel();
     _preloadTimer?.cancel();
@@ -1763,8 +1785,8 @@ class ViewerController extends ChangeNotifier {
     // Slot 2 is the page measurer: its events never touch reading
     // state; a ReadyEvent reports the measured column count.
     if (event.source == 2) {
-      if (event is ReadyEvent && _measureCursor >= 0) {
-        await _onMeasureReady(_measureCursor, event.columns);
+      if (event is ReadyEvent && _pageMeasurement.isLoading) {
+        await _pageMeasurement.onReady(event.columns);
       }
       return;
     }
@@ -1988,62 +2010,39 @@ class ViewerController extends ChangeNotifier {
     _columnsPerScreen,
   );
 
-  String get _cacheKey => 'elivre-pages/$_pageCacheKey/$_layoutSignature';
-
-  final Map<String, List<int?>> _pageCacheByKey = <String, List<int?>>{};
-
   void _refreshPageCacheKey() {
     if (_disposed) {
       return;
     }
-    final signature = _computeLayoutSignature();
-    if (signature == _layoutSignature) {
-      return;
-    }
-    _layoutSignature = signature;
-    _pageCacheKey = '${bookTitleFingerprint()}/$signature';
-    final cached = _pageCacheByKey[_pageCacheKey];
-    _measuredColumns = cached != null
-        ? [...cached]
-        : <int?>[for (var i = 0; i < book.readingOrder.length; i++) null];
-    _pageCacheLoaded = true;
-    // This can run inside a LayoutBuilder callback (the host reports
-    // its viewport during layout); notify outside the build phase.
-    scheduleMicrotask(() {
-      if (_disposed) {
-        return;
-      }
-      notifyListeners();
-      _scheduleMeasure();
-    });
+    _pageMeasurement.refreshLayout(
+      signature: _computeLayoutSignature(),
+      bookFingerprint: bookTitleFingerprint(),
+    );
   }
 
   /// Stable per-book part of the cache key.
   String bookTitleFingerprint() => book.metadata.title ?? 'book';
 
   /// Measured column counts (null = not measured yet — estimated).
-  List<int?> get measuredColumns => List.unmodifiable(_measuredColumns);
+  List<int?> get measuredColumns => _pageMeasurement.columns;
 
   /// (measured count, total items) for progress UI.
-  (int, int) get pageMeasureProgress {
-    final measured = _measuredColumns.where((final c) => c != null).length;
-    return (measured, _measuredColumns.length);
-  }
+  (int, int) get pageMeasureProgress => _pageMeasurement.progress;
 
   /// Book-wide page state: (current page, total, all measured?).
   /// Totals come from real measurements where available and density
   /// estimates elsewhere.
   (int, int, bool) get bookPageState {
+    final measuredColumns = _pageMeasurement._rawColumns;
     final counts = <int>[
-      for (var i = 0; i < _measuredColumns.length; i++) _measuredColumns[i] ?? _estimatePagesFor(i),
+      for (var i = 0; i < measuredColumns.length; i++) measuredColumns[i] ?? _estimatePagesFor(i),
     ];
     final total = counts.fold(0, (final a, final b) => a + b);
     var before = 0;
     for (var i = 0; i < _position.fileIndex && i < counts.length; i++) {
       before += counts[i];
     }
-    final allMeasured =
-        _measuredColumns.isNotEmpty && _measuredColumns.every((final c) => c != null);
+    final allMeasured = measuredColumns.isNotEmpty && measuredColumns.every((final c) => c != null);
     final page = math.min(
       total,
       before +
@@ -2056,12 +2055,13 @@ class ViewerController extends ChangeNotifier {
   }
 
   int _estimatePagesFor(final int fileIndex) {
+    final measuredColumns = _pageMeasurement._rawColumns;
     final chars = _documentTextOf(fileIndex).length;
     final density = currentPageIsMeasured
         ? math.max(
             1,
             _documentTextOf(_position.fileIndex).length /
-                math.max(1, _measuredColumns[_position.fileIndex]!),
+                math.max(1, measuredColumns[_position.fileIndex]!),
           )
         : 1500.0;
     return chars <= 0 ? 1 : math.max(1, (chars / density).ceil());
@@ -2069,9 +2069,16 @@ class ViewerController extends ChangeNotifier {
 
   /// Whether the current file's column count is measured (not
   /// estimated).
-  bool get currentPageIsMeasured =>
-      _position.fileIndex < _measuredColumns.length &&
-      _measuredColumns[_position.fileIndex] != null;
+  bool get currentPageIsMeasured => _pageMeasurement.isMeasured(_position.fileIndex);
+
+  @override
+  bool get _pageMeasurementIsActive => _started && !_disposed;
+
+  @override
+  int get _pageMeasurementCurrentFileIndex => _position.fileIndex;
+
+  @override
+  void _pageMeasurementDidChange() => notifyListeners();
 
   void _ensureMeasureEngine() {
     if (_measureEngine != null || _disposed) {
@@ -2080,7 +2087,17 @@ class ViewerController extends ChangeNotifier {
     _measureEngine = _engineFactory.createEngine(2, _onEngineMessage);
     // The measurer must lay out with the exact same inputs as the
     // reader engines, or its column count would be for another book.
-    _applySettingsTo(2);
+    unawaited(_applySettingsTo(2));
+  }
+
+  @override
+  Future<void> _loadPageForMeasurement(final int fileIndex) async {
+    _ensureMeasureEngine();
+    final engine = _measureEngine;
+    if (engine == null) {
+      return;
+    }
+    await engine.loadUrl(_server!.urlForItem(fileIndex));
   }
 
   void _onEngineMessage(final Object message, final int source) {
@@ -2088,123 +2105,7 @@ class ViewerController extends ChangeNotifier {
   }
 
   /// Starts (or continues) the background measurement queue.
-  void _scheduleMeasure() {
-    if (_disposed ||
-        pageCountMode == BookPageCountMode.estimate ||
-        !_started ||
-        _measureCursor >= 0) {
-      return;
-    }
-    _loadPageCacheThenMeasure();
-  }
-
-  Future<void> _loadPageCacheThenMeasure() async {
-    if (!_pageCacheLoaded) {
-      _pageCacheLoaded = true;
-      final loader = loadPageCache;
-      if (loader != null) {
-        try {
-          final raw = loader(_cacheKey);
-          if (raw != null) {
-            final decoded = jsonDecode(raw);
-            if (decoded is List) {
-              _measuredColumns = <int?>[for (final item in decoded) item is int ? item : null];
-              while (_measuredColumns.length < book.readingOrder.length) {
-                _measuredColumns.add(null);
-              }
-              notifyListeners();
-            }
-          }
-        } on Object {
-          // Corrupt cache: fall through and measure.
-        }
-      }
-    }
-    _measureNext();
-  }
-
-  Future<void> _measureNext() async {
-    if (_disposed || pageCountMode == BookPageCountMode.estimate || _measureCursor >= 0) {
-      return;
-    }
-    var next = _nextUnmeasured();
-    if (next == null) {
-      onPageMeasureProgress?.call(
-        _measuredColumns.where((final c) => c != null).length,
-        _measuredColumns.length,
-      );
-      _persistPageCache();
-      return;
-    }
-    if (pageCountMode == BookPageCountMode.measureAhead) {
-      // Only ahead of the reader (active file and the following ones).
-      if (next < _position.fileIndex) {
-        next = _nextUnmeasured(from: _position.fileIndex);
-        if (next == null) {
-          onPageMeasureProgress?.call(
-            _measuredColumns.where((final c) => c != null).length,
-            _measuredColumns.length,
-          );
-          return;
-        }
-      }
-    }
-    _ensureMeasureEngine();
-    final engine = _measureEngine;
-    if (engine == null) {
-      return;
-    }
-    _measureCursor = next;
-    try {
-      await engine.loadUrl(_server!.urlForItem(next));
-    } on Object {
-      _measureCursor = -1;
-    }
-  }
-
-  int? _nextUnmeasured({final int from = 0}) {
-    for (var i = from; i < _measuredColumns.length; i++) {
-      if (_measuredColumns[i] == null) {
-        return i;
-      }
-    }
-    return null;
-  }
-
-  Future<void> _persistPageCache() async {
-    _pageCacheByKey[_pageCacheKey] = [..._measuredColumns];
-    final saver = savePageCache;
-    if (saver == null) {
-      return;
-    }
-    try {
-      await saver(_cacheKey, jsonEncode([for (final c in _measuredColumns) c]));
-    } on Object {
-      // Persistence failures are non-fatal.
-    }
-  }
-
-  /// Handles the measurement engine's ReadyEvent: records the real
-  /// column count, then paces the next measurement.
-  Future<void> _onMeasureReady(final int fileIndex, final int columns) async {
-    if (_disposed || fileIndex < 0 || fileIndex >= _measuredColumns.length) {
-      _measureCursor = -1;
-      return;
-    }
-    _measuredColumns[fileIndex] = math.max(1, columns);
-    _measureCursor = -1;
-    onPageMeasureProgress?.call(
-      _measuredColumns.where((final c) => c != null).length,
-      _measuredColumns.length,
-    );
-    await _persistPageCache();
-    if (_disposed) {
-      return;
-    }
-    notifyListeners();
-    _measureTimer?.cancel();
-    _measureTimer = Timer(pageMeasureBatchDelay, _measureNext);
-  }
+  void _scheduleMeasure() => _pageMeasurement.schedule();
 
   final Map<int, EpubCfiDocument> _cfiDocs = <int, EpubCfiDocument>{};
 
