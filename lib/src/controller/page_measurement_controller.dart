@@ -1,27 +1,54 @@
-part of 'viewer_controller.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 
-/// The narrow host surface needed by the page-measurement scheduler.
-abstract interface class _PageMeasurementHost {
-  bool get _pageMeasurementIsActive;
+import 'package:e_livre/e_livre.dart';
 
-  int get _pageMeasurementCurrentFileIndex;
+import '../features/settings/viewer_settings.dart';
 
-  Future<void> _loadPageForMeasurement(int fileIndex);
+/// The narrow runtime port needed by the page-measurement scheduler.
+///
+/// This contract keeps the scheduler independent of the reader controller:
+/// it can observe lifecycle and position, request one page load, and report a
+/// state change, but cannot reach any other controller state.
+abstract interface class PageMeasurementHost {
+  /// Whether measurement work may currently run.
+  bool get pageMeasurementIsActive;
 
-  void _pageMeasurementDidChange();
+  /// The reading-order index currently visible to the reader.
+  int get pageMeasurementCurrentFileIndex;
+
+  /// Loads one reading-order item into the dedicated measurement engine.
+  Future<void> loadPageForMeasurement(int fileIndex);
+
+  /// Reports that measured state changed and dependents should refresh.
+  void pageMeasurementDidChange();
 }
 
 /// Owns book-wide column measurement, cache persistence, and pacing.
-class _PageMeasurementController {
-  _PageMeasurementController({required this.book, required this.host});
+final class PageMeasurementController {
+  /// Creates a scheduler for [book] backed by the narrow runtime [host].
+  PageMeasurementController({required this.book, required this.host});
 
+  /// The book whose reading-order items are measured.
   final Book book;
-  final _PageMeasurementHost host;
 
+  /// The only runtime capabilities the scheduler may use.
+  final PageMeasurementHost host;
+
+  /// Determines whether measurement is disabled, forward-only, or complete.
   BookPageCountMode pageCountMode = BookPageCountMode.measureAhead;
+
+  /// Delay inserted between completed page measurements.
   Duration batchDelay = const Duration(milliseconds: 250);
+
+  /// Optional host-owned persistent cache loader.
   String? Function(String key)? loadCache;
+
+  /// Optional host-owned persistent cache saver.
   Future<void> Function(String key, String json)? saveCache;
+
+  /// Optional progress observer receiving `(measured, total)`.
   void Function(int measured, int total)? onProgress;
 
   List<int?> _measuredColumns = <int?>[];
@@ -36,20 +63,23 @@ class _PageMeasurementController {
 
   String get _cacheKey => 'elivre-pages/$_pageCacheKey/$_layoutSignature';
 
+  /// Immutable view of measured columns; null entries remain estimated.
   List<int?> get columns => List<int?>.unmodifiable(_measuredColumns);
 
-  List<int?> get _rawColumns => _measuredColumns;
-
+  /// Whether an item is currently loaded for measurement.
   bool get isLoading => _measureCursor >= 0;
 
+  /// Number of measured items and total reading-order items.
   (int, int) get progress {
     final measured = _measuredColumns.where((final count) => count != null).length;
     return (measured, _measuredColumns.length);
   }
 
+  /// Whether [fileIndex] has a real measured column count.
   bool isMeasured(final int fileIndex) =>
       fileIndex >= 0 && fileIndex < _measuredColumns.length && _measuredColumns[fileIndex] != null;
 
+  /// Resets or restores counts when the layout fingerprint changes.
   void refreshLayout({required final int signature, required final String bookFingerprint}) {
     if (_disposed || signature == _layoutSignature) {
       return;
@@ -64,10 +94,10 @@ class _PageMeasurementController {
     // The host can refresh during layout. Preserve the original
     // microtask boundary before notifications and queue work.
     scheduleMicrotask(() {
-      if (_disposed || !host._pageMeasurementIsActive) {
+      if (_disposed || !host.pageMeasurementIsActive) {
         return;
       }
-      host._pageMeasurementDidChange();
+      host.pageMeasurementDidChange();
       schedule();
     });
   }
@@ -75,7 +105,7 @@ class _PageMeasurementController {
   /// Starts or continues the background queue.
   void schedule() {
     if (_disposed ||
-        !host._pageMeasurementIsActive ||
+        !host.pageMeasurementIsActive ||
         pageCountMode == BookPageCountMode.estimate ||
         _measureCursor >= 0) {
       return;
@@ -97,7 +127,7 @@ class _PageMeasurementController {
               while (_measuredColumns.length < book.readingOrder.length) {
                 _measuredColumns.add(null);
               }
-              host._pageMeasurementDidChange();
+              host.pageMeasurementDidChange();
             }
           }
         } on Object {
@@ -110,7 +140,7 @@ class _PageMeasurementController {
 
   Future<void> _measureNext() async {
     if (_disposed ||
-        !host._pageMeasurementIsActive ||
+        !host.pageMeasurementIsActive ||
         pageCountMode == BookPageCountMode.estimate ||
         _measureCursor >= 0) {
       return;
@@ -122,7 +152,7 @@ class _PageMeasurementController {
       return;
     }
     if (pageCountMode == BookPageCountMode.measureAhead) {
-      final currentFileIndex = host._pageMeasurementCurrentFileIndex;
+      final currentFileIndex = host.pageMeasurementCurrentFileIndex;
       if (next < currentFileIndex) {
         next = _nextUnmeasured(from: currentFileIndex);
         if (next == null) {
@@ -133,7 +163,7 @@ class _PageMeasurementController {
     }
     _measureCursor = next;
     try {
-      await host._loadPageForMeasurement(next);
+      await host.loadPageForMeasurement(next);
     } on Object {
       _measureCursor = -1;
     }
@@ -172,10 +202,10 @@ class _PageMeasurementController {
     _measureCursor = -1;
     _reportProgress();
     await _persistCache();
-    if (_disposed || !host._pageMeasurementIsActive) {
+    if (_disposed || !host.pageMeasurementIsActive) {
       return;
     }
-    host._pageMeasurementDidChange();
+    host.pageMeasurementDidChange();
     _measureTimer?.cancel();
     _measureTimer = Timer(batchDelay, _measureNext);
   }
@@ -185,6 +215,7 @@ class _PageMeasurementController {
     onProgress?.call(measured, total);
   }
 
+  /// Stops pending paced work and rejects later callbacks.
   void dispose() {
     _disposed = true;
     _measureTimer?.cancel();

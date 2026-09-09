@@ -22,6 +22,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../features/pdf/pdf_reading_mode.dart';
+import 'page_measurement_controller.dart';
 
 export '../features/annotations/viewer_annotations.dart';
 export '../features/navigation/viewer_events.dart';
@@ -29,11 +30,9 @@ export '../features/pdf/pdf_reading_mode.dart';
 export '../features/search/viewer_search.dart';
 export '../features/settings/viewer_settings.dart';
 
-part 'page_measurement_controller.dart';
-
 /// Drives the reader: two preloading webview engines, the book
 /// server, positions, bookmarks, highlights, search and settings.
-class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
+class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   /// Creates a controller for [book].
   ViewerController(
     this.book, {
@@ -61,7 +60,7 @@ class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
        _mathJaxLoader = mathJaxLoader ?? MathJaxLoader(),
        _pdfJsLoader = pdfJsLoader ?? PdfJsLoader(),
        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
-    _pageMeasurement = _PageMeasurementController(book: book, host: this);
+    _pageMeasurement = PageMeasurementController(book: book, host: this);
     readingState = ReadingState.of(book);
     _buildChapterTitles();
     _subscription = bridge.events.listen(_onEvent);
@@ -106,7 +105,7 @@ class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
 
   // --- book-wide page measurement (Opção 2: medição lazy com cache) ---
 
-  late final _PageMeasurementController _pageMeasurement;
+  late final PageMeasurementController _pageMeasurement;
 
   /// Controls the background measuring cost. See [BookPageCountMode].
   BookPageCountMode get pageCountMode => _pageMeasurement.pageCountMode;
@@ -2033,7 +2032,7 @@ class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
   /// Totals come from real measurements where available and density
   /// estimates elsewhere.
   (int, int, bool) get bookPageState {
-    final measuredColumns = _pageMeasurement._rawColumns;
+    final measuredColumns = _pageMeasurement.columns;
     final counts = <int>[
       for (var i = 0; i < measuredColumns.length; i++) measuredColumns[i] ?? _estimatePagesFor(i),
     ];
@@ -2055,7 +2054,7 @@ class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
   }
 
   int _estimatePagesFor(final int fileIndex) {
-    final measuredColumns = _pageMeasurement._rawColumns;
+    final measuredColumns = _pageMeasurement.columns;
     final chars = _documentTextOf(fileIndex).length;
     final density = currentPageIsMeasured
         ? math.max(
@@ -2072,13 +2071,13 @@ class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
   bool get currentPageIsMeasured => _pageMeasurement.isMeasured(_position.fileIndex);
 
   @override
-  bool get _pageMeasurementIsActive => _started && !_disposed;
+  bool get pageMeasurementIsActive => _started && !_disposed;
 
   @override
-  int get _pageMeasurementCurrentFileIndex => _position.fileIndex;
+  int get pageMeasurementCurrentFileIndex => _position.fileIndex;
 
   @override
-  void _pageMeasurementDidChange() => notifyListeners();
+  void pageMeasurementDidChange() => notifyListeners();
 
   void _ensureMeasureEngine() {
     if (_measureEngine != null || _disposed) {
@@ -2091,7 +2090,7 @@ class ViewerController extends ChangeNotifier implements _PageMeasurementHost {
   }
 
   @override
-  Future<void> _loadPageForMeasurement(final int fileIndex) async {
+  Future<void> loadPageForMeasurement(final int fileIndex) async {
     _ensureMeasureEngine();
     final engine = _measureEngine;
     if (engine == null) {
