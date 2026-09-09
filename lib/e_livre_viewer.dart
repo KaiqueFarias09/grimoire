@@ -37,25 +37,22 @@ export 'src/features/annotations/export_model.dart'
         ViewerExportOptions,
         ViewerExportSort,
         ViewerExportLocationLinks;
-export 'src/controller/viewer_controller.dart'
+export 'src/features/annotations/viewer_annotations.dart'
     show
-        ViewerController,
-        ViewerSearchResult,
         ViewerSelection,
-        ViewerWordMark,
-        PdfReadingMode,
         ViewerHighlight,
         ViewerHighlightColor,
         ViewerHighlightDecoration,
-        ViewerBookmark,
-        ViewerLayoutMode,
-        ViewerFootnoteMode,
-        ViewerPageChange,
-        ReadingSessionEvent,
-        BookPageCountMode;
+        ViewerBookmark;
+export 'src/controller/viewer_controller.dart' show ViewerController;
+export 'src/features/navigation/viewer_events.dart' show ViewerPageChange, ReadingSessionEvent;
 export 'src/features/navigation/viewer_position.dart'
     show ViewerLocator, ViewerPosition, ReadingState;
+export 'src/features/pdf/pdf_reading_mode.dart' show PdfReadingMode;
 export 'src/features/rendering/api/viewer_engine.dart' show ViewerEngine, ViewerEngineFactory;
+export 'src/features/search/viewer_search.dart' show ViewerSearchResult, ViewerWordMark;
 export 'src/features/settings/viewer_margins.dart' show ViewerMargins;
+export 'src/features/settings/viewer_settings.dart'
+    show BookPageCountMode, ViewerLayoutMode, ViewerFootnoteMode;
 export 'src/features/settings/viewer_theme.dart' show ViewerTheme;
 export 'src/widgets/elivre_view.dart' show ELivreView;
