@@ -117,6 +117,8 @@ class _ELivreViewState extends State<ELivreView> {
   StreamSubscription<ViewerPageChange>? _pageChangeSub;
   String _pageAnnouncement = '';
   StreamSubscription<FootnoteTapEvent>? _footnoteSub;
+  bool _positionListenerAttached = false;
+  StreamSubscription<ViewerSelection>? _selectionSub;
 
   Future<void> _boot() async {
     final controller = _controller;
@@ -173,9 +175,10 @@ class _ELivreViewState extends State<ELivreView> {
       _wired = true;
       if (widget.onPositionChanged != null) {
         controller.addListener(_notifyPosition);
+        _positionListenerAttached = true;
       }
       if (widget.onSelection != null) {
-        controller.selectionEvents.listen((final selection) {
+        _selectionSub = controller.selectionEvents.listen((final selection) {
           if (mounted) {
             widget.onSelection?.call(selection);
           }
@@ -237,7 +240,10 @@ class _ELivreViewState extends State<ELivreView> {
     _imagePopupSub?.cancel();
     _footnoteSub?.cancel();
     _pageChangeSub?.cancel();
-    _ownedController?.removeListener(_notifyPosition);
+    unawaited(_selectionSub?.cancel());
+    if (_positionListenerAttached) {
+      _controller.removeListener(_notifyPosition);
+    }
     _ownedController?.dispose();
     super.dispose();
   }
