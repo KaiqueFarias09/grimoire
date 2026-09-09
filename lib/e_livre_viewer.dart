@@ -8,6 +8,7 @@ export 'src/features/annotations/annotation_query.dart' show AnnotationQuery, An
 export 'src/features/annotations/export_document.dart'
     show
         ViewerExportModel,
+        ViewerExportSource,
         ViewerExportChapter,
         ViewerExportItem,
         ViewerExportBookmark,

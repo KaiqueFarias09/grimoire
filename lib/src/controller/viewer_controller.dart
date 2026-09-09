@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../features/annotations/annotation_controller.dart';
+import '../features/annotations/export_document.dart' show ViewerExportSource;
 import '../features/annotations/viewer_annotations.dart';
 import '../features/bridge/viewer_bridge.dart';
 import '../features/mathjax/mathjax_loader.dart';
@@ -33,7 +34,8 @@ export '../features/settings/viewer_settings.dart';
 
 /// Drives the reader: two preloading webview engines, the book
 /// server, positions, bookmarks, highlights, search and settings.
-class ViewerController extends ChangeNotifier implements NavigationHost, PageMeasurementHost {
+class ViewerController extends ChangeNotifier
+    implements NavigationHost, PageMeasurementHost, ViewerExportSource {
   /// Creates a controller for [book].
   ViewerController(
     this.book, {
@@ -75,6 +77,12 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
 
   /// The parsed book being read.
   final Book book;
+
+  @override
+  String? get bookTitle => book.metadata.title;
+
+  @override
+  Iterable<String> get bookAuthors => book.metadata.authors;
 
   /// Controls JavaScript authored by book HTML. The default disables
   /// book scripts while keeping eLivreViewer's injected viewer and
@@ -290,9 +298,11 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
   bool get hasSelection => _lastSelection != null && _lastSelection!.text.isNotEmpty;
 
   /// Bookmarks in creation order.
+  @override
   List<ViewerBookmark> get bookmarks => _annotations.bookmarks;
 
   /// Highlights in creation order.
+  @override
   List<ViewerHighlight> get highlights => _annotations.highlights;
 
   /// Whether the book renders as comic pages (image-only items).
@@ -466,6 +476,7 @@ class ViewerController extends ChangeNotifier implements NavigationHost, PageMea
 
   /// The TOC section title covering [fileIndex], or null when the
   /// book's navigation has no titled entry for it.
+  @override
   String? chapterTitleFor(final int fileIndex) {
     if (fileIndex < 0 || fileIndex >= book.readingOrder.length) {
       return null;

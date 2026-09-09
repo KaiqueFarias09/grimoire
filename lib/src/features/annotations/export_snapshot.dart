@@ -1,11 +1,10 @@
-import '../../controller/viewer_controller.dart' show ViewerController;
 import 'annotation_query.dart';
 import 'export_document.dart';
 import 'viewer_annotations.dart';
 
-/// Snapshots a controller's annotations into an immutable export document.
+/// Snapshots annotations into an immutable export document.
 ViewerExportModel buildViewerExportModel(
-  final ViewerController controller, {
+  final ViewerExportSource source, {
   final ViewerExportOptions options = const ViewerExportOptions(),
 }) {
   final highlights = options.includeHighlights
@@ -14,10 +13,10 @@ ViewerExportModel buildViewerExportModel(
           colors: options.colors,
           decorations: options.decorations,
           sort: options.sort,
-        ).apply(controller.highlights)
+        ).apply(source.highlights)
       : const <ViewerHighlight>[];
 
-  final bookmarks = options.includeBookmarks ? [...controller.bookmarks] : <ViewerBookmark>[];
+  final bookmarks = options.includeBookmarks ? [...source.bookmarks] : <ViewerBookmark>[];
   if (options.sort == AnnotationSort.recentlyCreated) {
     bookmarks.sort(
       (final a, final b) => _createdAt(b.createdAtIso).compareTo(_createdAt(a.createdAtIso)),
@@ -59,7 +58,7 @@ ViewerExportModel buildViewerExportModel(
     for (final fileIndex in fileIndexes) {
       chapters.add(
         ViewerExportChapter(
-          title: controller.chapterTitleFor(fileIndex),
+          title: source.chapterTitleFor(fileIndex),
           fileIndex: fileIndex,
           items: [for (final highlight in byFile[fileIndex]!) toItem(highlight)],
         ),
@@ -68,8 +67,8 @@ ViewerExportModel buildViewerExportModel(
   }
 
   return ViewerExportModel(
-    bookTitle: controller.book.metadata.title ?? 'Untitled',
-    bookAuthors: [...controller.book.metadata.authors],
+    bookTitle: source.bookTitle ?? 'Untitled',
+    bookAuthors: [...source.bookAuthors],
     chapters: chapters,
     bookmarks: [for (final bookmark in bookmarks) ViewerExportItem.bookmark(bookmark)],
     options: options,

@@ -19,7 +19,8 @@ void main() {
       PdfReadingMode,
       PdfJsLoader,
       PdfJsSource,
-    ], hasLength(15));
+      ViewerExportSource,
+    ], hasLength(16));
 
     final PdfJsLoader loader = PdfJsLoader(baseUrl: 'https://example.invalid/pdfjs');
     const PdfJsSource source = PdfJsSource(cachePath: '', scriptBase: '/__pdfjs__');
