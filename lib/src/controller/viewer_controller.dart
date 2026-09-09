@@ -22,6 +22,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../features/pdf/pdf_reading_mode.dart';
+import 'navigation_coordinator.dart';
 import 'page_measurement_controller.dart';
 
 export '../features/annotations/viewer_annotations.dart';
@@ -32,7 +33,7 @@ export '../features/settings/viewer_settings.dart';
 
 /// Drives the reader: two preloading webview engines, the book
 /// server, positions, bookmarks, highlights, search and settings.
-class ViewerController extends ChangeNotifier implements PageMeasurementHost {
+class ViewerController extends ChangeNotifier implements NavigationHost, PageMeasurementHost {
   /// Creates a controller for [book].
   ViewerController(
     this.book, {
@@ -61,6 +62,10 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
        _pdfJsLoader = pdfJsLoader ?? PdfJsLoader(),
        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
     _pageMeasurement = PageMeasurementController(book: book, host: this);
+    _navigation = NavigationCoordinator(
+      readingOrderPaths: <String>[for (final item in book.readingOrder) item.name],
+      host: this,
+    );
     readingState = ReadingState.of(book);
     _buildChapterTitles();
     _subscription = bridge.events.listen(_onEvent);
@@ -90,18 +95,11 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
 
   BookServer? _server;
   List<ViewerEngine> _engines = const <ViewerEngine>[];
-  int _active = 0;
-  final List<int?> _loadedFile = <int?>[null, null];
-  final List<bool> _engineReady = <bool>[false, false];
-  final List<_PendingNavigation?> _pending = <_PendingNavigation?>[null, null];
-  int? _swapOnReadySlot;
   Timer? _preloadTimer;
 
   ViewerPosition _position = const ViewerPosition(fileIndex: 0, charOffset: 0);
 
-  /// Where the reader left each file, so backward chapter turns can
-  /// restore the exact column (Calibre forward_scroll_data).
-  final Map<int, _FileExitState> _exitStateByFile = <int, _FileExitState>{};
+  late final NavigationCoordinator _navigation;
 
   // --- book-wide page measurement (Opção 2: medição lazy com cache) ---
 
@@ -168,8 +166,6 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   DateTime? _sessionStart;
   DateTime? _lastActivity;
   int _lastEmittedPagePercent = -1;
-  final List<_HistoryEntry> _history = <_HistoryEntry>[];
-  int _historyIndex = -1;
   Map<int, String> _chapterTitlesByFile = const <int, String>{};
   final MathJaxLoader _mathJaxLoader;
   final PdfJsLoader _pdfJsLoader;
@@ -290,7 +286,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   List<ViewerEngine> get engines => _engines;
 
   /// Which engine slot is visible.
-  int get activeEngineIndex => _active;
+  int get activeEngineIndex => _navigation.activeSlot;
 
   /// The last text selection, when active (drives the highlight
   /// toolbar).
@@ -351,10 +347,12 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
       return;
     }
     final target = pageIndex.clamp(0, pdf.pageCount - 1);
-    _beginJump();
-    const pending = _PendingNavigation(offset: 0);
-    _completeJump(target, pending);
-    await _navigate(target, pending);
+    await _navigation.jumpTo(
+      currentFileIndex: _position.fileIndex,
+      currentOffset: _position.charOffset,
+      fileIndex: target,
+      intent: const NavigationIntent(offset: 0),
+    );
   }
 
   /// Taps on highlights (resolved against [highlights]).
@@ -495,63 +493,19 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   /// Whether [goBack] can return to an earlier jump point. Page turns
   /// never create history; explicit jumps (TOC, links, footnotes,
   /// search, highlights, CFI) do.
-  bool get canGoBack => _historyIndex > 0;
+  bool get canGoBack => _navigation.canGoBack;
 
   /// Whether [goForward] can re-apply a jump undone by [goBack].
-  bool get canGoForward => _historyIndex < _history.length - 1;
+  bool get canGoForward => _navigation.canGoForward;
 
   /// Returns to the previous jump point (Calibre's back).
-  Future<void> goBack() async {
-    if (_historyIndex <= 0) {
-      return;
-    }
-    _historyIndex--;
-    notifyListeners();
-    final entry = _history[_historyIndex];
-    await _navigate(entry.fileIndex, entry.pending);
-  }
+  Future<void> goBack() => _navigation.goBack();
 
   /// Re-applies the next jump point undone by [goBack] (Calibre's
   /// forward).
-  Future<void> goForward() async {
-    if (_historyIndex >= _history.length - 1) {
-      return;
-    }
-    _historyIndex++;
-    notifyListeners();
-    final entry = _history[_historyIndex];
-    await _navigate(entry.fileIndex, entry.pending);
-  }
+  Future<void> goForward() => _navigation.goForward();
 
-  // --- jump history, page changes and reading sessions (internals) ---
-
-  /// Marks the pre-jump position: drops any forward tail (a new jump
-  /// after [goBack] discards forward history) and records where the
-  /// user was, paging included, when it differs from the tail.
-  void _beginJump() {
-    while (_history.length > _historyIndex + 1) {
-      _history.removeLast();
-    }
-    if (_historyIndex >= 0 && _historyEntryMatchesCurrent(_history[_historyIndex])) {
-      return;
-    }
-    _history.add(
-      _HistoryEntry(_position.fileIndex, _PendingNavigation(offset: _position.charOffset)),
-    );
-    _historyIndex = _history.length - 1;
-  }
-
-  /// Marks the jump destination once navigation is committed.
-  void _completeJump(final int target, final _PendingNavigation pending) {
-    _history.add(_HistoryEntry(target, pending));
-    _historyIndex = _history.length - 1;
-    notifyListeners();
-  }
-
-  bool _historyEntryMatchesCurrent(final _HistoryEntry entry) =>
-      entry.fileIndex == _position.fileIndex &&
-      entry.pending.offset != null &&
-      entry.pending.offset == _position.charOffset;
+  // --- page changes and reading sessions (internals) ---
 
   void _noteReadingActivity() {
     final now = DateTime.now();
@@ -613,7 +567,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     void walk(final List<NavPoint> points) {
       for (final point in points) {
         final title = documentText(point.label).replaceAll(RegExp(r'\s+'), ' ').trim();
-        final target = _resolveNavTarget(point.content);
+        final target = _navigation.resolveTarget(point.content, _position.fileIndex);
         if (title.isNotEmpty && target != null) {
           entries.add((target.$1, tocOrder, title));
         }
@@ -652,7 +606,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     if (path.isEmpty || fragment.isEmpty) {
       return null;
     }
-    final fileIndex = _resolveRelativePath(path);
+    final fileIndex = _navigation.resolveRelativePath(path);
     if (fileIndex == null) {
       return null;
     }
@@ -758,11 +712,11 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
       (final message, final source) => bridge.accept(message, source: source),
     );
 
-    _loadedFile[_active] = 0;
-    _engineReady[_active] = false;
+    _navigation.prepareInitial(0);
+    final activeSlot = _navigation.activeSlot;
     debugPrint('🔌 Loading URL: ${server.urlForItem(0)}');
-    await _engines[_active].loadUrl(server.urlForItem(0));
-    debugPrint('🔌 URL loaded on engine $_active');
+    await _engines[activeSlot].loadUrl(server.urlForItem(0));
+    debugPrint('🔌 URL loaded on engine $activeSlot');
   }
 
   @mustCallSuper
@@ -799,15 +753,14 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
 
   /// Navigates to a table-of-contents entry.
   Future<void> goToNavPoint(final NavPoint point) async {
-    final target = _resolveNavTarget(point.content);
-    if (target == null) {
+    final navigated = await _navigation.followContent(
+      point.content,
+      currentFileIndex: _position.fileIndex,
+      currentOffset: _position.charOffset,
+    );
+    if (!navigated) {
       return;
     }
-    final (fileIndex, anchor) = target;
-    _beginJump();
-    final pending = _PendingNavigation(anchor: anchor.isEmpty ? null : anchor);
-    await _navigate(fileIndex, pending);
-    _completeJump(fileIndex, pending);
     _chromeVisible = false;
     notifyListeners();
   }
@@ -822,12 +775,12 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   }
 
   /// Navigates to [position].
-  Future<void> goToPosition(final ViewerPosition position) {
-    _beginJump();
-    final pending = _PendingNavigation(offset: position.charOffset);
-    _completeJump(position.fileIndex, pending);
-    return _navigate(position.fileIndex, pending);
-  }
+  Future<void> goToPosition(final ViewerPosition position) => _navigation.jumpTo(
+    currentFileIndex: _position.fileIndex,
+    currentOffset: _position.charOffset,
+    fileIndex: position.fileIndex,
+    intent: NavigationIntent(offset: position.charOffset),
+  );
 
   // --- bookmarks ---
 
@@ -890,7 +843,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
       cfi: _highlightCfi(selection.fileIndex, selection.start),
     );
     _highlights.add(highlight);
-    await _applyHighlightsToEngine(_active, selection.fileIndex);
+    await _applyHighlightsToEngine(_navigation.activeSlot, selection.fileIndex);
     _notifyAnnotationsChanged();
     notifyListeners();
     return highlight;
@@ -915,19 +868,19 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
       return;
     }
     final highlight = _highlights.removeAt(index);
-    if (_loadedFile[_active] == highlight.fileIndex) {
+    if (_navigation.activeFileIndex == highlight.fileIndex) {
       await _send(<String, Object?>{'action': 'removeHighlight', 'id': id});
     }
     notifyListeners();
   }
 
   /// Jumps to a highlight and flashes its selection.
-  Future<void> goToHighlight(final ViewerHighlight highlight) {
-    _beginJump();
-    final pending = _PendingNavigation(selection: (highlight.start, highlight.end));
-    _completeJump(highlight.fileIndex, pending);
-    return _navigate(highlight.fileIndex, pending);
-  }
+  Future<void> goToHighlight(final ViewerHighlight highlight) => _navigation.jumpTo(
+    currentFileIndex: _position.fileIndex,
+    currentOffset: _position.charOffset,
+    fileIndex: highlight.fileIndex,
+    intent: NavigationIntent(selection: (highlight.start, highlight.end)),
+  );
 
   /// Relocates a persisted highlight against the current text of its
   /// file: exact offsets win, then the highlighted text relocates
@@ -1071,8 +1024,8 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
         if (mark.start >= 0 && mark.end > mark.start) mark,
     ];
     _wordMarksByFile[fileIndex] = valid;
-    if (_loadedFile[_active] == fileIndex) {
-      await _applyWordMarksToEngine(_active, fileIndex);
+    if (_navigation.activeFileIndex == fileIndex) {
+      await _applyWordMarksToEngine(_navigation.activeSlot, fileIndex);
     }
   }
 
@@ -1083,7 +1036,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     for (final cleared in clearedFiles) {
       _wordMarksByFile.remove(cleared);
     }
-    if (fileIndex == null || _loadedFile[_active] == fileIndex) {
+    if (fileIndex == null || _navigation.activeFileIndex == fileIndex) {
       await _send(const <String, Object?>{'action': 'clearWordMarks'});
     }
   }
@@ -1119,7 +1072,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   /// loaded file (media-overlay text targets). Null when the id is
   /// unknown, the file is not loaded, or the engine did not answer.
   Future<int?> fragmentOffset(final int fileIndex, final String fragment) async {
-    if (_loadedFile[_active] != fileIndex) {
+    if (_navigation.activeFileIndex != fileIndex) {
       return null;
     }
     final completer = Completer<int>();
@@ -1193,7 +1146,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     _searchMarkersByFile = markersByFile;
     notifyListeners();
     if (_started) {
-      await _applySearchMarkersToEngine(_active, _position.fileIndex);
+      await _applySearchMarkersToEngine(_navigation.activeSlot, _position.fileIndex);
     }
     return results;
   }
@@ -1208,12 +1161,12 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   }
 
   /// Navigates to and highlights a search result.
-  Future<void> goToSearchResult(final ViewerSearchResult result) {
-    _beginJump();
-    final pending = _PendingNavigation(selection: (result.start, result.end));
-    _completeJump(result.fileIndex, pending);
-    return _navigate(result.fileIndex, pending);
-  }
+  Future<void> goToSearchResult(final ViewerSearchResult result) => _navigation.jumpTo(
+    currentFileIndex: _position.fileIndex,
+    currentOffset: _position.charOffset,
+    fileIndex: result.fileIndex,
+    intent: NavigationIntent(selection: (result.start, result.end)),
+  );
 
   final StreamController<String> _imagePopups = StreamController<String>.broadcast();
   final StreamController<void> _annotationsChanged = StreamController<void>.broadcast();
@@ -1499,7 +1452,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   /// automatically; use this only to mark ranges manually.
   Future<void> showSearchMatches(final List<(int, int)> matches) async {
     _searchCursor = -1;
-    await _sendTo(_active, <String, Object?>{
+    await _sendTo(_navigation.activeSlot, <String, Object?>{
       'action': 'setSearchMatches',
       'matches': [
         for (final (start, end) in matches) <int>[start, end],
@@ -1587,7 +1540,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
       return;
     }
     _highlights[index] = _highlights[index].copyWith(color: color, decoration: decoration);
-    await _applyHighlightsToEngine(_active, _highlights[index].fileIndex);
+    await _applyHighlightsToEngine(_navigation.activeSlot, _highlights[index].fileIndex);
     notifyListeners();
   }
 
@@ -1659,7 +1612,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
         _bookmarks[at] = incoming;
       }
     }
-    await _applyHighlightsToEngine(_active, _position.fileIndex);
+    await _applyHighlightsToEngine(_navigation.activeSlot, _position.fileIndex);
     notifyListeners();
   }
 
@@ -1673,7 +1626,8 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
 
   // --- internals ---
 
-  Future<void> _send(final Map<String, Object?> message) => _sendTo(_active, message);
+  Future<void> _send(final Map<String, Object?> message) =>
+      _sendTo(_navigation.activeSlot, message);
 
   Future<void> _sendTo(final int slot, final Map<String, Object?> message) async {
     if (slot == 2) {
@@ -1691,58 +1645,31 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     await _engines[slot].evaluateJavaScript(ViewerBridge.javaScriptFor(message));
   }
 
-  Future<void> _navigate(final int target, final _PendingNavigation pending) async {
+  @override
+  bool get navigationIsReady => _server != null;
+
+  @override
+  Future<void> loadNavigationItem(final int slot, final int fileIndex) async {
     final server = _server;
-    if (server == null) {
+    if (server == null || slot < 0 || slot >= _engines.length) {
       return;
     }
-    final index = target.clamp(0, server.itemCount - 1);
-    final other = 1 - _active;
-
-    if (_loadedFile[other] == index && _engineReady[other]) {
-      // Fast path: the spare engine already shows the target (the
-      // preloader did its job) — position it and swap instantly.
-      await _applyPending(other, pending);
-      _activate(other);
-      return;
-    }
-    _pending[other] = pending;
-    _loadedFile[other] = index;
-    _engineReady[other] = false;
-    _swapOnReadySlot = other;
-    await _engines[other].loadUrl(server.urlForItem(index));
+    await _engines[slot].loadUrl(server.urlForItem(fileIndex));
   }
 
-  Future<void> _applyPending(final int slot, final _PendingNavigation pending) async {
-    if (pending.offset != null) {
-      await _sendTo(slot, <String, Object?>{'action': 'goToOffset', 'offset': pending.offset});
-    } else if (pending.restoreColumn != null) {
-      await _sendTo(slot, <String, Object?>{
-        'action': 'goToColumn',
-        'column': pending.restoreColumn,
-      });
-    } else if (pending.anchor != null) {
-      await _sendTo(slot, <String, Object?>{'action': 'goToAnchor', 'id': pending.anchor});
-    } else if (pending.atEnd) {
-      await _sendTo(slot, const <String, Object?>{'action': 'goToEnd'});
-    }
-    final selection = pending.selection;
-    if (selection != null) {
-      await _sendTo(slot, <String, Object?>{
-        'action': 'setSelection',
-        'start': selection.$1,
-        'end': selection.$2,
-      });
-      await _sendTo(slot, <String, Object?>{'action': 'goToOffset', 'offset': selection.$1});
-    }
-  }
+  @override
+  Future<void> sendNavigationCommand(final int slot, final Map<String, Object?> command) =>
+      _sendTo(slot, command);
 
-  void _activate(final int slot) {
-    _active = slot;
-    _position = ViewerPosition(fileIndex: _loadedFile[slot] ?? 0, charOffset: 0);
+  @override
+  void navigationDidActivate(final int slot, final int fileIndex) {
+    _position = ViewerPosition(fileIndex: fileIndex, charOffset: 0);
     notifyListeners();
     _schedulePreload();
   }
+
+  @override
+  void navigationStateDidChange() => notifyListeners();
 
   void _schedulePreload() {
     _preloadTimer?.cancel();
@@ -1757,27 +1684,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     if (server == null || !server.isRunning || _engines.length < 2) {
       return;
     }
-    final current = _loadedFile[_active];
-    if (current == null) {
-      return;
-    }
-    final next = current + 1;
-    if (next >= server.itemCount) {
-      return;
-    }
-    final other = 1 - _active;
-    if (_loadedFile[other] == next) {
-      return; // already preloaded
-    }
-    _pending[other] = const _PendingNavigation();
-    _loadedFile[other] = next;
-    _engineReady[other] = false;
-    try {
-      await _engines[other].loadUrl(server.urlForItem(next));
-    } on Object {
-      // Preload failures (disposed, stopped server) are non-fatal;
-      // boundary navigation retries through the slow path.
-    }
+    await _navigation.preloadNext();
   }
 
   Future<void> _onEvent(final ViewerEvent event) async {
@@ -1792,29 +1699,23 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     switch (event) {
       case ReadyEvent():
         final slot = event.source;
-        if (slot < _engineReady.length) {
-          _engineReady[slot] = true;
-        }
+        final ready = _navigation.beginEngineReady(slot);
         await _applySettingsTo(slot);
-        final pending = _pending[slot];
-        _pending[slot] = null;
-        if (pending != null) {
-          await _applyPending(slot, pending);
+        final intent = ready.intent;
+        if (intent != null) {
+          await _navigation.applyIntent(slot, intent);
         }
-        final fileIndex = slot < _loadedFile.length ? _loadedFile[slot] : null;
+        final fileIndex = ready.fileIndex;
         if (fileIndex != null) {
           await _applyHighlightsToEngine(slot, fileIndex);
           await _applySearchMarkersToEngine(slot, fileIndex);
           await _applyWordMarksToEngine(slot, fileIndex);
         }
-        if (_swapOnReadySlot == slot) {
-          _swapOnReadySlot = null;
-          _activate(slot);
-        } else if (slot == _active) {
+        if (!_navigation.finishEngineReady(slot) && slot == _navigation.activeSlot) {
           _schedulePreload();
         }
       case PositionEvent():
-        if (event.source != _active) {
+        if (event.source != _navigation.activeSlot) {
           return;
         }
         final previousFile = _position.fileIndex;
@@ -1830,56 +1731,44 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
         notifyListeners();
         _scheduleMeasure();
       case BoundaryEvent():
-        if (event.source != _active) {
+        if (event.source != _navigation.activeSlot) {
           return;
         }
-        final fromFile = _position.fileIndex;
-        final target = fromFile + event.direction;
-        if (target >= 0 && target < (_server?.itemCount ?? 0)) {
-          final _PendingNavigation pending;
-          if (event.direction < 0) {
-            final exit = _exitStateByFile[target];
-            pending = exit != null
-                ? _PendingNavigation(restoreColumn: exit.column)
-                : const _PendingNavigation(atEnd: true);
-          } else {
-            _exitStateByFile[fromFile] = _FileExitState(
-              column: event.exitColumn,
-              colsPerScreen: event.colsPerScreen,
-            );
-            pending = const _PendingNavigation();
-          }
-          await _navigate(target, pending);
-        }
+        await _navigation.navigateBoundary(
+          fromFile: _position.fileIndex,
+          direction: event.direction,
+          exitColumn: event.exitColumn,
+          columnsPerScreen: event.colsPerScreen,
+        );
       case ChromeToggleEvent():
-        if (event.source == _active) {
+        if (event.source == _navigation.activeSlot) {
           toggleChrome();
         }
       case final PageTurnEvent turn:
         // Fixed-layout pages are one reading-order item per page
         // (comics and PDFs), so a swipe is a cross-file turn, not a
         // column move. Out-of-range turns are ignored.
-        if (event.source == _active) {
+        if (event.source == _navigation.activeSlot) {
           final target = _position.fileIndex + (turn.forward ? 1 : -1);
           if (target >= 0 && target < (_server?.itemCount ?? 0)) {
-            await _navigate(target, const _PendingNavigation(offset: 0));
+            await _navigation.navigate(target, const NavigationIntent(offset: 0));
           }
         }
       case FontSizeBumpEvent bump:
-        if (event.source == _active) {
+        if (event.source == _navigation.activeSlot) {
           setFontSize(_fontSizePx + bump.delta);
         }
       case ShortcutEvent shortcut:
-        if (event.source != _active) {
+        if (event.source != _navigation.activeSlot) {
           return;
         }
         await _handleShortcut(shortcut.name);
       case ViewImageEvent image:
-        if (event.source == _active) {
+        if (event.source == _navigation.activeSlot) {
           _imagePopups.add(image.src);
         }
       case FootnoteTapEvent footnote:
-        if (event.source == _active) {
+        if (event.source == _navigation.activeSlot) {
           if (_footnoteMode == ViewerFootnoteMode.popup) {
             final content = _resolveFootnote(footnote.href);
             if (content != null) {
@@ -1898,7 +1787,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
           await _followInternalLink(footnote.href);
         }
       case MathJaxReadyEvent():
-        if (event.source == _active) {
+        if (event.source == _navigation.activeSlot) {
           // Typesetting re-flowed the columns: real page counts are
           // only measurable now.
           _refreshPageCacheKey();
@@ -1908,7 +1797,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
       case FragmentOffsetEvent fragment:
         _fragmentRequests.remove(fragment.id)?.complete(fragment.offset);
       case LinkTapEvent link:
-        if (event.source != _active) {
+        if (event.source != _navigation.activeSlot) {
           return;
         }
         if (link.external) {
@@ -1922,7 +1811,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
           await _followInternalLink(link.href);
         }
       case SelectionEvent selection:
-        if (event.source != _active) {
+        if (event.source != _navigation.activeSlot) {
           return;
         }
         _lastSelection = selection.text.isEmpty
@@ -1936,7 +1825,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
         _selectionExtents = selection.extents;
         notifyListeners();
       case HighlightTapEvent tap:
-        if (event.source != _active) {
+        if (event.source != _navigation.activeSlot) {
           return;
         }
         for (final highlight in _highlights) {
@@ -2159,10 +2048,12 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
       }
       final offset = doc.offsetForCfi(parsed);
       if (offset != null) {
-        _beginJump();
-        final pending = _PendingNavigation(offset: offset);
-        _completeJump(fileIndex, pending);
-        await _navigate(fileIndex, pending);
+        await _navigation.jumpTo(
+          currentFileIndex: _position.fileIndex,
+          currentOffset: _position.charOffset,
+          fileIndex: fileIndex,
+          intent: NavigationIntent(offset: offset),
+        );
         return true;
       }
     }
@@ -2173,7 +2064,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   Future<void> nextChapter() async {
     final target = _position.fileIndex + 1;
     if (target < (_server?.itemCount ?? 0)) {
-      await _navigate(target, const _PendingNavigation());
+      await _navigation.navigate(target, const NavigationIntent());
     }
   }
 
@@ -2181,7 +2072,7 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   Future<void> previousChapter() async {
     final target = _position.fileIndex - 1;
     if (target >= 0) {
-      await _navigate(target, const _PendingNavigation(atEnd: true));
+      await _navigation.navigate(target, const NavigationIntent(atEnd: true));
     }
   }
 
@@ -2202,20 +2093,24 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
   Future<void> _handleShortcut(final String name) async {
     switch (name) {
       case 'bookStart':
-        _beginJump();
-        const startPending = _PendingNavigation();
-        _completeJump(0, startPending);
-        await _navigate(0, startPending);
+        await _navigation.jumpTo(
+          currentFileIndex: _position.fileIndex,
+          currentOffset: _position.charOffset,
+          fileIndex: 0,
+          intent: const NavigationIntent(),
+        );
         _refreshPageCacheKey();
         _scheduleMeasure();
         if (!_readyCompleter.isCompleted) {
           _readyCompleter.complete();
         }
       case 'bookEnd':
-        _beginJump();
-        const endPending = _PendingNavigation(atEnd: true);
-        _completeJump(book.readingOrder.length - 1, endPending);
-        await _navigate(book.readingOrder.length - 1, endPending);
+        await _navigation.jumpTo(
+          currentFileIndex: _position.fileIndex,
+          currentOffset: _position.charOffset,
+          fileIndex: book.readingOrder.length - 1,
+          intent: const NavigationIntent(atEnd: true),
+        );
       case 'moreColumns':
         await setColumnsPerScreen(math.min(4, _columnsPerScreen + 1));
       case 'fewerColumns':
@@ -2227,109 +2122,15 @@ class ViewerController extends ChangeNotifier implements PageMeasurementHost {
     }
   }
 
-  Future<void> _followInternalLink(final String href) async {
-    final withoutFragment = href.split('#');
-    final path = withoutFragment[0];
-    final fragment = withoutFragment.length > 1 ? withoutFragment[1] : '';
-    if (path.isEmpty) {
-      if (fragment.isNotEmpty) {
-        _beginJump();
-        final pending = _PendingNavigation(anchor: fragment);
-        _completeJump(_position.fileIndex, pending);
-        await _send(<String, Object?>{'action': 'goToAnchor', 'id': fragment});
-      }
-      return;
-    }
-    final target = _resolveRelativePath(path);
-    if (target == null) {
-      return;
-    }
-    _beginJump();
-    final pending = _PendingNavigation(anchor: fragment.isEmpty ? null : fragment);
-    await _navigate(target, pending);
-    _completeJump(target, pending);
-  }
-
-  (int, String)? _resolveNavTarget(final String content) {
-    if (content.isEmpty) {
-      return null;
-    }
-    final parts = content.split('#');
-    final path = parts[0];
-    final fragment = parts.length > 1 ? parts[1] : '';
-
-    if (path.isEmpty) {
-      return (_position.fileIndex, fragment);
-    }
-    final fileIndex = _resolveRelativePath(path);
-    if (fileIndex == null) {
-      return null;
-    }
-    return (fileIndex, fragment);
-  }
-
-  /// Resolves a relative href (from links or the TOC) to a
-  /// reading-order index by suffix/basename match.
-  int? _resolveRelativePath(final String path) {
-    final normalized = path.replaceAll('\\', '/').replaceAll('./', '').toLowerCase();
-    final order = book.readingOrder;
-    for (var i = 0; i < order.length; i++) {
-      final name = order[i].name.toLowerCase();
-      if (name == normalized || name.endsWith('/$normalized')) {
-        return i;
-      }
-    }
-    final base = normalized.split('/').last;
-    if (base.isEmpty) {
-      return null;
-    }
-    for (var i = 0; i < order.length; i++) {
-      if (order[i].name.toLowerCase().endsWith('/$base')) {
-        return i;
-      }
-    }
-    return null;
-  }
+  Future<void> _followInternalLink(final String href) => _navigation.followInternalLink(
+    href,
+    currentFileIndex: _position.fileIndex,
+    currentOffset: _position.charOffset,
+  );
 
   static String _excerpt(final String text, final int start, final int end) {
     final contextStart = start - 40 < 0 ? 0 : start - 40;
     final contextEnd = end + 40 > text.length ? text.length : end + 40;
     return text.substring(contextStart, contextEnd).replaceAll(RegExp(r'\s+'), ' ').trim();
   }
-}
-
-class _FileExitState {
-  const _FileExitState({required this.column, required this.colsPerScreen});
-
-  final int column;
-  final int colsPerScreen;
-}
-
-/// One back/forward history location: a reading-order index plus the
-/// pending navigation that restores it exactly (offset or anchor).
-class _HistoryEntry {
-  const _HistoryEntry(this.fileIndex, this.pending);
-
-  final int fileIndex;
-  final _PendingNavigation pending;
-}
-
-class _PendingNavigation {
-  const _PendingNavigation({
-    this.offset,
-    this.anchor,
-    this.atEnd = false,
-    this.selection,
-    this.restoreColumn,
-  });
-
-  final int? offset;
-  final String? anchor;
-  final bool atEnd;
-  final (int, int)? selection;
-
-  /// Column to land on in the target file, used when returning to a
-  /// chapter the reader had left part-way through (Calibre's
-  /// forward_scroll_data/is_return pair).
-  final int? restoreColumn;
 }
