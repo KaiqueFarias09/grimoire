@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/features/annotations/viewer_annotations.dart';
+import 'viewer_annotations.dart';
 
 /// Ordering shared by annotation browsing and export snapshots.
 enum AnnotationSort {

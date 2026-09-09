@@ -1,8 +1,8 @@
 import 'dart:io' show Platform;
 
-import 'package:e_livre_viewer/src/features/rendering/adapters/inapp_webview_engine.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/webview_flutter_engine.dart';
-import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
+import '../adapters/inapp_webview_engine.dart';
+import '../adapters/webview_flutter_engine.dart';
+import '../api/viewer_engine.dart';
 
 /// Selects the platform adapter at the composition boundary (native
 /// platforms).

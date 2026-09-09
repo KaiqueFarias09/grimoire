@@ -1,7 +1,7 @@
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart' show ViewerController;
-import 'package:e_livre_viewer/src/features/annotations/annotation_query.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_document.dart';
-import 'package:e_livre_viewer/src/features/annotations/viewer_annotations.dart';
+import '../../controller/viewer_controller.dart' show ViewerController;
+import 'annotation_query.dart';
+import 'export_document.dart';
+import 'viewer_annotations.dart';
 
 /// Snapshots a controller's annotations into an immutable export document.
 ViewerExportModel buildViewerExportModel(

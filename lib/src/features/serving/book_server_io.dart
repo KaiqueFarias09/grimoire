@@ -3,13 +3,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
-import 'package:e_livre_viewer/src/features/pdf/pdf_reading_mode.dart';
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
-import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
+
+import '../mathjax/mathjax_component.dart';
+import '../pdf/pdf_reading_mode.dart';
+import '../pdfjs/pdfjs_component.dart';
+import 'book_content.dart';
 
 /// Serves a parsed [Book] over a loopback HTTP server so a WebView
 /// can render it (native platforms).

@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
+import 'mathjax_component.dart';
 
 /// Web variant of the MathJax loader: there is no disk cache, pages
 /// load the component straight from the CDN base (or a host-supplied

@@ -1,7 +1,8 @@
 import 'dart:ui' show Color;
 
-import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:flutter/foundation.dart';
+
+import '../navigation/viewer_position.dart';
 
 /// How a highlight draws over the text. Orthogonal to
 /// [ViewerHighlightColor]: a wavy underline in green is a valid

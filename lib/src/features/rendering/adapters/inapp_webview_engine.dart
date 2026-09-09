@@ -1,8 +1,9 @@
 import 'dart:async';
 
-import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+import '../api/viewer_engine.dart';
 
 /// [ViewerEngine] over `flutter_inappwebview` — covers Windows and
 /// Linux (and all mobile/desktop platforms as a fallback).

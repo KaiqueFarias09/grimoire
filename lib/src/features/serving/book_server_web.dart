@@ -4,14 +4,15 @@ import 'dart:js_interop';
 import 'dart:typed_data';
 
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
-import 'package:e_livre_viewer/src/features/mathjax/mathjax_loader.dart';
-import 'package:e_livre_viewer/src/features/pdf/pdf_reading_mode.dart';
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_loader.dart';
-import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:web/web.dart' as web;
+
+import '../mathjax/mathjax_component.dart';
+import '../mathjax/mathjax_loader.dart';
+import '../pdf/pdf_reading_mode.dart';
+import '../pdfjs/pdfjs_component.dart';
+import '../pdfjs/pdfjs_loader.dart';
+import 'book_content.dart';
 
 /// Serves a parsed [Book] to the reader through same-origin blob
 /// URLs (Flutter web).

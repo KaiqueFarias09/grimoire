@@ -1,9 +1,10 @@
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
-import 'package:e_livre_viewer/src/widgets/annotations_sheet.dart';
-import 'package:e_livre_viewer/src/widgets/search_overlay.dart';
-import 'package:e_livre_viewer/src/widgets/toc_sheet.dart';
 import 'package:flutter/material.dart';
+
+import '../controller/viewer_controller.dart';
+import '../features/settings/viewer_theme.dart';
+import 'annotations_sheet.dart';
+import 'search_overlay.dart';
+import 'toc_sheet.dart';
 
 /// The reader chrome: app bars, selection toolbar and panels that
 /// overlay the webviews. Tap zones live in the viewer JS.

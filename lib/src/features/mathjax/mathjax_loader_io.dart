@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:e_livre_viewer/src/features/mathjax/mathjax_component.dart';
+import 'mathjax_component.dart';
 
 /// Downloads and caches the MathJax component used to render MathML
 /// and TeX (with the mhchem chemistry extension).

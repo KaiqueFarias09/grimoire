@@ -4,24 +4,24 @@ import 'dart:math' as math;
 import 'dart:ui' show Rect;
 
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/annotations/viewer_annotations.dart';
-import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
-import 'package:e_livre_viewer/src/features/mathjax/mathjax_loader.dart';
-import 'package:e_livre_viewer/src/features/navigation/viewer_events.dart';
-import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_loader.dart';
-import 'package:e_livre_viewer/src/features/search/viewer_search.dart';
-import 'package:e_livre_viewer/src/features/serving/book_content.dart';
-import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
-import 'package:e_livre_viewer/src/features/rendering/composition/viewer_engine_selector.dart';
-import 'package:e_livre_viewer/src/features/serving/book_server.dart';
-import 'package:e_livre_viewer/src/features/settings/viewer_margins.dart';
-import 'package:e_livre_viewer/src/features/settings/viewer_settings.dart';
-import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
+import '../features/annotations/viewer_annotations.dart';
+import '../features/bridge/viewer_bridge.dart';
+import '../features/mathjax/mathjax_loader.dart';
+import '../features/navigation/viewer_events.dart';
+import '../features/navigation/viewer_position.dart';
 import '../features/pdf/pdf_reading_mode.dart';
+import '../features/pdfjs/pdfjs_loader.dart';
+import '../features/rendering/api/viewer_engine.dart';
+import '../features/rendering/composition/viewer_engine_selector.dart';
+import '../features/search/viewer_search.dart';
+import '../features/serving/book_content.dart';
+import '../features/serving/book_server.dart';
+import '../features/settings/viewer_margins.dart';
+import '../features/settings/viewer_settings.dart';
+import '../features/settings/viewer_theme.dart';
 import 'navigation_coordinator.dart';
 import 'page_measurement_controller.dart';
 

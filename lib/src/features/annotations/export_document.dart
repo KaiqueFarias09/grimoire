@@ -1,7 +1,8 @@
-import 'package:e_livre_viewer/src/features/annotations/annotation_query.dart';
-import 'package:e_livre_viewer/src/features/annotations/viewer_annotations.dart';
-import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:flutter/foundation.dart';
+
+import '../navigation/viewer_position.dart';
+import 'annotation_query.dart';
+import 'viewer_annotations.dart';
 
 /// Which locator, if any, accompanies each exported item.
 enum ViewerExportLocationLinks {

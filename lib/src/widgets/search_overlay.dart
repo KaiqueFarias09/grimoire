@@ -1,6 +1,7 @@
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:flutter/material.dart';
+
+import '../controller/viewer_controller.dart';
 
 /// Opens the in-book search as a full-screen dialog.
 Future<void> showSearchOverlay(final BuildContext context, final ViewerController controller) {

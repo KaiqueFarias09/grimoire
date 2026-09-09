@@ -1,5 +1,5 @@
-import 'package:e_livre_viewer/src/features/rendering/adapters/iframe_engine.dart';
-import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
+import '../adapters/iframe_engine.dart';
+import '../api/viewer_engine.dart';
 
 /// Selects the platform adapter at the composition boundary (Flutter
 /// web).

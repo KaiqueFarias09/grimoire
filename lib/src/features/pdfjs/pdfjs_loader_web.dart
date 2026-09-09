@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
+import 'pdfjs_component.dart';
 
 /// Web variant of the pdf.js loader: there is no disk cache, pages
 /// load the component straight from the CDN base (or a host-supplied

@@ -1,12 +1,13 @@
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
-import 'package:e_livre_viewer/src/features/serving/book_content.dart';
-import 'package:e_livre_viewer/src/widgets/reader_shell.dart';
 import 'dart:async';
 
+import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
+
+import '../controller/viewer_controller.dart';
+import '../features/bridge/viewer_bridge.dart';
+import '../features/navigation/viewer_position.dart';
+import '../features/serving/book_content.dart';
+import 'reader_shell.dart';
 
 /// Renders a parsed [Book] as a Calibre-style paginated reader.
 ///

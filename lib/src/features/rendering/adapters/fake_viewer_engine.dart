@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:flutter/widgets.dart';
+
+import '../api/viewer_engine.dart';
 
 /// A fake engine for tests: records loaded URLs and evaluated
 /// scripts without a platform webview.

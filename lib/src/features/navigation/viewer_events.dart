@@ -1,5 +1,6 @@
-import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:flutter/foundation.dart';
+
+import 'viewer_position.dart';
 
 /// A page turn: the visible location moved to another page (paged
 /// mode), chapter (any mode), or whole-percent progress (scroll

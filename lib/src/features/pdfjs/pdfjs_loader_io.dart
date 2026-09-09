@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
+import 'pdfjs_component.dart';
 
 /// Downloads and caches the pdf.js runtime used to render PDF pages
 /// in the system webview.

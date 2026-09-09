@@ -1,7 +1,7 @@
-import 'package:e_livre_viewer/src/features/annotations/export_document.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_html.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_markdown.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_plain_text.dart';
+import 'export_document.dart';
+import 'export_html.dart';
+import 'export_markdown.dart';
+import 'export_plain_text.dart';
 
 /// Convenience rendering operations kept above the immutable document layer.
 extension ViewerExportRendering on ViewerExportModel {

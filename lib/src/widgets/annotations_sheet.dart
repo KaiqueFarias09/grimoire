@@ -1,10 +1,11 @@
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/features/annotations/annotation_query.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_document.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_rendering.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../controller/viewer_controller.dart';
+import '../features/annotations/annotation_query.dart';
+import '../features/annotations/export_document.dart';
+import '../features/annotations/export_rendering.dart';
+import '../features/annotations/export_snapshot.dart';
 
 /// Opens the annotation browser (highlights + bookmarks) as a bottom
 /// sheet.

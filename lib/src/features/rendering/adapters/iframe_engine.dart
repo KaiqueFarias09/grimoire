@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
-import 'package:e_livre_viewer/src/features/rendering/api/viewer_engine.dart';
 import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
+
+import '../api/viewer_engine.dart';
 
 /// [ViewerEngine] over a native same-origin `<iframe>` (Flutter web).
 ///

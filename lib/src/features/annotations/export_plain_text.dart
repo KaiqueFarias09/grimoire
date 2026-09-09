@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/features/annotations/export_document.dart';
+import 'export_document.dart';
 
 /// Renders [model] as plain text using the model's build-time options.
 String renderPlainText(final ViewerExportModel model) {
