@@ -23,11 +23,8 @@ export 'src/features/mathjax/mathjax_loader.dart' show MathJaxLoader;
 export 'src/features/narration/text_segmentation.dart' show TextSegment, segmentText;
 export 'src/features/serving/book_content.dart' show BookJavaScriptPolicy;
 export 'package:e_livre/e_livre.dart' show SearchMode;
-export 'src/features/annotations/export_html.dart'
-    show ViewerHtmlExportOptions, ViewerHtmlPartFormatter;
-export 'src/features/annotations/export_markdown.dart'
-    show ViewerMarkdownExportOptions, ViewerMarkdownPartFormatter;
-export 'src/features/annotations/export_model.dart'
+export 'src/features/annotations/annotation_query.dart' show AnnotationQuery, AnnotationSort;
+export 'src/features/annotations/export_document.dart'
     show
         ViewerExportModel,
         ViewerExportChapter,
@@ -35,8 +32,13 @@ export 'src/features/annotations/export_model.dart'
         ViewerExportBookmark,
         ViewerExportItemKind,
         ViewerExportOptions,
-        ViewerExportSort,
         ViewerExportLocationLinks;
+export 'src/features/annotations/export_html.dart'
+    show ViewerHtmlExportOptions, ViewerHtmlPartFormatter;
+export 'src/features/annotations/export_markdown.dart'
+    show ViewerMarkdownExportOptions, ViewerMarkdownPartFormatter;
+export 'src/features/annotations/export_rendering.dart' show ViewerExportRendering;
+export 'src/features/annotations/export_snapshot.dart' show buildViewerExportModel;
 export 'src/features/annotations/viewer_annotations.dart'
     show
         ViewerSelection,

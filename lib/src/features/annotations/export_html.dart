@@ -1,4 +1,4 @@
-import 'package:e_livre_viewer/src/features/annotations/export_model.dart';
+import 'package:e_livre_viewer/src/features/annotations/export_document.dart';
 
 /// Per-part formatter for HTML export. Every callback that returns
 /// null (or is left null) falls back to the default rendering; a

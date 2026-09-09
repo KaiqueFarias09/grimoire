@@ -1,5 +1,8 @@
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/features/annotations/export_model.dart';
+import 'package:e_livre_viewer/src/features/annotations/annotation_query.dart';
+import 'package:e_livre_viewer/src/features/annotations/export_document.dart';
+import 'package:e_livre_viewer/src/features/annotations/export_rendering.dart';
+import 'package:e_livre_viewer/src/features/annotations/export_snapshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -49,48 +52,22 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
 
   bool get _filtersActive => _query.isNotEmpty || _colors.isNotEmpty || _decorations.isNotEmpty;
 
-  List<ViewerHighlight> get _filteredHighlights {
-    final query = _query.trim().toLowerCase();
-    final highlights = widget.controller.highlights.where((final h) {
-      if (_colors.isNotEmpty && !_colors.contains(h.color)) {
-        return false;
-      }
-      if (_decorations.isNotEmpty && !_decorations.contains(h.decoration)) {
-        return false;
-      }
-      if (query.isNotEmpty) {
-        final haystack = '${h.text}\n${h.note ?? ''}'.toLowerCase();
-        if (!haystack.contains(query)) {
-          return false;
-        }
-      }
-      return true;
-    }).toList();
-    if (_sortByCreated) {
-      highlights.sort((final a, final b) {
-        final aAt = DateTime.tryParse(a.createdAtIso) ?? DateTime(2000);
-        final bAt = DateTime.tryParse(b.createdAtIso) ?? DateTime(2000);
-        return bAt.compareTo(aAt);
-      });
-    } else {
-      highlights.sort((final a, final b) {
-        final byFile = a.fileIndex.compareTo(b.fileIndex);
-        return byFile != 0 ? byFile : a.start.compareTo(b.start);
-      });
-    }
-    return highlights;
-  }
+  AnnotationQuery get _annotationQuery => AnnotationQuery(
+    text: _query,
+    colors: _colors.isEmpty ? null : _colors,
+    decorations: _decorations.isEmpty ? null : _decorations,
+    sort: _sortByCreated ? AnnotationSort.recentlyCreated : AnnotationSort.documentOrder,
+    invalidCreatedAt: DateTime(2000),
+  );
 
-  Map<String, List<ViewerHighlight>> get _groupedHighlights {
-    final groups = <String, List<ViewerHighlight>>{};
-    for (final highlight in _filteredHighlights) {
-      final title =
-          widget.controller.chapterTitleFor(highlight.fileIndex) ??
-          'Section ${highlight.fileIndex + 1}';
-      (groups[title] ??= <ViewerHighlight>[]).add(highlight);
-    }
-    return groups;
-  }
+  List<ViewerHighlight> get _filteredHighlights =>
+      _annotationQuery.apply(widget.controller.highlights);
+
+  Map<String, List<ViewerHighlight>> get _groupedHighlights => _annotationQuery.groupBySection(
+    widget.controller.highlights,
+    sectionTitle: (final fileIndex) =>
+        widget.controller.chapterTitleFor(fileIndex) ?? 'Section ${fileIndex + 1}',
+  );
 
   @override
   Widget build(final BuildContext context) {
@@ -311,9 +288,9 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
   }
 
   Future<void> _copyExport(final String format) async {
-    final model = ViewerExportModel.fromController(
+    final model = buildViewerExportModel(
       widget.controller,
-      options: ViewerExportOptions(includeBookmarks: true),
+      options: const ViewerExportOptions(includeBookmarks: true),
     );
     final text = switch (format) {
       'md' => model.toMarkdown(),

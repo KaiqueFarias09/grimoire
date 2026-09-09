@@ -42,7 +42,7 @@ void main() {
   group('ViewerExportModel', () {
     test('groups highlights by chapter with TOC titles', () async {
       await seedAnnotations();
-      final model = ViewerExportModel.fromController(
+      final model = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(includeBookmarks: true),
       );
@@ -58,7 +58,7 @@ void main() {
 
     test('ungrouped model collapses into one chapter', () async {
       await seedAnnotations();
-      final model = ViewerExportModel.fromController(
+      final model = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(groupByChapter: false),
       );
@@ -70,27 +70,27 @@ void main() {
     test('filters by color, decoration and text query', () async {
       await seedAnnotations();
 
-      final yellow = ViewerExportModel.fromController(
+      final yellow = buildViewerExportModel(
         controller,
         options: ViewerExportOptions(colors: {ViewerHighlightColor.yellow}),
       );
       expect(yellow.highlightItems, hasLength(1));
       expect(yellow.highlightItems.first.text, 'Chapter one text here.');
 
-      final wavy = ViewerExportModel.fromController(
+      final wavy = buildViewerExportModel(
         controller,
         options: ViewerExportOptions(decorations: {ViewerHighlightDecoration.wavy}),
       );
       expect(wavy.highlightItems, hasLength(1));
       expect(wavy.highlightItems.first.fileIndex, 1);
 
-      final queried = ViewerExportModel.fromController(
+      final queried = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(textQuery: 'FIRST NOTE'),
       );
       expect(queried.highlightItems, hasLength(1));
 
-      final none = ViewerExportModel.fromController(
+      final none = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(textQuery: 'no such text'),
       );
@@ -101,17 +101,17 @@ void main() {
       await seedAnnotations();
       final options = ViewerExportOptions(
         groupByChapter: false,
-        sort: ViewerExportSort.recentlyCreated,
+        sort: AnnotationSort.recentlyCreated,
       );
-      final model = ViewerExportModel.fromController(controller, options: options);
+      final model = buildViewerExportModel(controller, options: options);
       // h2 (Sep 2) is newer than h1 (Sep 1).
       expect(model.highlightItems.first.text, 'content');
 
-      final docOrder = ViewerExportModel.fromController(
+      final docOrder = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(
           groupByChapter: false,
-          sort: ViewerExportSort.documentOrder,
+          sort: AnnotationSort.documentOrder,
         ),
       );
       expect(docOrder.highlightItems.first.text, 'Chapter one text here.');
@@ -121,7 +121,7 @@ void main() {
   group('Markdown export', () {
     test('default rendering golden', () async {
       await seedAnnotations();
-      final model = ViewerExportModel.fromController(
+      final model = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(
           includeBookmarks: true,
@@ -155,7 +155,7 @@ void main() {
 
     test('callbacks override parts and omit empty returns', () async {
       await seedAnnotations();
-      final model = ViewerExportModel.fromController(controller);
+      final model = buildViewerExportModel(controller);
       final markdown = model.toMarkdown(
         options: ViewerMarkdownExportOptions(
           frontMatter: (final m) => '---\ntitle: ${m.bookTitle}\n---',
@@ -174,14 +174,14 @@ void main() {
 
     test('location links support eLivre and both', () async {
       await seedAnnotations();
-      final both = ViewerExportModel.fromController(
+      final both = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(locationLinks: ViewerExportLocationLinks.both),
       ).toMarkdown();
       expect(both, contains('eLv1:0:0'));
       expect(both, contains('epubcfi'));
 
-      final eLivreOnly = ViewerExportModel.fromController(
+      final eLivreOnly = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(locationLinks: ViewerExportLocationLinks.eLivre),
       ).toMarkdown();
@@ -201,7 +201,7 @@ void main() {
         '"color":{"light":"#add8ff","dark":"#265589"},'
         '"createdAt":"2026-09-03T10:00:00Z"}], "bookmarks": []}',
       );
-      final html = ViewerExportModel.fromController(
+      final html = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(locationLinks: ViewerExportLocationLinks.cfi),
       ).toHtml();
@@ -214,7 +214,7 @@ void main() {
 
     test('fragment mode and custom css', () async {
       await seedAnnotations();
-      final html = ViewerExportModel.fromController(
+      final html = buildViewerExportModel(
         controller,
       ).toHtml(options: const ViewerHtmlExportOptions(includeDocumentShell: false, css: 'body{}'));
       expect(html, isNot(contains('<!DOCTYPE html>')));
@@ -224,7 +224,7 @@ void main() {
 
     test('callback override replaces the highlight markup', () async {
       await seedAnnotations();
-      final html = ViewerExportModel.fromController(controller).toHtml(
+      final html = buildViewerExportModel(controller).toHtml(
         options: ViewerHtmlExportOptions(
           highlight: (final item, final chapter) => '<p data-kind="custom">${item.text}</p>',
         ),
@@ -237,7 +237,7 @@ void main() {
   group('Plain text export', () {
     test('renders chapters, notes and locators', () async {
       await seedAnnotations();
-      final text = ViewerExportModel.fromController(
+      final text = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(
           includeBookmarks: true,
