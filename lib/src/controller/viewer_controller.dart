@@ -1615,7 +1615,7 @@ class ViewerController extends ChangeNotifier {
             .search(
               query,
               mode: mode,
-              caseSensitive: caseSensitive,
+              isCaseSensitive: caseSensitive,
               nearChars: nearChars,
               maxMatches: 500,
             )
