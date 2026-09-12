@@ -1,8 +1,11 @@
 // Headless-Chrome driver for the viewer.js benchmark page.
 //
-// Requires puppeteer-core plus a local Chrome. On first run it
-// installs puppeteer-core into this folder (gitignored) when missing:
+// Requires puppeteer-core plus a local Chrome. Dependencies are
+// pinned by the committed package.json + package-lock.json in this
+// folder; the runner never installs anything on its own and FAILS
+// when node_modules is missing:
 //
+//     cd benchmark/viewer_js && npm ci   # once; installs the lock
 //     node benchmark/viewer_js/run.js
 //
 // Environment overrides:
@@ -15,29 +18,33 @@
 //     OUT          also write the raw payloads to this file as a JSON
 //                  array, one entry per size
 //     WIDTH/HEIGHT viewport in px (default 1200x800)
+//     JSON_OUT     also write the schemaVersion-1 benchmark contract
+//                  report to this file (one record per benchmark row;
+//                  same field names as the Dart suites)
 
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const here = __dirname;
 
+// Fails hard instead of implicitly installing: benchmark results are
+// only comparable when every run used the exact locked driver
+// version, so a silent `npm install` here would quietly change the
+// measurement stack between runs.
 function resolvePuppeteer() {
   try {
     return require('puppeteer-core');
   } catch (error) {
-    console.log('puppeteer-core not found — installing it into benchmark/viewer_js/node_modules …');
-    const result = spawnSync('npm', ['install', '--no-save', '--no-fund', 'puppeteer-core@^24'], {
-      cwd: here,
-      stdio: 'inherit',
-    });
-    if (result.status !== 0) {
-      console.error('npm install failed; run it manually in benchmark/viewer_js and retry.');
-      process.exit(2);
-    }
-    return require('puppeteer-core');
+    console.error(
+      'puppeteer-core is not installed (or not at the locked version). '
+      + 'This folder pins its dependency in package-lock.json — restore it '
+      + 'explicitly and retry:\n'
+      + '    cd ' + here + ' && npm ci'
+    );
+    process.exit(2);
   }
 }
 
@@ -82,7 +89,9 @@ function sizesFromEnv() {
     },
   });
   const payloads = [];
+  let browserVersion = 'unknown-chrome';
   try {
+    browserVersion = await browser.version();
     for (const size of sizes) {
       // Fresh page per size: the harness builds its DOM at load time.
       const page = await browser.newPage();
@@ -104,6 +113,10 @@ function sizesFromEnv() {
     console.error('payloads written to ' + outPath);
   }
 
+  if (process.env.JSON_OUT) {
+    writeContractReport(payloads, browser);
+  }
+
   const failed = payloads.filter((payload) => payload.error);
   if (failed.length) {
     for (const payload of failed) {
@@ -121,6 +134,71 @@ function sizesFromEnv() {
   console.error(error);
   process.exit(1);
 });
+
+// SchemaVersion-1 benchmark contract report: same field names and key
+// order as the Dart suites' JSON output, so one compare tool reads all
+// of them. suite / platform / sdk / commit come from this process and
+// the launched browser; nothing private (no paths beyond the repo
+// layout, no hostnames) is written.
+function writeContractReport(payloads, browser) {
+  let commit = 'unknown';
+  try {
+    commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path.join(here, '..', '..') })
+      .toString().trim();
+  } catch (error) { /* keep 'unknown' */ }
+
+  const sdk = 'Node ' + process.version + ' · ' + browser.version();
+  const records = [];
+  let failed = false;
+  for (const payload of payloads) {
+    if (payload.error) {
+      failed = true;
+    }
+    const baseChecksum = payload.checksum | 0;
+    (payload.rows || []).forEach((row, index) => {
+      const medianUs = row.medianUs;
+      records.push({
+        schemaVersion: 1,
+        suite: 'e_livre_viewer_js',
+        scenario: 'viewer_js — ' + row.name,
+        platform: process.platform + '-' + process.arch,
+        sdk: sdk,
+        commit: commit,
+        fixtureId: 'synthetic-chapter-' + payload.chars,
+        sizeBytes: payload.chars,
+        iterations: row.runs,
+        warmupIterations: 1,
+        medianMicros: round3(medianUs),
+        p95Micros: round3(row.p95Us),
+        throughputPerSecond: medianUs > 0 ? round3(1e6 / medianUs) : 0,
+        checksum: (baseChecksum + index) | 0,
+        status: payload.error ? 'error' : 'ok',
+        meanMicros: round3(row.meanUs),
+        firstMicros: round3(row.firstUs),
+      });
+    });
+  }
+
+  const envelope = {
+    schemaVersion: 1,
+    suite: 'e_livre_viewer_js',
+    generatedAt: new Date().toISOString(),
+    platform: process.platform + '-' + process.arch,
+    sdk: sdk,
+    commit: commit,
+    quickMode: false,
+    status: failed ? 'error' : 'ok',
+    results: records,
+  };
+  const outPath = path.resolve(process.env.JSON_OUT);
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, JSON.stringify(envelope, null, 2) + '\n');
+  console.error('contract report written to ' + outPath);
+}
+
+function round3(value) {
+  return Math.round(value * 1000) / 1000;
+}
 
 // Default invocation: identical shape to the pre-SIZES output.
 function printSingle(payload) {

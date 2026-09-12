@@ -1,0 +1,10 @@
+{
+  "name": "e-livre-viewer-js-bench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headless-Chrome driver dependencies for the viewer.js benchmarks (puppeteer-core). Reproducible via package-lock.json: run `npm ci` here before `node run.js`.",
+  "type": "commonjs",
+  "dependencies": {
+    "puppeteer-core": "^24.10.0"
+  }
+}

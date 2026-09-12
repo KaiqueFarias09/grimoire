@@ -54,6 +54,17 @@
     return (performance.now() - begin) * 1000;
   }
 
+  // Int32 fold over every row's run count and median, plus the boot
+  // character total, carried in the JSON payload. The measured ops
+  // mutate the live DOM (spans, layout, scroll state), so the browser
+  // cannot dead-code-eliminate them; the checksum makes any truncated
+  // or reordered run detectable from the payload alone.
+  var checksumFold = targetChars | 0;
+  function foldRow(row) {
+    checksumFold = ((checksumFold * 31 + row.runs) | 0)
+      + ((Math.round(row.medianUs) * 7) | 0) | 0;
+  }
+
   function summarize(samples) {
     // First timed sample kept separate: repeated wrap/unwrap cycles
     // degrade the heap monotonically, so the median is a steady-state
@@ -300,21 +311,26 @@
     setTimeout(function () {
       // Comparability rows first, unchanged; isolation rows append and
       // may leave annotation spans behind (nothing reads them after).
-      var rows = runSuite(chars).concat(runIsolationSuite(chars));
-      rows.push({
-        name: 'boot (script eval to ready post)',
-        runs: 1,
-        firstUs: bootMs * 1000,
-        medianUs: bootMs * 1000,
-        meanUs: bootMs * 1000,
-        p95Us: bootMs * 1000,
-      });
-      document.getElementById('results').textContent = JSON.stringify({
-        chars: chars,
-        textNodesEstimate: chars / paragraph.length,
-        userAgent: navigator.userAgent,
-        rows: rows,
-      });
+    var bootRow = {
+      name: 'boot (script eval to ready post)',
+      runs: 1,
+      firstUs: bootMs * 1000,
+      medianUs: bootMs * 1000,
+      meanUs: bootMs * 1000,
+      p95Us: bootMs * 1000,
+    };
+    var rows = runSuite(chars).concat(runIsolationSuite(chars));
+    rows.push(bootRow);
+    for (var i = 0; i < rows.length; i++) {
+      foldRow(rows[i]);
+    }
+    document.getElementById('results').textContent = JSON.stringify({
+      chars: chars,
+      textNodesEstimate: chars / paragraph.length,
+      userAgent: navigator.userAgent,
+      checksum: checksumFold,
+      rows: rows,
+    });
       document.title = 'BENCH_DONE';
     }, 50);
   };
