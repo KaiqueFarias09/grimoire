@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/test_book.dart';
@@ -37,32 +40,45 @@ void main() {
     ]);
   });
 
-  test('disposing cancels the paced continuation', () async {
-    final factory = _TrackingViewerEngineFactory();
-    final controller = ViewerController(buildTestBook(), engineFactory: factory)
-      ..pageCountMode = BookPageCountMode.measureAll
-      ..pageMeasureBatchDelay = const Duration(milliseconds: 20);
+  test('disposing cancels the paced continuation', () {
+    // The batch pacing is a real production timer; a controlled clock
+    // fires and re-checks it deterministically.
+    unawaited(
+      fakeAsync((async) async {
+        final factory = _TrackingViewerEngineFactory();
+        final controller = ViewerController(buildTestBook(), engineFactory: factory)
+          ..pageCountMode = BookPageCountMode.measureAll
+          ..pageMeasureBatchDelay = const Duration(milliseconds: 20);
 
-    await controller.start();
-    controller.setLogicalViewport(800, 600);
-    await _waitUntil(() => controller.pageMeasureProgress.$1 == 1);
+        await controller.start();
+        controller.setLogicalViewport(800, 600);
+        async.elapse(const Duration(milliseconds: 20));
 
-    final measurer = factory.engines.singleWhere((final engine) => engine.slot == 2);
-    expect(measurer.loadedUrls, hasLength(1));
+        final measurer = factory.engines.singleWhere((final engine) => engine.slot == 2);
+        expect(measurer.loadedUrls, hasLength(1));
 
-    controller.dispose();
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+        controller.dispose();
+        async.elapse(const Duration(milliseconds: 20));
+        async.flushMicrotasks();
 
-    expect(measurer.loadedUrls, hasLength(1));
+        expect(measurer.loadedUrls, hasLength(1));
+      }),
+    );
   });
 }
 
+/// Drains zero-duration timers and microtasks without wall-clock time.
+Future<void> _settle() async {
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+}
+
 Future<void> _waitUntil(final bool Function() condition) async {
-  for (var attempt = 0; attempt < 100; attempt++) {
+  for (var attempt = 0; attempt < 200; attempt++) {
     if (condition()) {
       return;
     }
-    await Future<void>.delayed(const Duration(milliseconds: 2));
+    await _settle();
   }
   fail('Timed out waiting for page measurement.');
 }
