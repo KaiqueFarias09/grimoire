@@ -1,12 +1,52 @@
 name: CI
 
+# `e_livre_viewer` declares `e_livre: ^3.3.0` (pubspec.yaml). That version is
+# not published on pub.dev yet (pub.dev latest at the time of writing: 2.0.0),
+# so a checkout of this repository alone cannot resolve its dependencies.
+#
+# The workflow therefore has two families of lanes:
+#
+#   * `analyze` / `test` — the isolated lanes. They run this repository alone
+#     against the hosted package and are gated by the `resolution` probe:
+#     while `e_livre` ^3.3.0 is unavailable the lanes are skipped with an
+#     explicit warning instead of hiding a guaranteed dependency-resolution
+#     failure. As soon as the version is published the probe enables the
+#     lanes and their failures are real.
+#   * `integration` — the multi-repo lane. It checks out the sibling eLivre
+#     repository next to this checkout (the same `<parent>/eLivre +
+#     <parent>/e_livre_viewer` layout local development uses), generates the
+#     machine-local pubspec_overrides.yaml in-job via
+#     tool/generate_local_overrides.sh (that file is gitignored and never
+#     committed), then runs analyze + tests against the local stack.
+
 on:
   push:
     branches: [main]
   pull_request:
 
 jobs:
+  resolution:
+    runs-on: ubuntu-latest
+    outputs:
+      hosted: ${{ steps.probe.outputs.hosted }}
+    steps:
+      - id: probe
+        run: |
+          set -euo pipefail
+          latest="$(curl -fsSL https://pub.dev/api/packages/e_livre 2>/dev/null | jq -r '.latest.version' || true)"
+          # `e_livre: ^3.3.0` resolves iff some published version is >= 3.3.0
+          # (published versions only grow, so latest >= min implies resolution).
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" 3.3.0 | sort -V | tail -n1)" = "$latest" ]; then
+            echo "hosted=true" >> "$GITHUB_OUTPUT"
+            echo "e_livre $latest satisfies ^3.3.0: isolated lanes enabled"
+          else
+            echo "hosted=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::e_livre ^3.3.0 is not on pub.dev yet (latest: ${latest:-none}). Isolated analyze/test lanes are skipped until it is published; the integration lane validates the sibling checkouts instead."
+          fi
+
   analyze:
+    needs: resolution
+    if: needs.resolution.outputs.hosted == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +57,8 @@ jobs:
       - run: dart analyze --fatal-infos
 
   test:
+    needs: resolution
+    if: needs.resolution.outputs.hosted == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,3 +67,37 @@ jobs:
           channel: stable
       - run: flutter pub get
       - run: flutter test -j 1
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: e_livre_viewer
+
+      # Sibling checkout, mirroring the local development stack.
+      - uses: actions/checkout@v4
+        with:
+          repository: KaiqueFarias09/eLivre
+          ref: main
+          path: eLivre
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Generate machine-local dependency overrides
+        run: ./tool/generate_local_overrides.sh
+        working-directory: e_livre_viewer
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: e_livre_viewer
+
+      - name: Analyze package source
+        run: dart analyze --fatal-infos
+        working-directory: e_livre_viewer
+
+      - name: Run tests against the sibling stack
+        run: flutter test -j 1
+        working-directory: e_livre_viewer
