@@ -24,6 +24,7 @@ Future<void> runControllerBenchmarks() async {
   _textModelGroup();
   await _searchGroup();
   await _pagesAndCfiGroup();
+  await _navigationGroup();
 }
 
 void _textModelGroup() {
@@ -155,4 +156,29 @@ Future<void> _pagesAndCfiGroup() async {
     note: many.label,
   );
   warmController.dispose();
+}
+
+Future<void> _navigationGroup() async {
+  final group = BenchmarkGroup('Controller — page navigation');
+
+  // First load, Dart side: the boot batch every engine pays before the
+  // first page is interactive (settings, layout mode, fonts, margins),
+  // encoded through the bridge and evaluated by the fake engine.
+  final many = manyChapters;
+  final boot = _controller(many.book);
+  await group.addAsync(
+    'first-load bootstrap (settings batch to engine)',
+    () => boot.setFontSize(17),
+    note: '${many.label} · bridge encode + fake engine eval',
+  );
+  boot.dispose();
+
+  // Steady-state page turns: the Dart-side cost of every next/previous
+  // page (bridge encode plus engine evaluation, position report
+  // handled by the fake engine's synchronous ready).
+  final pager = _controller(many.book);
+  await pager.setFontSize(18);
+  await group.addAsync('nextPage (page turn)', pager.nextPage, note: many.label);
+  await group.addAsync('previousPage (page turn)', pager.previousPage, note: many.label);
+  pager.dispose();
 }

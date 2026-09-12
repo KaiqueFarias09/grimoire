@@ -24,6 +24,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'annotations_benchmarks.dart';
 import 'benchmark_harness.dart';
 import 'controller_benchmarks.dart';
+import 'json_report.dart';
 import 'library_corpus_benchmarks.dart';
 import 'narration_bridge_benchmarks.dart';
 import 'serving_benchmarks.dart';
@@ -41,6 +42,16 @@ Future<void> main() async {
     benchmarkFilter = filter;
   }
   quickMode = Platform.environment['ELIVRE_VIEWER_BENCH_QUICK'] == '1';
+  final jsonTarget = Platform.environment['ELIVRE_VIEWER_BENCH_JSON'];
+  if (jsonTarget != null && jsonTarget.isNotEmpty) {
+    if (jsonTarget == 'stdout') {
+      jsonMode = JsonMode.stdout;
+    } else {
+      jsonMode = JsonMode.file;
+      jsonOutputPath = jsonTarget;
+    }
+  }
+  quickModeEnabled = quickMode;
   printBanner();
   try {
     await runControllerBenchmarks();
@@ -48,10 +59,13 @@ Future<void> main() async {
     await runAnnotationBenchmarks();
     await runNarrationAndBridgeBenchmarks();
     await runLibraryCorpusBenchmarks();
-  } on Object {
+  } on Object catch (error) {
+    runError = '${error.runtimeType}';
     finished.completeError(StateError('A benchmark group crashed; see the output above.'));
+    writeJsonReport();
     rethrow;
   }
   printFooter(started.elapsed);
+  writeJsonReport();
   finished.complete();
 }
