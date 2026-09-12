@@ -63,7 +63,8 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 100));
+    // One settle frame: subscriptions attach during the build above.
+    await tester.pump();
     expect(controller.positionListenerAdditions, greaterThan(0));
     expect(controller.selections.hasListener, isTrue);
 

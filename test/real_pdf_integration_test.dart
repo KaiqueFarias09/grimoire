@@ -11,7 +11,8 @@ void main() {
     addTearDown(controller.dispose);
 
     await controller.start();
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
 
     expect(book, isA<PdfBook>());
     expect(controller.isPdfMode, isTrue);
@@ -20,7 +21,8 @@ void main() {
     expect(await controller.search('foolishness'), isNotEmpty);
 
     await controller.setPdfReadingMode(PdfReadingMode.facsimile);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
 
     expect(controller.pdfReadingMode, PdfReadingMode.facsimile);
     expect(

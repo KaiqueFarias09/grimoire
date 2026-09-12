@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -5,10 +6,17 @@ import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:e_livre_viewer/src/features/serving/book_content.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/test_book.dart';
+
+/// Drains the event loop so the controller's engine-ready pipeline
+/// (settings, highlight and word-mark replay, engine swaps) settles
+/// without any wall-clock sleep. FakeViewerEngine reports readiness
+/// via a microtask, so deterministic queue draining is enough.
+Future<void> settle() => pumpEventQueue();
 
 Book _comicBook() {
   return ComicBook(
@@ -109,37 +117,53 @@ void main() {
       controller.dispose();
     });
 
-    test('start loads the first file into slot 0 and preloads slot 1', () async {
-      await controller.start();
-      // Wait for the preload timer.
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+    test('start loads the first file into slot 0 and preloads slot 1', () {
+      // The preload is a real production timer (500 ms); a controlled
+      // clock fires it deterministically.
+      unawaited(fakeAsync((async) async {
+        final preloadFactory = FakeViewerEngineFactory();
+        final preloadController = ViewerController(buildTestBook(), engineFactory: preloadFactory);
+        await preloadController.start();
+        async.elapse(const Duration(milliseconds: 500));
 
-      expect(factory.engines[0].loadedUrls, hasLength(1));
-      expect(factory.engines[0].loadedUrls.first.path, contains('/book/chapter1.html'));
-      // Slot 1 preloaded chapter 2.
-      expect(
-        factory.engines[1].loadedUrls.map((final u) => u.path).toList(),
-        everyElement(contains('chapter2')),
-      );
+        expect(preloadFactory.engines[0].loadedUrls, hasLength(1));
+        expect(preloadFactory.engines[0].loadedUrls.first.path, contains('/book/chapter1.html'));
+        // Slot 1 preloaded chapter 2.
+        expect(
+          preloadFactory.engines[1].loadedUrls.map((final u) => u.path).toList(),
+          everyElement(contains('chapter2')),
+        );
+
+        preloadController.dispose();
+        async.flushTimers();
+        expect(async.nonPeriodicTimerCount, 0, reason: 'no leaked timers after dispose');
+      }));
     });
 
-    test('boundary forward swaps to the preloaded engine', () async {
-      await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+    test('boundary forward swaps to the preloaded engine', () {
+      unawaited(fakeAsync((async) async {
+        final preloadFactory = FakeViewerEngineFactory();
+        final preloadController = ViewerController(buildTestBook(), engineFactory: preloadFactory);
+        await preloadController.start();
+        async.elapse(const Duration(milliseconds: 500));
 
-      // Simulate the active page hitting the end.
-      factory.engines[0].postMessage({'type': 'fileBoundary', 'direction': 1});
-      await Future<void>.delayed(Duration.zero);
+        // Simulate the active page hitting the end.
+        preloadFactory.engines[0].postMessage({'type': 'fileBoundary', 'direction': 1});
+        async.flushMicrotasks();
 
-      // The spare engine (slot 1) already has chapter2; fast path.
-      expect(controller.activeEngineIndex, 1);
-      // No extra loadUrl on slot 1 (it was already loaded).
-      expect(factory.engines[1].loadedUrls, hasLength(1));
+        // The spare engine (slot 1) already has chapter2; fast path.
+        expect(preloadController.activeEngineIndex, 1);
+        // No extra loadUrl on slot 1 (it was already loaded).
+        expect(preloadFactory.engines[1].loadedUrls, hasLength(1));
+
+        preloadController.dispose();
+        async.flushTimers();
+      }));
     });
 
     test('selection updates lastSelection and enables highlights', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       expect(controller.hasSelection, isFalse);
 
@@ -214,44 +238,61 @@ void main() {
       expect(controller.isComicMode, isFalse);
     });
 
-    test('settings are applied to both engines on ready', () async {
-      await controller.setTheme(ViewerTheme.dark);
-      await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+    test('settings are applied to both engines on ready', () {
+      unawaited(fakeAsync((async) async {
+        final settingsFactory = FakeViewerEngineFactory();
+        final settingsController = ViewerController(
+          buildTestBook(),
+          engineFactory: settingsFactory,
+        );
+        await settingsController.setTheme(ViewerTheme.dark);
+        await settingsController.start();
+        async.elapse(const Duration(milliseconds: 500));
 
-      // Both engines should have received the theme vars.
-      for (final engine in factory.engines) {
-        expect(engine.scripts.where((final s) => s.contains('setVars')), isNotEmpty);
-      }
+        // Both engines should have received the theme vars.
+        for (final engine in settingsFactory.engines) {
+          expect(engine.scripts.where((final s) => s.contains('setVars')), isNotEmpty);
+        }
+
+        settingsController.dispose();
+        async.flushTimers();
+      }));
     });
 
-    test('typography settings reach engines on ready and on change', () async {
-      await controller.setFontFamily('Georgia, serif');
-      await controller.setJustify(true);
-      await controller.setHyphenate(true);
-      expect(controller.fontFamily, 'Georgia, serif');
-      expect(controller.justify, isTrue);
-      expect(controller.hyphenate, isTrue);
+    test('typography settings reach engines on ready and on change', () {
+      unawaited(fakeAsync((async) async {
+        final typeFactory = FakeViewerEngineFactory();
+        final typeController = ViewerController(buildTestBook(), engineFactory: typeFactory);
+        await typeController.setFontFamily('Georgia, serif');
+        await typeController.setJustify(true);
+        await typeController.setHyphenate(true);
+        expect(typeController.fontFamily, 'Georgia, serif');
+        expect(typeController.justify, isTrue);
+        expect(typeController.hyphenate, isTrue);
 
-      await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+        await typeController.start();
+        async.elapse(const Duration(milliseconds: 500));
 
-      for (final engine in factory.engines) {
-        expect(engine.scripts.where((final s) => s.contains('setFontFamily')), isNotEmpty);
-        expect(engine.scripts.where((final s) => s.contains('setTextJustify')), isNotEmpty);
-        expect(engine.scripts.where((final s) => s.contains('setHyphenation')), isNotEmpty);
-      }
+        for (final engine in typeFactory.engines) {
+          expect(engine.scripts.where((final s) => s.contains('setFontFamily')), isNotEmpty);
+          expect(engine.scripts.where((final s) => s.contains('setTextJustify')), isNotEmpty);
+          expect(engine.scripts.where((final s) => s.contains('setHyphenation')), isNotEmpty);
+        }
 
-      await controller.setFontFamily(null);
-      expect(controller.fontFamily, isNull);
+        await typeController.setFontFamily(null);
+        expect(typeController.fontFamily, isNull);
+
+        typeController.dispose();
+        async.flushTimers();
+      }));
     });
 
     test('settings application on ready emits a single batch message', () async {
       await controller.setTheme(ViewerTheme.dark);
       await controller.start();
-      // Wait for the initial ready but not for the preload timer, so
-      // slot 0 sees exactly its own ready-time messages.
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // Settle the initial ready pipeline but do not fire the preload
+      // timer, so slot 0 sees exactly its own ready-time messages.
+      await settle();
 
       final engine = factory.engines[0];
       // One round trip: the batch plus the (empty) highlight replay.
@@ -332,7 +373,7 @@ void main() {
 
     test('quick highlight uses the remembered default style', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       factory.engines[controller.activeEngineIndex].postMessage({
         'type': 'selectionChanged',
@@ -357,7 +398,7 @@ void main() {
 
     test('useHostChrome keeps chrome hidden but reports toggle events', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       final toggles = <ChromeToggleEvent>[];
       final sub = controller.bridge.events.listen((final event) {
@@ -383,7 +424,7 @@ void main() {
 
     test('narration marks reach the engine and clear', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
       final engine = factory.engines[controller.activeEngineIndex];
 
       await controller.markNarrationRange(10, 25, wordStart: 10, wordEnd: 14);
@@ -398,7 +439,7 @@ void main() {
     group('passive word marks', () {
       Future<FakeViewerEngine> startedEngine() async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
         return factory.engines[controller.activeEngineIndex];
       }
 
@@ -469,24 +510,27 @@ void main() {
         });
       });
 
-      test('marks of an inactive file wait for its engine to load', () async {
-        await controller.start();
-        // File 1 is not loaded anywhere yet: the set only lands in the
-        // controller store, nothing reaches the active engine.
-        await controller.setWordMarks(1, const [
-          ViewerWordMark(start: 0, end: 4, state: 'learning'),
-        ]);
-        final activeEngine = factory.engines[controller.activeEngineIndex];
-        expect(activeEngine.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
+      test('marks of an inactive file wait for its engine to load', () {
+        unawaited(fakeAsync((async) async {
+          await controller.start();
+          async.elapse(Duration.zero);
+          // File 1 is not loaded anywhere yet: the set only lands in the
+          // controller store, nothing reaches the active engine.
+          await controller.setWordMarks(1, const [
+            ViewerWordMark(start: 0, end: 4, state: 'learning'),
+          ]);
+          final activeEngine = factory.engines[controller.activeEngineIndex];
+          expect(activeEngine.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
 
-        // The preloader loads file 1 into the spare engine; its ready
-        // event replays that file's marks there.
-        await Future<void>.delayed(const Duration(milliseconds: 600));
-        final spareEngine = factory.engines[1 - controller.activeEngineIndex];
-        expect(
-          payloadsOf(spareEngine.scripts.where((final s) => s.contains('applyWordMarks'))),
-          hasLength(1),
-        );
+          // The preloader loads file 1 into the spare engine; its ready
+          // event replays that file's marks there.
+          async.elapse(const Duration(milliseconds: 500));
+          final spareEngine = factory.engines[1 - controller.activeEngineIndex];
+          expect(
+            payloadsOf(spareEngine.scripts.where((final s) => s.contains('applyWordMarks'))),
+            hasLength(1),
+          );
+        }));
       });
 
       test('clearWordMarks unwraps the page and stops replays', () async {
@@ -519,8 +563,10 @@ void main() {
         expect(engine.scripts.where((final s) => s.contains('"clearWordMarks"')), hasLength(1));
         engine.scripts.clear();
 
-        // No replay on either file's next activation.
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        // A later engine-ready (chapter reload) replays nothing: the
+        // stored sets are gone.
+        await factory.engines[1].loadUrl(Uri.parse('http://localhost/book/chapter2.html'));
+        await settle();
         for (final candidate in factory.engines) {
           expect(candidate.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
         }
@@ -561,7 +607,7 @@ void main() {
 
     test('page changes fire on moves and carry chapter titles', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       final changes = <ViewerPageChange>[];
       final sub = controller.pageChanges.listen(changes.add);
@@ -595,9 +641,9 @@ void main() {
     });
 
     test('reading sessions close after the idle timeout', () async {
-      controller.readingIdleTimeout = const Duration(milliseconds: 80);
+      controller.readingIdleTimeout = const Duration(milliseconds: 50);
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       final sessions = <ReadingSessionEvent>[];
       final sub = controller.readingSessions.listen(sessions.add);
@@ -611,7 +657,9 @@ void main() {
         'chars': 44,
         'frac': 0.1,
       });
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // The session duration is wall-clock based inside the controller,
+      // so give the two activity reports a real gap to measure.
+      await Future<void>.delayed(const Duration(milliseconds: 2));
       factory.engines[controller.activeEngineIndex].postMessage({
         'type': 'positionChanged',
         'column': 0,
@@ -620,14 +668,19 @@ void main() {
         'chars': 44,
         'frac': 0.15,
       });
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      // The idle close is the behavior under test: await the event
+      // instead of sleeping past the timer.
+      await expectLater(
+        controller.readingSessions.first.timeout(const Duration(seconds: 5)),
+        completion(isA<ReadingSessionEvent>()),
+      );
       expect(sessions, hasLength(1));
       expect(sessions.first.duration, greaterThan(Duration.zero));
     });
 
     test('footnote popup mode resolves content without navigating', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
       controller.footnoteMode = ViewerFootnoteMode.popup;
 
       final events = <FootnoteTapEvent>[];
@@ -646,7 +699,7 @@ void main() {
 
     test('footnote navigate mode follows the link without content', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       final events = <FootnoteTapEvent>[];
       final sub = controller.footnoteTapEvents.listen(events.add);
@@ -662,51 +715,66 @@ void main() {
       expect(events.first.html, isNull);
     });
 
-    test('jumps record history; back and forward restore them', () async {
-      await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      expect(controller.canGoBack, isFalse);
+    test('jumps record history; back and forward restore them', () {
+      // Jumping between preloaded engines takes the synchronous fast
+      // path, so the preload timer must have fired first: controlled
+      // clock instead of a fixed wait.
+      unawaited(fakeAsync((async) async {
+        final jumpFactory = FakeViewerEngineFactory();
+        final jumpController = ViewerController(buildTestBook(), engineFactory: jumpFactory);
+        await jumpController.start();
+        async.elapse(const Duration(milliseconds: 500));
+        expect(jumpController.canGoBack, isFalse);
 
-      await controller.goToNavPoint(controller.book.navigation.navPoints[1]);
-      expect(controller.position.fileIndex, 1);
-      expect(controller.canGoBack, isTrue);
-      expect(controller.canGoForward, isFalse);
+        await jumpController.goToNavPoint(jumpController.book.navigation.navPoints[1]);
+        expect(jumpController.position.fileIndex, 1);
+        expect(jumpController.canGoBack, isTrue);
+        expect(jumpController.canGoForward, isFalse);
 
-      await controller.goBack();
-      expect(controller.position.fileIndex, 0);
-      expect(controller.canGoForward, isTrue);
+        await jumpController.goBack();
+        expect(jumpController.position.fileIndex, 0);
+        expect(jumpController.canGoForward, isTrue);
 
-      await controller.goForward();
-      expect(controller.position.fileIndex, 1);
+        await jumpController.goForward();
+        expect(jumpController.position.fileIndex, 1);
 
-      // Another jump from here drops the forward tail.
-      await controller.goToNavPoint(controller.book.navigation.navPoints[0]);
-      expect(controller.position.fileIndex, 0);
-      expect(controller.canGoForward, isFalse);
+        // Another jump from here drops the forward tail.
+        await jumpController.goToNavPoint(jumpController.book.navigation.navPoints[0]);
+        expect(jumpController.position.fileIndex, 0);
+        expect(jumpController.canGoForward, isFalse);
+
+        jumpController.dispose();
+        async.flushTimers();
+      }));
     });
 
-    test('rtl page progression reaches the engines', () async {
+    test('rtl page progression reaches the engines', () {
       expect(controller.rtlPageProgression, isFalse);
 
-      final rtlBook = buildTestBook(pageProgressionDirection: PageProgressionDirection.rtl);
-      final rtlController = ViewerController(rtlBook, engineFactory: factory);
-      addTearDown(rtlController.dispose);
-      expect(rtlController.rtlPageProgression, isTrue);
+      unawaited(fakeAsync((async) async {
+        final rtlBook = buildTestBook(pageProgressionDirection: PageProgressionDirection.rtl);
+        final rtlFactory = FakeViewerEngineFactory();
+        final rtlController = ViewerController(rtlBook, engineFactory: rtlFactory);
+        expect(rtlController.rtlPageProgression, isTrue);
 
-      await rtlController.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      for (final engine in factory.engines.skip(2)) {
-        expect(engine.scripts.where((final s) => s.contains('setPageProgression')), isNotEmpty);
-      }
+        await rtlController.start();
+        async.elapse(const Duration(milliseconds: 500));
+        for (final engine in rtlFactory.engines) {
+          expect(engine.scripts.where((final s) => s.contains('setPageProgression')), isNotEmpty);
+        }
 
-      await rtlController.setReversePageTurnZones(true);
-      expect(rtlController.reversePageTurnZones, isTrue);
+        await rtlController.setReversePageTurnZones(true);
+        expect(rtlController.reversePageTurnZones, isTrue);
+
+        rtlController.dispose();
+        async.flushTimers();
+      }));
     });
 
     group('search modes', () {
       setUp(() async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
       });
 
       test('regex mode matches the raw pattern', () async {
@@ -752,7 +820,7 @@ void main() {
 
     test('per-side margins reach the engine as four values', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       await controller.setMarginsPerSide(
         const ViewerMargins(left: 4, top: 6, right: 8, bottom: 10),
@@ -776,7 +844,7 @@ void main() {
 
     test('capture and apply profile round-trips appearance', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       await controller.setTheme(ViewerTheme.sepia);
       await controller.setFontFamily('Georgia, serif');
@@ -816,7 +884,7 @@ void main() {
 
     test('user stylesheet reaches the engine and the replay', () async {
       await controller.start();
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await settle();
 
       await controller.setUserStylesheet('p { margin: 0; }');
       expect(controller.userStylesheet, 'p { margin: 0; }');
@@ -877,7 +945,7 @@ void main() {
 
       test('start loads the reflowed first page', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         expect(controller.isPdfMode, isTrue);
         expect(controller.isComicMode, isFalse);
@@ -909,18 +977,18 @@ void main() {
 
       test('position carries no CFI for PDFs', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         expect(controller.positionCfi, isNull);
       });
 
       test('switching mode keeps the position', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
         final before = controller.position;
 
         await controller.setPdfReadingMode(PdfReadingMode.facsimile);
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         expect(controller.pdfReadingMode, PdfReadingMode.facsimile);
         expect(controller.position.fileIndex, before.fileIndex);
@@ -929,7 +997,7 @@ void main() {
 
       test('search reaches the reflowed pages', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         final results = await controller.search('Second');
         expect(results, isNotEmpty);
@@ -988,10 +1056,10 @@ void main() {
 
       test('switching to facsimile reloads through the page route', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         await controller.setPdfReadingMode(PdfReadingMode.facsimile);
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         final urls = factory.engines
             .expand((final e) => e.loadedUrls.map((final u) => u.path))
@@ -1023,7 +1091,7 @@ void main() {
 
       test('swipe pageTurn events decode and navigate pages', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         final turns = <PageTurnEvent>[];
         final sub = controller.bridge.events.listen((final event) {
@@ -1046,7 +1114,7 @@ void main() {
 
       test('pageTurn clamps at the reading order limits', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
         expect(controller.position.fileIndex, 0);
 
         // Backward on the first page: ignored.
@@ -1072,7 +1140,7 @@ void main() {
 
       test('goToPdfPage clamps into the page range', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
 
         await controller.goToPdfPage(5);
         await Future<void>.delayed(Duration.zero);
@@ -1087,7 +1155,7 @@ void main() {
         expect(ViewerController(buildTestBook()).positionPageLocator, isNull);
 
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
         expect(controller.positionPageLocator, const PageLocator(pageIndex: 0, total: 2));
 
         await controller.goToPdfPage(1);
@@ -1097,7 +1165,7 @@ void main() {
 
       test('word marks reach the engine on a reflowed PDF page', () async {
         await controller.start();
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+        await settle();
         final engine = factory.engines[controller.activeEngineIndex];
 
         await controller.setWordMarks(0, const [
