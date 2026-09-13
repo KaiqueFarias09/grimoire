@@ -2,10 +2,12 @@
 // parsed book and the WebView — text extraction, search mapping,
 // book-wide page estimation and CFI jumps.
 //
-// Controllers here never call start(): no engines, server or
-// WebView are involved. Search, page state, text extraction and CFI
-// resolution all run against the bare controller, which is exactly
-// the work the reading UI repeats.
+// The text-model, search and pages/CFI groups run against bare
+// controllers (no engines, server or WebView), which is exactly the
+// work the reading UI repeats. The page-navigation group is the
+// exception: it starts real controllers over the fake engine so the
+// bootstrap batch and page turns actually cross the bridge (spied via
+// the engine's recorded scripts).
 
 import 'dart:async';
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -17,6 +19,38 @@ import 'helpers/test_book.dart';
 /// without any wall-clock sleep. FakeViewerEngine reports readiness
 /// via a microtask, so deterministic queue draining is enough.
 Future<void> settle() => pumpEventQueue();
+
+/// A fake engine that reports when chapter 2 is loaded into its
+/// slot: the preload spy for the timer-outcome test.
+class _PreloadSpyEngine extends FakeViewerEngine {
+  _PreloadSpyEngine({required super.slot, required super.onMessage, required this.onChapter2});
+
+  final void Function() onChapter2;
+
+  @override
+  Future<void> loadUrl(final Uri url) async {
+    await super.loadUrl(url);
+    if (url.path.contains('chapter2')) {
+      onChapter2();
+    }
+  }
+}
+
+/// Factory producing [_PreloadSpyEngine]s and exposing the chapter-2
+/// load signal.
+class _PreloadSpyFactory extends FakeViewerEngineFactory {
+  final Completer<void> chapter2Loaded = Completer<void>();
+
+  @override
+  List<ViewerEngine> createPair(final void Function(Object message, int source) onMessage) {
+    final pair = <ViewerEngine>[
+      _PreloadSpyEngine(slot: 0, onMessage: onMessage, onChapter2: chapter2Loaded.complete),
+      _PreloadSpyEngine(slot: 1, onMessage: onMessage, onChapter2: chapter2Loaded.complete),
+    ];
+    engines.addAll(pair.cast<FakeViewerEngine>());
+    return pair;
+  }
+}
 
 Book _comicBook() {
   return ComicBook(
@@ -126,7 +160,8 @@ void main() {
       fakeAsync((async) {
         final preloadFactory = FakeViewerEngineFactory();
         final preloadController = ViewerController(buildTestBook(), engineFactory: preloadFactory);
-        addTearDown(preloadController.dispose);
+        // Disposed inside the zone below: the leak assertion needs the
+        // in-zone dispose to cancel the armed fake timer.
 
         expect(async.nonPeriodicTimerCount, 0);
         preloadController.bridge.accept(const {
@@ -142,7 +177,40 @@ void main() {
         expect(async.nonPeriodicTimerCount, 1);
         async.elapse(const Duration(milliseconds: 1));
         expect(async.nonPeriodicTimerCount, 0, reason: 'the preload ran and cleared the timer');
+
+        // Re-arm, then dispose: disposing must cancel the pending
+        // preload timer instead of leaving it behind.
+        preloadController.bridge.accept(const {
+          'type': 'ready',
+          'chars': 100,
+          'columns': 5,
+        }, source: 0);
+        flushControllerEvents(async);
+        expect(async.nonPeriodicTimerCount, 1, reason: 're-armed');
+
+        preloadController.dispose();
+        async.flushMicrotasks();
+        expect(async.nonPeriodicTimerCount, 0, reason: 'no leaked timers after dispose');
       });
+    });
+
+    test('the armed preload timer loads chapter 2 into the spare slot', () async {
+      // The full preload outcome, executed for real: the production
+      // 500 ms timer fires against a started controller and the spare
+      // engine ends up holding chapter 2. The spy engine completes a
+      // completer when that load happens, so the test awaits the
+      // effect instead of sleeping past the timer.
+      final spyFactory = _PreloadSpyFactory();
+      final preloadController = ViewerController(buildTestBook(), engineFactory: spyFactory);
+      addTearDown(preloadController.dispose);
+      await preloadController.start();
+      await pumpEventQueue();
+
+      await spyFactory.chapter2Loaded.future.timeout(const Duration(seconds: 5));
+
+      final spare = spyFactory.engines[1];
+      expect(spare.loadedUrls, hasLength(1));
+      expect(spare.loadedUrls.single.path, contains('/book/chapter2.html'));
     });
 
     test('start loads the first file into slot 0', () async {
