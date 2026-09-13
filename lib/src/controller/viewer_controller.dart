@@ -207,7 +207,9 @@ class ViewerController extends ChangeNotifier
       return;
     }
     for (var slot = 0; slot < _engines.length; slot++) {
-      _sendTo(slot, <String, Object?>{'action': 'setViewport', 'width': width, 'height': height});
+      unawaited(
+        _sendTo(slot, <String, Object?>{'action': 'setViewport', 'width': width, 'height': height}),
+      );
     }
   }
 
@@ -235,6 +237,9 @@ class ViewerController extends ChangeNotifier
   /// corresponding buttons stay hidden (Calibre's lookup/search-net
   /// are host-provided services).
   void Function(String word)? onLookup;
+
+  /// Host hook for the "search the web for this word" lookup; the
+  /// reader passes the raw query (Calibre's "search dictionary").
   void Function(String query)? onSearchNet;
 
   /// Calibre default template (session.pyj net_search_url).
@@ -251,6 +256,8 @@ class ViewerController extends ChangeNotifier
   String formatNetSearchUrl(final String query) =>
       _netSearchUrl.replaceAll('{q}', Uri.encodeQueryComponent(query));
 
+  /// Installs the URL [template] (with a `{q}` placeholder) used by
+  /// [onSearchNet] lookups.
   void setNetSearchUrl(final String template) {
     _netSearchUrl = template;
   }
@@ -726,7 +733,7 @@ class ViewerController extends ChangeNotifier
   void dispose() {
     _pageMeasurement.dispose();
     _disposed = true;
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     _preloadTimer?.cancel();
     _sessionIdleTimer?.cancel();
     final start = _sessionStart;
@@ -735,13 +742,13 @@ class ViewerController extends ChangeNotifier
       _readingSessions.add(ReadingSessionEvent(startedAt: start, endedAt: last));
     }
     _annotations.dispose();
-    _pageChanges.close();
-    _readingSessions.close();
-    bridge.dispose();
+    unawaited(_pageChanges.close());
+    unawaited(_readingSessions.close());
+    unawaited(bridge.dispose());
     for (final engine in _engines) {
-      engine.dispose();
+      unawaited(engine.dispose());
     }
-    _server?.stop();
+    unawaited(_server?.stop());
     super.dispose();
   }
 
@@ -1237,6 +1244,10 @@ class ViewerController extends ChangeNotifier
   /// reverse_page_turn_zones).
   bool get reversePageTurnZones => _reversePageTurnZones;
 
+  /// Mirrors the page-turn tap zones (right-to-left reading).
+  ///
+  /// Persists the choice to the reader profile and re-applies it to
+  /// the loaded engines.
   Future<void> setReversePageTurnZones(final bool value) async {
     if (value == _reversePageTurnZones) {
       return;
@@ -1444,8 +1455,10 @@ class ViewerController extends ChangeNotifier
     notifyListeners();
   }
 
+  /// Jumps to the next search match (wraps at the book end).
   Future<void> nextSearchMatch() => goToSearchMatch(_searchCursor + 1);
 
+  /// Jumps to the previous search match (wraps at the book start).
   Future<void> previousSearchMatch() => goToSearchMatch(_searchCursor - 1);
 
   /// (current match index, total) — `-1` before the first jump.
@@ -1455,6 +1468,7 @@ class ViewerController extends ChangeNotifier
   /// the current position; wraps at the ends.
   Future<HighlightRecord?> nextAnnotation() => _stepAnnotation(1);
 
+  /// Jumps to the highlight or bookmark preceding the position.
   Future<HighlightRecord?> previousAnnotation() => _stepAnnotation(-1);
 
   Future<HighlightRecord?> _stepAnnotation(final int direction) async {
@@ -1496,6 +1510,8 @@ class ViewerController extends ChangeNotifier
     activeFileIndex: _position.fileIndex,
   );
 
+  /// Shows the chrome when hidden and vice versa. No-op without
+  /// host chrome (the host owns the bars in that mode).
   void toggleChrome() {
     if (_useHostChrome) {
       return;
@@ -1639,7 +1655,7 @@ class ViewerController extends ChangeNotifier
         }
       case final FontSizeBumpEvent bump:
         if (event.source == _navigation.activeSlot) {
-          setFontSize(_fontSizePx + bump.delta);
+          unawaited(setFontSize(_fontSizePx + bump.delta));
         }
       case final ShortcutEvent shortcut:
         if (event.source != _navigation.activeSlot) {
@@ -1954,12 +1970,14 @@ class ViewerController extends ChangeNotifier
     }
   }
 
+  /// Makes the reader chrome visible (idempotent when shown).
   void showChrome() {
     if (!_chromeVisible) {
       toggleChrome();
     }
   }
 
+  /// Makes the reader chrome invisible (idempotent when hidden).
   void hideChrome() {
     if (_chromeVisible) {
       toggleChrome();

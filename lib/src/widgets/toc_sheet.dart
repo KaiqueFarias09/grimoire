@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
 
@@ -23,6 +25,7 @@ Future<void> showTocSheet(final BuildContext context, final ViewerController con
 
 /// The table of contents list with indentation by nesting level.
 class TocSheet extends StatelessWidget {
+  /// Creates the table-of-contents sheet.
   const TocSheet({
     required this.controller,
     required this.scrollController,
@@ -30,8 +33,13 @@ class TocSheet extends StatelessWidget {
     super.key,
   });
 
+  /// Controller the TOC entries navigate.
   final ViewerController controller;
+
+  /// Controls the sheet's list scrolling (initial child size anchor).
   final ScrollController scrollController;
+
+  /// Host-provided sheet close action.
   final VoidCallback? onClose;
 
   @override
@@ -70,8 +78,8 @@ class TocSheet extends StatelessWidget {
                 contentPadding: EdgeInsets.fromLTRB(20.0 + entry.depth * 16, 0, 20, 0),
                 title: Text(entry.point.label, maxLines: 2, overflow: TextOverflow.ellipsis),
                 onTap: () {
-                  Navigator.of(context).maybePop();
-                  controller.goToNavPoint(entry.point);
+                  unawaited(Navigator.of(context).maybePop());
+                  unawaited(controller.goToNavPoint(entry.point));
                 },
               );
             },

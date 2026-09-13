@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -8,26 +10,30 @@ import '../api/viewer_engine.dart';
 class WebviewFlutterEngine extends ViewerEngine {
   /// Creates the engine; the platform webview is created eagerly.
   WebviewFlutterEngine({required super.slot, required super.onMessage}) {
-    _controller =
-        WebViewController.fromPlatformCreationParams(
-            const PlatformWebViewControllerCreationParams(),
-          )
-          ..setJavaScriptMode(JavaScriptMode.unrestricted)
-          ..addJavaScriptChannel(
-            'ELivreBridge',
-            onMessageReceived: (final message) => onMessage(message.message, slot),
-          )
-          ..setNavigationDelegate(
-            NavigationDelegate(
-              onNavigationRequest: (final request) {
-                // Keep the reader inside the loopback server.
-                return request.url.startsWith('http://localhost:') ||
-                        request.url.startsWith('http://127.0.0.1:')
-                    ? NavigationDecision.navigate
-                    : NavigationDecision.prevent;
-              },
-            ),
-          );
+    final controller = WebViewController.fromPlatformCreationParams(
+      const PlatformWebViewControllerCreationParams(),
+    );
+    unawaited(controller.setJavaScriptMode(JavaScriptMode.unrestricted));
+    unawaited(
+      controller.addJavaScriptChannel(
+        'ELivreBridge',
+        onMessageReceived: (final message) => onMessage(message.message, slot),
+      ),
+    );
+    unawaited(
+      controller.setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (final request) {
+            // Keep the reader inside the loopback server.
+            return request.url.startsWith('http://localhost:') ||
+                    request.url.startsWith('http://127.0.0.1:')
+                ? NavigationDecision.navigate
+                : NavigationDecision.prevent;
+          },
+        ),
+      ),
+    );
+    _controller = controller;
     _created = true;
   }
 

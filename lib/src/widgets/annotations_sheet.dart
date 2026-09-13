@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,8 +39,13 @@ class AnnotationsSheet extends StatefulWidget {
     super.key,
   });
 
+  /// Controller whose highlights and bookmarks are listed.
   final ViewerController controller;
+
+  /// Controls the sheet's list scrolling (initial child size anchor).
   final ScrollController scrollController;
+
+  /// Host-provided sheet close action.
   final VoidCallback? onClose;
 
   @override
@@ -211,8 +218,8 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
                   ? null
                   : Text(highlight.note!, maxLines: 1, overflow: TextOverflow.ellipsis),
               onTap: () {
-                Navigator.of(context).maybePop();
-                widget.controller.goToHighlight(highlight);
+                unawaited(Navigator.of(context).maybePop());
+                unawaited(widget.controller.goToHighlight(highlight));
               },
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -257,8 +264,8 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
               'Section ${bookmark.sectionIndex + 1}, character ${bookmark.charOffset}',
             ),
             onTap: () {
-              Navigator.of(context).maybePop();
-              widget.controller.goToBookmark(bookmark);
+              unawaited(Navigator.of(context).maybePop());
+              unawaited(widget.controller.goToBookmark(bookmark));
             },
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline, size: 20),

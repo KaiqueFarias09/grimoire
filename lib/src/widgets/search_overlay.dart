@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
 
@@ -14,8 +16,10 @@ Future<void> showSearchOverlay(final BuildContext context, final ViewerControlle
 /// Search field with mode and case controls plus the result list;
 /// tapping a result jumps to it and marks every match on the page.
 class SearchOverlay extends StatefulWidget {
+  /// Creates the search overlay bound to [controller].
   const SearchOverlay({required this.controller, super.key});
 
+  /// Reader state and commands this overlay drives.
   final ViewerController controller;
 
   @override
@@ -98,7 +102,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                     tooltip: 'Close search',
                     icon: const Icon(Icons.close),
                     onPressed: () {
-                      widget.controller.clearSearch();
+                      unawaited(widget.controller.clearSearch());
                       Navigator.of(context).pop();
                     },
                   ),
@@ -186,7 +190,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                         ),
                         onTap: () {
                           Navigator.of(context).pop();
-                          widget.controller.goToSearchResult(result);
+                          unawaited(widget.controller.goToSearchResult(result));
                         },
                       );
                     },

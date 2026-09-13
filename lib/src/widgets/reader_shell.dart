@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
 
@@ -10,8 +12,10 @@ import 'toc_sheet.dart';
 /// The reader chrome: app bars, selection toolbar and panels that
 /// overlay the webviews. Tap zones live in the viewer JS.
 class ReaderShell extends StatelessWidget {
+  /// Creates a reader shell around [controller].
   const ReaderShell({required this.controller, super.key});
 
+  /// Reader state and commands this shell drives.
   final ViewerController controller;
 
   @override
@@ -133,7 +137,7 @@ class _ThemeButton extends StatelessWidget {
         final next = isDark
             ? ViewerTheme.sepia
             : (controller.theme == ViewerTheme.sepia ? ViewerTheme.light : ViewerTheme.dark);
-        controller.setTheme(next);
+        unawaited(controller.setTheme(next));
       },
     );
   }
@@ -205,13 +209,19 @@ class _FileScrollbar extends StatelessWidget {
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onVerticalDragUpdate: (final details) {
-              controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height);
+              unawaited(
+                controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height),
+              );
             },
             onVerticalDragStart: (final details) {
-              controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height);
+              unawaited(
+                controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height),
+              );
             },
             onTapUp: (final details) {
-              controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height);
+              unawaited(
+                controller.goToFraction(details.globalPosition.dy.clamp(0.0, height) / height),
+              );
             },
             child: Align(
               alignment: Alignment(0, frac * 2 - 1),
@@ -274,8 +284,8 @@ class _SelectionToolbar extends StatelessWidget {
                         controller
                           ..defaultHighlightColor = color
                           ..defaultHighlightDecoration = HighlightDecoration.background;
-                        controller.addHighlightFromSelection();
-                        controller.clearSelection();
+                        unawaited(controller.addHighlightFromSelection());
+                        unawaited(controller.clearSelection());
                       },
                     ),
                   const VerticalDivider(width: 8, indent: 10, endIndent: 10),
@@ -292,8 +302,8 @@ class _SelectionToolbar extends StatelessWidget {
                         controller
                           ..defaultHighlightColor = PaletteHighlightColor.red
                           ..defaultHighlightDecoration = decoration;
-                        controller.addHighlightFromSelection();
-                        controller.clearSelection();
+                        unawaited(controller.addHighlightFromSelection());
+                        unawaited(controller.clearSelection());
                       },
                     ),
                   const VerticalDivider(width: 8, indent: 10, endIndent: 10),

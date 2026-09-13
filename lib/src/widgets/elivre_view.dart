@@ -188,18 +188,20 @@ class _ELivreViewState extends State<ELivreView> {
   }
 
   void _showFootnotePopup(final FootnoteTapEvent event) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (final sheetContext) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.5,
-        maxChildSize: 0.85,
-        builder: (final sheetContext, final scrollController) => _FootnoteSheet(
-          event: event,
-          scrollController: scrollController,
-          onClose: () => Navigator.of(sheetContext).pop(),
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (final sheetContext) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.5,
+          maxChildSize: 0.85,
+          builder: (final sheetContext, final scrollController) => _FootnoteSheet(
+            event: event,
+            scrollController: scrollController,
+            onClose: () => Navigator.of(sheetContext).pop(),
+          ),
         ),
       ),
     );
@@ -212,21 +214,23 @@ class _ELivreViewState extends State<ELivreView> {
   }
 
   void _showImagePopup(final String src) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (final dialogContext) => Dialog.fullscreen(
-        backgroundColor: Colors.transparent,
-        child: GestureDetector(
-          onTap: () => Navigator.of(dialogContext).pop(),
-          child: InteractiveViewer(
-            maxScale: 8,
-            child: Center(
-              child: Image.network(
-                src,
-                fit: BoxFit.contain,
-                errorBuilder: (final context, final error, final stack) =>
-                    const Icon(Icons.broken_image, size: 48, color: Colors.white70),
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierColor: Colors.black87,
+        builder: (final dialogContext) => Dialog.fullscreen(
+          backgroundColor: Colors.transparent,
+          child: GestureDetector(
+            onTap: () => Navigator.of(dialogContext).pop(),
+            child: InteractiveViewer(
+              maxScale: 8,
+              child: Center(
+                child: Image.network(
+                  src,
+                  fit: BoxFit.contain,
+                  errorBuilder: (final context, final error, final stack) =>
+                      const Icon(Icons.broken_image, size: 48, color: Colors.white70),
+                ),
               ),
             ),
           ),
@@ -237,9 +241,9 @@ class _ELivreViewState extends State<ELivreView> {
 
   @override
   void dispose() {
-    _imagePopupSub?.cancel();
-    _footnoteSub?.cancel();
-    _pageChangeSub?.cancel();
+    unawaited(_imagePopupSub?.cancel());
+    unawaited(_footnoteSub?.cancel());
+    unawaited(_pageChangeSub?.cancel());
     unawaited(_selectionSub?.cancel());
     if (_positionListenerAttached) {
       _controller.removeListener(_notifyPosition);
