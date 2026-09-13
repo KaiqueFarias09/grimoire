@@ -16,5 +16,13 @@ example/.steward/
 
 # viewer.js benchmark driver
 benchmark/viewer_js/node_modules/
-# Local sibling-package overrides are development-only.
-pubspec_overrides.yaml
+
+# Machine-local dependency overrides (tool/generate_local_overrides.sh).
+# Never commit: the published contract stays on the hosted constraint.
+/pubspec_overrides.yaml
+
+# Libraries do not commit their lockfile (matches the e_livre package).
+/pubspec.lock
+
+# flutter test --coverage output (tool/coverage_gate.sh)
+/coverage/
