@@ -1592,6 +1592,9 @@ class ViewerController extends ChangeNotifier
         if (!_navigation.finishEngineReady(slot) && slot == _navigation.activeSlot) {
           _schedulePreload();
         }
+        if (!_readyCompleter.isCompleted && slot == _navigation.activeSlot) {
+          _readyCompleter.complete();
+        }
       case PositionEvent():
         if (event.source != _navigation.activeSlot) {
           return;
