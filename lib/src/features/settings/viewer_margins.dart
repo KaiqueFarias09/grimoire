@@ -1,4 +1,9 @@
+import 'package:flutter/cupertino.dart' show EdgeInsets;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show EdgeInsets;
+import 'package:flutter/painting.dart' show EdgeInsets;
+import 'package:flutter/rendering.dart' show EdgeInsets;
+import 'package:flutter/widgets.dart' show EdgeInsets;
 
 /// Per-side page margins in pixels (Calibre's margin_left/top/right/
 /// bottom). In paged mode the left+right pair (horizontal writing) or

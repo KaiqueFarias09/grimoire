@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'dart:ui' show Rect;
 
 import 'package:e_livre/e_livre.dart';
+import 'package:e_livre_viewer/e_livre_viewer.dart' show ELivreView;
+import 'package:e_livre_viewer/src/widgets/elivre_view.dart' show ELivreView;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
@@ -956,8 +958,8 @@ class ViewerController extends ChangeNotifier
       'action': 'ttsMark',
       'start': start,
       'end': end,
-      if (wordStart != null) 'wordStart': wordStart,
-      if (wordEnd != null) 'wordEnd': wordEnd,
+      'wordStart': ?wordStart,
+      'wordEnd': ?wordEnd,
     });
   }
 
@@ -1635,20 +1637,20 @@ class ViewerController extends ChangeNotifier
             await _navigation.navigate(target, const NavigationIntent(offset: 0));
           }
         }
-      case FontSizeBumpEvent bump:
+      case final FontSizeBumpEvent bump:
         if (event.source == _navigation.activeSlot) {
           setFontSize(_fontSizePx + bump.delta);
         }
-      case ShortcutEvent shortcut:
+      case final ShortcutEvent shortcut:
         if (event.source != _navigation.activeSlot) {
           return;
         }
         await _handleShortcut(shortcut.name);
-      case ViewImageEvent image:
+      case final ViewImageEvent image:
         if (event.source == _navigation.activeSlot) {
           _imagePopups.add(image.src);
         }
-      case FootnoteTapEvent footnote:
+      case final FootnoteTapEvent footnote:
         if (event.source == _navigation.activeSlot) {
           if (_footnoteMode == ViewerFootnoteMode.popup) {
             final content = _resolveFootnote(footnote.href);
@@ -1675,9 +1677,9 @@ class ViewerController extends ChangeNotifier
           _scheduleMeasure();
           notifyListeners();
         }
-      case FragmentOffsetEvent fragment:
+      case final FragmentOffsetEvent fragment:
         _fragmentRequests.remove(fragment.id)?.complete(fragment.offset);
-      case LinkTapEvent link:
+      case final LinkTapEvent link:
         if (event.source != _navigation.activeSlot) {
           return;
         }
@@ -1691,7 +1693,7 @@ class ViewerController extends ChangeNotifier
         } else {
           await _followInternalLink(link.href);
         }
-      case SelectionEvent selection:
+      case final SelectionEvent selection:
         if (event.source != _navigation.activeSlot) {
           return;
         }
@@ -1705,7 +1707,7 @@ class ViewerController extends ChangeNotifier
               );
         _selectionExtents = selection.extents;
         notifyListeners();
-      case HighlightTapEvent tap:
+      case final HighlightTapEvent tap:
         if (event.source != _navigation.activeSlot) {
           return;
         }

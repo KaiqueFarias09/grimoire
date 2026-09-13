@@ -1,7 +1,6 @@
-import 'dart:ui' show Rect;
-
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Rect;
 
 /// Events flowing from the viewer JS to Dart.
 ///

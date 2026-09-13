@@ -79,7 +79,7 @@ void main() {
 
       final wavy = buildViewerExportModel(
         controller,
-        options: ViewerExportOptions(decorations: {HighlightDecoration.wavy}),
+        options: const ViewerExportOptions(decorations: {HighlightDecoration.wavy}),
       );
       expect(wavy.highlightItems, hasLength(1));
       expect(wavy.highlightItems.first.fileIndex, 1);
@@ -99,7 +99,7 @@ void main() {
 
     test('sorts by document order or creation date', () async {
       await seedAnnotations();
-      final options = ViewerExportOptions(
+      final options = const ViewerExportOptions(
         groupByChapter: false,
         sort: AnnotationSort.recentlyCreated,
       );
