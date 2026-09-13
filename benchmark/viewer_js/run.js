@@ -114,7 +114,7 @@ function sizesFromEnv() {
   }
 
   if (process.env.JSON_OUT) {
-    writeContractReport(payloads, browser);
+    writeContractReport(payloads, browserVersion);
   }
 
   const failed = payloads.filter((payload) => payload.error);
@@ -140,14 +140,14 @@ function sizesFromEnv() {
 // of them. suite / platform / sdk / commit come from this process and
 // the launched browser; nothing private (no paths beyond the repo
 // layout, no hostnames) is written.
-function writeContractReport(payloads, browser) {
+function writeContractReport(payloads, browserVersion) {
   let commit = 'unknown';
   try {
     commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path.join(here, '..', '..') })
       .toString().trim();
   } catch (error) { /* keep 'unknown' */ }
 
-  const sdk = 'Node ' + process.version + ' · ' + browser.version();
+  const sdk = 'Node ' + process.version + ' · ' + browserVersion;
   const records = [];
   let failed = false;
   for (const payload of payloads) {
