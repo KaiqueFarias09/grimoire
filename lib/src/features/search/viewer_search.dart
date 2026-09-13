@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 /// A search hit inside the book.
 @immutable
 class ViewerSearchResult {
+  /// Creates a search result.
   const ViewerSearchResult({
     required this.fileIndex,
     required this.start,
@@ -15,6 +16,8 @@ class ViewerSearchResult {
 
   /// Character range of the hit (documentText space).
   final int start;
+
+  /// End offset in the document text (exclusive).
   final int end;
 
   /// Context around the hit.

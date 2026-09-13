@@ -7,8 +7,8 @@ import 'dart:math' as math;
 /// reading-order item so the chrome can show "Book page 83 of 365".
 ///
 /// Given the text length of each reading-order item and the real
-/// measurement of the active file ([activeColumns] columns for its
-/// [activeFileChars] characters), estimates each item's page count and
+/// measurement of the active file (`activeColumns` columns for its
+/// `activeFileChars` characters), estimates each item's page count and
 /// returns (current book page, estimated book total, per-file counts).
 (int, int, List<int>) estimateBookPages({
   required final List<int> fileChars,

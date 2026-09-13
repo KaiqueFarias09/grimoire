@@ -63,6 +63,7 @@ class ViewerTheme {
     };
   }
 
+  /// Returns a theme with the supplied fields replaced.
   ViewerTheme copyWith({
     final Color? background,
     final Color? foreground,

@@ -41,5 +41,7 @@ abstract class ViewerEngineFactory {
     final void Function(Object message, int source) onMessage,
   );
 
+  /// Creates the engine pair (active slot 0 and preloading slot 1)
+  /// wired to the host [onMessage] callback.
   List<ViewerEngine> createPair(final void Function(Object message, int source) onMessage);
 }

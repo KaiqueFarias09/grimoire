@@ -7,9 +7,13 @@ import '../api/viewer_engine.dart';
 /// A fake engine for tests: records loaded URLs and evaluated
 /// scripts without a platform webview.
 class FakeViewerEngine extends ViewerEngine {
+  /// Creates a fake engine for [slot].
   FakeViewerEngine({required super.slot, required super.onMessage});
 
+  /// URLs passed to [loadUrl], in load order.
   final List<Uri> loadedUrls = <Uri>[];
+
+  /// JavaScript payloads passed to evaluateJavaScript, in order.
   final List<String> scripts = <String>[];
   bool _created = true;
 
@@ -51,6 +55,7 @@ class FakeViewerEngine extends ViewerEngine {
 
 /// Factory producing [FakeViewerEngine] pairs.
 class FakeViewerEngineFactory extends ViewerEngineFactory {
+  /// Every engine produced by this factory, in creation order.
   final List<FakeViewerEngine> engines = <FakeViewerEngine>[];
 
   @override
