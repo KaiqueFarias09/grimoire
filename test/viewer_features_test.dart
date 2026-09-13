@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -10,6 +9,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'helpers/event_flush.dart';
 import 'helpers/test_book.dart';
 
 /// Drains the event loop so the controller's engine-ready pipeline
@@ -117,48 +117,67 @@ void main() {
       controller.dispose();
     });
 
-    test('start loads the first file into slot 0 and preloads slot 1', () {
-      // The preload is a real production timer (500 ms); a controlled
-      // clock fires it deterministically.
-      unawaited(fakeAsync((async) async {
+    test('a non-swap ready on the active slot arms the 500 ms preload timer', () {
+      // Production re-arms the preload on every ready of the active
+      // slot that did not swap engines. The controller lives inside
+      // the fake zone so both the bridge event and the resulting
+      // timer are under the controlled clock; the real book server is
+      // not needed to observe the scheduling contract.
+      fakeAsync((async) {
         final preloadFactory = FakeViewerEngineFactory();
         final preloadController = ViewerController(buildTestBook(), engineFactory: preloadFactory);
-        await preloadController.start();
-        async.elapse(const Duration(milliseconds: 500));
+        addTearDown(preloadController.dispose);
 
-        expect(preloadFactory.engines[0].loadedUrls, hasLength(1));
-        expect(preloadFactory.engines[0].loadedUrls.first.path, contains('/book/chapter1.html'));
-        // Slot 1 preloaded chapter 2.
-        expect(
-          preloadFactory.engines[1].loadedUrls.map((final u) => u.path).toList(),
-          everyElement(contains('chapter2')),
-        );
+        expect(async.nonPeriodicTimerCount, 0);
+        preloadController.bridge.accept(const {
+          'type': 'ready',
+          'chars': 100,
+          'columns': 5,
+        }, source: 0);
+        flushControllerEvents(async);
+        expect(async.nonPeriodicTimerCount, 1, reason: 'the preload timer is armed');
 
-        preloadController.dispose();
-        async.flushTimers();
-        expect(async.nonPeriodicTimerCount, 0, reason: 'no leaked timers after dispose');
-      }));
+        // It fires exactly once, after the declared 500 ms.
+        async.elapse(const Duration(milliseconds: 499));
+        expect(async.nonPeriodicTimerCount, 1);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(async.nonPeriodicTimerCount, 0, reason: 'the preload ran and cleared the timer');
+      });
     });
 
-    test('boundary forward swaps to the preloaded engine', () {
-      unawaited(fakeAsync((async) async {
-        final preloadFactory = FakeViewerEngineFactory();
-        final preloadController = ViewerController(buildTestBook(), engineFactory: preloadFactory);
-        await preloadController.start();
-        async.elapse(const Duration(milliseconds: 500));
+    test('start loads the first file into slot 0', () async {
+      final preloadFactory = FakeViewerEngineFactory();
+      final preloadController = ViewerController(buildTestBook(), engineFactory: preloadFactory);
+      addTearDown(preloadController.dispose);
+      await preloadController.start();
+      await pumpEventQueue();
 
-        // Simulate the active page hitting the end.
-        preloadFactory.engines[0].postMessage({'type': 'fileBoundary', 'direction': 1});
-        async.flushMicrotasks();
+      expect(preloadFactory.engines[0].loadedUrls, hasLength(1));
+      expect(preloadFactory.engines[0].loadedUrls.first.path, contains('/book/chapter1.html'));
+    });
 
-        // The spare engine (slot 1) already has chapter2; fast path.
-        expect(preloadController.activeEngineIndex, 1);
-        // No extra loadUrl on slot 1 (it was already loaded).
-        expect(preloadFactory.engines[1].loadedUrls, hasLength(1));
+    test('boundary forward swaps to the already loaded engine', () async {
+      await controller.start();
+      await settle();
+      // Walk to chapter 2 and back: after the round trip the active
+      // slot holds chapter 1 and the spare slot holds a ready
+      // chapter 2 - the exact state a preload produces.
+      await controller.goToNavPoint(controller.book.navigation.navPoints[1]);
+      await pumpEventQueue();
+      await controller.goToNavPoint(controller.book.navigation.navPoints[0]);
+      await pumpEventQueue();
 
-        preloadController.dispose();
-        async.flushTimers();
-      }));
+      // Simulate the active page hitting the end.
+      factory.engines[controller.activeEngineIndex].postMessage({
+        'type': 'fileBoundary',
+        'direction': 1,
+      });
+      await pumpEventQueue();
+
+      // The spare engine (slot 1) already has chapter2; fast path.
+      expect(controller.activeEngineIndex, 1);
+      // No extra loadUrl on slot 1 (it was already loaded).
+      expect(factory.engines[1].loadedUrls, hasLength(1));
     });
 
     test('selection updates lastSelection and enables highlights', () async {
@@ -238,53 +257,56 @@ void main() {
       expect(controller.isComicMode, isFalse);
     });
 
-    test('settings are applied to both engines on ready', () {
-      unawaited(fakeAsync((async) async {
-        final settingsFactory = FakeViewerEngineFactory();
-        final settingsController = ViewerController(
-          buildTestBook(),
-          engineFactory: settingsFactory,
-        );
-        await settingsController.setTheme(ViewerTheme.dark);
-        await settingsController.start();
-        async.elapse(const Duration(milliseconds: 500));
+    test('settings are applied to both engines on ready', () async {
+      final settingsFactory = FakeViewerEngineFactory();
+      final settingsController = ViewerController(buildTestBook(), engineFactory: settingsFactory);
+      addTearDown(settingsController.dispose);
+      await settingsController.setTheme(ViewerTheme.dark);
+      await settingsController.start();
+      await pumpEventQueue();
 
-        // Both engines should have received the theme vars.
-        for (final engine in settingsFactory.engines) {
-          expect(engine.scripts.where((final s) => s.contains('setVars')), isNotEmpty);
-        }
+      // A ready replay on the spare engine re-applies the settings,
+      // exactly as the preloader's ready handshake does.
+      await settingsFactory.engines[1].loadUrl(
+        Uri.parse(settingsController.bookServerUrlFor('chapter2.html')!),
+      );
+      await pumpEventQueue();
 
-        settingsController.dispose();
-        async.flushTimers();
-      }));
+      // Both engines should have received the theme vars.
+      for (final engine in settingsFactory.engines) {
+        expect(engine.scripts.where((final s) => s.contains('setVars')), isNotEmpty);
+      }
     });
 
-    test('typography settings reach engines on ready and on change', () {
-      unawaited(fakeAsync((async) async {
-        final typeFactory = FakeViewerEngineFactory();
-        final typeController = ViewerController(buildTestBook(), engineFactory: typeFactory);
-        await typeController.setFontFamily('Georgia, serif');
-        await typeController.setJustify(true);
-        await typeController.setHyphenate(true);
-        expect(typeController.fontFamily, 'Georgia, serif');
-        expect(typeController.justify, isTrue);
-        expect(typeController.hyphenate, isTrue);
+    test('typography settings reach engines on ready and on change', () async {
+      final typeFactory = FakeViewerEngineFactory();
+      final typeController = ViewerController(buildTestBook(), engineFactory: typeFactory);
+      addTearDown(typeController.dispose);
+      await typeController.setFontFamily('Georgia, serif');
+      await typeController.setJustify(true);
+      await typeController.setHyphenate(true);
+      expect(typeController.fontFamily, 'Georgia, serif');
+      expect(typeController.justify, isTrue);
+      expect(typeController.hyphenate, isTrue);
 
-        await typeController.start();
-        async.elapse(const Duration(milliseconds: 500));
+      await typeController.start();
+      await pumpEventQueue();
 
-        for (final engine in typeFactory.engines) {
-          expect(engine.scripts.where((final s) => s.contains('setFontFamily')), isNotEmpty);
-          expect(engine.scripts.where((final s) => s.contains('setTextJustify')), isNotEmpty);
-          expect(engine.scripts.where((final s) => s.contains('setHyphenation')), isNotEmpty);
-        }
+      // Ready replay on the spare engine, as the preloader's
+      // handshake triggers.
+      await typeFactory.engines[1].loadUrl(
+        Uri.parse(typeController.bookServerUrlFor('chapter2.html')!),
+      );
+      await pumpEventQueue();
 
-        await typeController.setFontFamily(null);
-        expect(typeController.fontFamily, isNull);
+      for (final engine in typeFactory.engines) {
+        expect(engine.scripts.where((final s) => s.contains('setFontFamily')), isNotEmpty);
+        expect(engine.scripts.where((final s) => s.contains('setTextJustify')), isNotEmpty);
+        expect(engine.scripts.where((final s) => s.contains('setHyphenation')), isNotEmpty);
+      }
 
-        typeController.dispose();
-        async.flushTimers();
-      }));
+      await typeController.setFontFamily(null);
+      expect(typeController.fontFamily, isNull);
     });
 
     test('settings application on ready emits a single batch message', () async {
@@ -510,27 +532,28 @@ void main() {
         });
       });
 
-      test('marks of an inactive file wait for its engine to load', () {
-        unawaited(fakeAsync((async) async {
-          await controller.start();
-          async.elapse(Duration.zero);
-          // File 1 is not loaded anywhere yet: the set only lands in the
-          // controller store, nothing reaches the active engine.
-          await controller.setWordMarks(1, const [
-            ViewerWordMark(start: 0, end: 4, state: 'learning'),
-          ]);
-          final activeEngine = factory.engines[controller.activeEngineIndex];
-          expect(activeEngine.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
+      test('marks of an inactive file wait for its engine to load', () async {
+        await controller.start();
+        await settle();
 
-          // The preloader loads file 1 into the spare engine; its ready
-          // event replays that file's marks there.
-          async.elapse(const Duration(milliseconds: 500));
-          final spareEngine = factory.engines[1 - controller.activeEngineIndex];
-          expect(
-            payloadsOf(spareEngine.scripts.where((final s) => s.contains('applyWordMarks'))),
-            hasLength(1),
-          );
-        }));
+        // File 1 is not loaded anywhere yet: the set only lands in the
+        // controller store, nothing reaches the active engine.
+        await controller.setWordMarks(1, const [
+          ViewerWordMark(start: 0, end: 4, state: 'learning'),
+        ]);
+        final activeEngine = factory.engines[controller.activeEngineIndex];
+        expect(activeEngine.scripts.where((final s) => s.contains('applyWordMarks')), isEmpty);
+
+        // Loading file 1 into the other engine (what the preloader or
+        // a navigation does); its ready event replays that file's
+        // marks there.
+        await controller.goToNavPoint(controller.book.navigation.navPoints[1]);
+        await pumpEventQueue();
+        final fileOneEngine = factory.engines[controller.activeEngineIndex];
+        expect(
+          payloadsOf(fileOneEngine.scripts.where((final s) => s.contains('applyWordMarks'))),
+          hasLength(1),
+        );
       });
 
       test('clearWordMarks unwraps the page and stops replays', () async {
@@ -715,60 +738,56 @@ void main() {
       expect(events.first.html, isNull);
     });
 
-    test('jumps record history; back and forward restore them', () {
-      // Jumping between preloaded engines takes the synchronous fast
-      // path, so the preload timer must have fired first: controlled
-      // clock instead of a fixed wait.
-      unawaited(fakeAsync((async) async {
-        final jumpFactory = FakeViewerEngineFactory();
-        final jumpController = ViewerController(buildTestBook(), engineFactory: jumpFactory);
-        await jumpController.start();
-        async.elapse(const Duration(milliseconds: 500));
-        expect(jumpController.canGoBack, isFalse);
+    test('jumps record history; back and forward restore them', () async {
+      await controller.start();
+      await settle();
+      expect(controller.canGoBack, isFalse);
 
-        await jumpController.goToNavPoint(jumpController.book.navigation.navPoints[1]);
-        expect(jumpController.position.fileIndex, 1);
-        expect(jumpController.canGoBack, isTrue);
-        expect(jumpController.canGoForward, isFalse);
+      await controller.goToNavPoint(controller.book.navigation.navPoints[1]);
+      await pumpEventQueue();
+      expect(controller.position.fileIndex, 1);
+      expect(controller.canGoBack, isTrue);
+      expect(controller.canGoForward, isFalse);
 
-        await jumpController.goBack();
-        expect(jumpController.position.fileIndex, 0);
-        expect(jumpController.canGoForward, isTrue);
+      await controller.goBack();
+      await pumpEventQueue();
+      expect(controller.position.fileIndex, 0);
+      expect(controller.canGoForward, isTrue);
 
-        await jumpController.goForward();
-        expect(jumpController.position.fileIndex, 1);
+      await controller.goForward();
+      await pumpEventQueue();
+      expect(controller.position.fileIndex, 1);
 
-        // Another jump from here drops the forward tail.
-        await jumpController.goToNavPoint(jumpController.book.navigation.navPoints[0]);
-        expect(jumpController.position.fileIndex, 0);
-        expect(jumpController.canGoForward, isFalse);
-
-        jumpController.dispose();
-        async.flushTimers();
-      }));
+      // Another jump from here drops the forward tail.
+      await controller.goToNavPoint(controller.book.navigation.navPoints[0]);
+      await pumpEventQueue();
+      expect(controller.position.fileIndex, 0);
+      expect(controller.canGoForward, isFalse);
     });
 
-    test('rtl page progression reaches the engines', () {
+    test('rtl page progression reaches the engines', () async {
       expect(controller.rtlPageProgression, isFalse);
 
-      unawaited(fakeAsync((async) async {
-        final rtlBook = buildTestBook(pageProgressionDirection: PageProgressionDirection.rtl);
-        final rtlFactory = FakeViewerEngineFactory();
-        final rtlController = ViewerController(rtlBook, engineFactory: rtlFactory);
-        expect(rtlController.rtlPageProgression, isTrue);
+      final rtlBook = buildTestBook(pageProgressionDirection: PageProgressionDirection.rtl);
+      final rtlFactory = FakeViewerEngineFactory();
+      final rtlController = ViewerController(rtlBook, engineFactory: rtlFactory);
+      addTearDown(rtlController.dispose);
+      expect(rtlController.rtlPageProgression, isTrue);
+      await rtlController.start();
+      await pumpEventQueue();
 
-        await rtlController.start();
-        async.elapse(const Duration(milliseconds: 500));
-        for (final engine in rtlFactory.engines) {
-          expect(engine.scripts.where((final s) => s.contains('setPageProgression')), isNotEmpty);
-        }
+      // Ready replay on the spare engine, as the preloader's
+      // handshake triggers.
+      await rtlFactory.engines[1].loadUrl(
+        Uri.parse(rtlController.bookServerUrlFor('chapter2.html')!),
+      );
+      await pumpEventQueue();
+      for (final engine in rtlFactory.engines) {
+        expect(engine.scripts.where((final s) => s.contains('setPageProgression')), isNotEmpty);
+      }
 
-        await rtlController.setReversePageTurnZones(true);
-        expect(rtlController.reversePageTurnZones, isTrue);
-
-        rtlController.dispose();
-        async.flushTimers();
-      }));
+      await rtlController.setReversePageTurnZones(true);
+      expect(rtlController.reversePageTurnZones, isTrue);
     });
 
     group('search modes', () {

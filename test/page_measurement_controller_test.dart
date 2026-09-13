@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:fake_async/fake_async.dart';
@@ -40,30 +38,33 @@ void main() {
     ]);
   });
 
-  test('disposing cancels the paced continuation', () {
-    // The batch pacing is a real production timer; a controlled clock
-    // fires and re-checks it deterministically.
-    unawaited(
-      fakeAsync((async) async {
-        final factory = _TrackingViewerEngineFactory();
-        final controller = ViewerController(buildTestBook(), engineFactory: factory)
-          ..pageCountMode = BookPageCountMode.measureAll
-          ..pageMeasureBatchDelay = const Duration(milliseconds: 20);
+  test('disposing cancels the paced continuation', () async {
+    // The batch pacing is a real production timer; the controlled
+    // clock arms and re-checks it deterministically after the real
+    // server bind completed outside the fake zone.
+    final factory = _TrackingViewerEngineFactory();
+    final controller = ViewerController(buildTestBook(), engineFactory: factory)
+      ..pageCountMode = BookPageCountMode.measureAll
+      ..pageMeasureBatchDelay = const Duration(milliseconds: 20);
 
-        await controller.start();
-        controller.setLogicalViewport(800, 600);
-        async.elapse(const Duration(milliseconds: 20));
+    await controller.start();
+    await pumpEventQueue();
 
-        final measurer = factory.engines.singleWhere((final engine) => engine.slot == 2);
-        expect(measurer.loadedUrls, hasLength(1));
+    fakeAsync((async) {
+      // Arming the viewport measurement inside the zone makes the
+      // batch timer a fake one.
+      controller.setLogicalViewport(800, 600);
+      async.elapse(const Duration(milliseconds: 20));
 
-        controller.dispose();
-        async.elapse(const Duration(milliseconds: 20));
-        async.flushMicrotasks();
+      final measurer = factory.engines.singleWhere((final engine) => engine.slot == 2);
+      expect(measurer.loadedUrls, hasLength(1));
 
-        expect(measurer.loadedUrls, hasLength(1));
-      }),
-    );
+      controller.dispose();
+      async.elapse(const Duration(milliseconds: 20));
+      async.flushMicrotasks();
+
+      expect(measurer.loadedUrls, hasLength(1));
+    });
   });
 }
 
