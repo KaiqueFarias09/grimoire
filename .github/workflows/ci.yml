@@ -23,6 +23,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      viewer_ref:
+        description: 'e_livre_viewer ref the integration lane checks out (defaults to the dispatching SHA)'
+        required: false
+        type: string
+      elivre_ref:
+        description: 'eLivre sibling ref the integration lane checks out (never implicit; defaults to main only when unset)'
+        required: false
+        type: string
+        default: main
 
 jobs:
   resolution:
@@ -71,15 +82,19 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     steps:
+      # Explicit candidate ref: the dispatching SHA for push/PR runs, or
+      # the viewer_ref input for manual runs. Never an implicit default.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.viewer_ref || github.sha }}
           path: e_livre_viewer
 
-      # Sibling checkout, mirroring the local development stack.
+      # Sibling checkout, mirroring the local development stack. The
+      # sibling ref is always explicit (elivre_ref input, default main).
       - uses: actions/checkout@v4
         with:
           repository: KaiqueFarias09/eLivre
-          ref: main
+          ref: ${{ inputs.elivre_ref || 'main' }}
           path: eLivre
 
       - uses: subosito/flutter-action@v2
