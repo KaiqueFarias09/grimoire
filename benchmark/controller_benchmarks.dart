@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:e_livre/e_livre.dart';
 import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'benchmark_harness.dart';
 import 'fixtures.dart';
@@ -158,27 +159,57 @@ Future<void> _pagesAndCfiGroup() async {
   warmController.dispose();
 }
 
+/// Spy helpers: the fake engine records every evaluated script, so a
+/// benchmark can prove its declared bridge path actually ran. The
+/// counters are read outside the timed closures.
+int _scriptsContaining(final FakeViewerEngine engine, final String action) =>
+    engine.scripts.where((final script) => script.contains('"$action"')).length;
+
 Future<void> _navigationGroup() async {
   final group = BenchmarkGroup('Controller — page navigation');
 
   // First load, Dart side: the boot batch every engine pays before the
   // first page is interactive (settings, layout mode, fonts, margins),
-  // encoded through the bridge and evaluated by the fake engine.
+  // encoded through the bridge and evaluated by the fake engine. The
+  // controller is started and settled first, so the measured call
+  // really crosses the bridge into the engine.
   final many = manyChapters;
-  final boot = _controller(many.book);
+  final bootFactory = FakeViewerEngineFactory();
+  final boot = ViewerController(many.book, engineFactory: bootFactory);
+  await boot.start();
+  await pumpEventQueue();
+  final bootEngine = bootFactory.engines[0];
+  final setFontSizeBefore = _scriptsContaining(bootEngine, 'setFontSize');
   await group.addAsync(
     'first-load bootstrap (settings batch to engine)',
     () => boot.setFontSize(17),
     note: '${many.label} · bridge encode + fake engine eval',
   );
+  // Spy: the timed call must have produced engine evaluations.
+  if (_scriptsContaining(bootEngine, 'setFontSize') == setFontSizeBefore) {
+    throw StateError('bootstrap benchmark did not reach the engine (no setFontSize script)');
+  }
   boot.dispose();
 
   // Steady-state page turns: the Dart-side cost of every next/previous
   // page (bridge encode plus engine evaluation, position report
   // handled by the fake engine's synchronous ready).
-  final pager = _controller(many.book);
+  final pagerFactory = FakeViewerEngineFactory();
+  final pager = ViewerController(many.book, engineFactory: pagerFactory);
+  await pager.start();
+  await pumpEventQueue();
   await pager.setFontSize(18);
+  final pagerEngine = pagerFactory.engines[0];
+  final nextColumnsBefore = _scriptsContaining(pagerEngine, 'nextColumn');
+  final previousColumnsBefore = _scriptsContaining(pagerEngine, 'previousColumn');
   await group.addAsync('nextPage (page turn)', pager.nextPage, note: many.label);
   await group.addAsync('previousPage (page turn)', pager.previousPage, note: many.label);
+  // Spy: both turn commands must have reached the engine.
+  if (_scriptsContaining(pagerEngine, 'nextColumn') == nextColumnsBefore) {
+    throw StateError('nextPage benchmark did not reach the engine (no nextColumn script)');
+  }
+  if (_scriptsContaining(pagerEngine, 'previousColumn') == previousColumnsBefore) {
+    throw StateError('previousPage benchmark did not reach the engine');
+  }
   pager.dispose();
 }

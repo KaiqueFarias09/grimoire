@@ -16,9 +16,6 @@ import 'benchmark_harness.dart' show formatBytes;
 /// The supported real-book file extensions.
 const Set<String> _bookExtensions = <String>{'.epub', '.mobi', '.azw3', '.fb2'};
 
-/// The fallback root used when the environment variable is unset.
-const String _defaultLibraryRoot = '/Volumes/SSD/Archives/Calibre Library';
-
 /// A real book from the Calibre library, referenced by path.
 ///
 /// Bytes load on demand through [read] so a whole-library scan never
@@ -49,12 +46,14 @@ final class LibraryBook {
 final String? _libraryRoot = _resolveRoot();
 List<LibraryBook>? _books;
 
+/// The library root comes exclusively from the environment so no
+/// machine-specific path is baked into the repository.
 String? _resolveRoot() {
   final value = Platform.environment['ELIVRE_VIEWER_BENCH_LIBRARY'];
-  if (value != null && value.isNotEmpty) {
-    return Directory(value).existsSync() ? value : null;
+  if (value == null || value.isEmpty) {
+    return null;
   }
-  return Directory(_defaultLibraryRoot).existsSync() ? _defaultLibraryRoot : null;
+  return Directory(value).existsSync() ? value : null;
 }
 
 /// The configured library root, or `null` when neither the
