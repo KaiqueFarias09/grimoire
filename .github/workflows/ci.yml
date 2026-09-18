@@ -1,6 +1,6 @@
 name: CI
 
-# `e_livre_viewer` declares `e_livre: ^3.3.0` (pubspec.yaml). That version is
+# `e_livre_viewer` declares `e_livre: ^3.0.0` (pubspec.yaml). That version is
 # not published on pub.dev yet (pub.dev latest at the time of writing: 2.0.0),
 # so a checkout of this repository alone cannot resolve its dependencies.
 #
@@ -8,7 +8,7 @@ name: CI
 #
 #   * `analyze` / `test` — the isolated lanes. They run this repository alone
 #     against the hosted package and are gated by the `resolution` probe:
-#     while `e_livre` ^3.3.0 is unavailable the lanes are skipped with an
+#     while `e_livre` ^3.0.0 is unavailable the lanes are skipped with an
 #     explicit warning instead of hiding a guaranteed dependency-resolution
 #     failure. As soon as the version is published the probe enables the
 #     lanes and their failures are real.
@@ -45,14 +45,14 @@ jobs:
         run: |
           set -euo pipefail
           latest="$(curl -fsSL https://pub.dev/api/packages/e_livre 2>/dev/null | jq -r '.latest.version' || true)"
-          # `e_livre: ^3.3.0` resolves iff some published version is >= 3.3.0
+          # `e_livre: ^3.0.0` resolves iff some published version is >= 3.0.0
           # (published versions only grow, so latest >= min implies resolution).
-          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" 3.3.0 | sort -V | tail -n1)" = "$latest" ]; then
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" 3.0.0 | sort -V | tail -n1)" = "$latest" ]; then
             echo "hosted=true" >> "$GITHUB_OUTPUT"
-            echo "e_livre $latest satisfies ^3.3.0: isolated lanes enabled"
+            echo "e_livre $latest satisfies ^3.0.0: isolated lanes enabled"
           else
             echo "hosted=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::e_livre ^3.3.0 is not on pub.dev yet (latest: ${latest:-none}). Isolated analyze/test lanes are skipped until it is published; the integration lane validates the sibling checkouts instead."
+            echo "::warning::e_livre ^3.0.0 is not on pub.dev yet (latest: ${latest:-none}). Isolated analyze/test lanes are skipped until it is published; the integration lane validates the sibling checkouts instead."
           fi
 
   analyze:

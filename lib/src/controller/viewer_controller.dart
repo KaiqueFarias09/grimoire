@@ -3,8 +3,6 @@ import 'dart:math' as math;
 import 'dart:ui' show Rect;
 
 import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/e_livre_viewer.dart' show ELivreView;
-import 'package:e_livre_viewer/src/widgets/elivre_view.dart' show ELivreView;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
@@ -396,7 +394,7 @@ class ViewerController extends ChangeNotifier
   /// controller keeps its own chrome hidden: center taps and Esc
   /// still emit [ChromeToggleEvent]s (so the host can toggle its own
   /// UI) but no longer flip [chromeVisible], and [toggleChrome],
-  /// [showChrome] and [hideChrome] become no-ops. [ELivreView] sets
+  /// [showChrome] and [hideChrome] become no-ops. `ELivreView` sets
   /// this from `showShell: false`; hosts driving the viewer without
   /// the widget can set it directly.
   bool get useHostChrome => _useHostChrome;
