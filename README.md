@@ -95,6 +95,10 @@ await controller.addHighlightFromSelection(
 );
 final annotationsJson = controller.exportAnnotations();
 
+// Existing unversioned e_livre_viewer annotation JSON can be imported once.
+// Every subsequent export uses eLivre's canonical versioned v3 envelope.
+await controller.importAnnotations(previouslySavedAnnotationsJson);
+
 // Bookmarks:
 final bookmark = controller.addBookmark('Chapter 5');
 

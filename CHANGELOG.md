@@ -2,6 +2,11 @@
 
 ### Added
 
+- **One-way annotation migration**: `importAnnotations` accepts the previous
+  unversioned viewer persistence envelope and converts its highlights and
+  bookmarks to eLivre's canonical versioned records without data loss.
+  `exportAnnotations` always writes the canonical format, so applications do
+  not need to maintain two storage formats.
 - **Fixed-layout page turning**: comics and PDF facsimile pages now
   turn on a horizontal swipe (same 64px/0.35 thresholds as the text
   gesture layer, RTL-aware), driven by a new `PageTurnEvent` through
@@ -140,6 +145,9 @@
 
 ### Changed
 
+- eLivre is consumed through the release-target `^3.0.0` hosted contract. CI validates
+  package analysis/tests and enforces the repository coverage floor while the
+  cross-package lane verifies the current eLivre + Viewer stack together.
 - **Breaking**: highlight appearance uses eLivre's canonical
   `HighlightColor` and `HighlightDecoration` types. The viewer maps
   palette tokens to Flutter light/dark colors while persistence stays
