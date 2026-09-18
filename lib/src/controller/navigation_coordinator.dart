@@ -1,67 +1,10 @@
-/// The engine-facing capabilities required by [NavigationCoordinator].
-///
-/// The coordinator can load a reading-order item, send positioning commands,
-/// activate a prepared engine, and publish state changes. It cannot access the
-/// rest of the viewer controller.
-abstract interface class NavigationHost {
-  /// Whether the book server and reader engines are available.
-  bool get navigationIsReady;
+import 'navigation_host.dart';
+import 'navigation_intent.dart';
+import 'navigation_ready_state.dart';
 
-  /// Loads [fileIndex] into the engine identified by [slot].
-  Future<void> loadNavigationItem(int slot, int fileIndex);
-
-  /// Sends one positioning command to [slot].
-  Future<void> sendNavigationCommand(int slot, Map<String, Object?> command);
-
-  /// Makes [slot] visible at [fileIndex].
-  void navigationDidActivate(int slot, int fileIndex);
-
-  /// Publishes a history or navigation-state change.
-  void navigationStateDidChange();
-}
-
-/// A destination to apply after a reading-order item becomes ready.
-final class NavigationIntent {
-  /// Creates a destination from an offset, anchor, selection, end position, or
-  /// previously saved column.
-  const NavigationIntent({
-    this.offset,
-    this.anchor,
-    this.atEnd = false,
-    this.selection,
-    this.restoreColumn,
-  });
-
-  /// Character offset to reveal.
-  final int? offset;
-
-  /// Element identifier to reveal.
-  final String? anchor;
-
-  /// Whether to land at the end of the item.
-  final bool atEnd;
-
-  /// Selection range to restore and reveal.
-  final (int, int)? selection;
-
-  /// Column to restore when returning to a previously visited item.
-  final int? restoreColumn;
-}
-
-/// Work the facade must perform when an engine reports that it is ready.
-final class NavigationReadyState {
-  /// Creates the ready-time state for [slot].
-  const NavigationReadyState({required this.slot, this.fileIndex, this.intent});
-
-  /// Engine slot that became ready.
-  final int slot;
-
-  /// Reading-order item currently loaded in [slot].
-  final int? fileIndex;
-
-  /// Destination waiting to be applied to the loaded item.
-  final NavigationIntent? intent;
-}
+export 'navigation_host.dart';
+export 'navigation_intent.dart';
+export 'navigation_ready_state.dart';
 
 /// Coordinates two-engine navigation, preload state, and explicit jump history.
 final class NavigationCoordinator {
@@ -77,8 +20,10 @@ final class NavigationCoordinator {
   final List<int?> _loadedFiles = <int?>[null, null];
   final List<bool> _engineReady = <bool>[false, false];
   final List<NavigationIntent?> _pending = <NavigationIntent?>[null, null];
-  final Map<int, _FileExitState> _exitStateByFile = <int, _FileExitState>{};
-  final List<_HistoryEntry> _history = <_HistoryEntry>[];
+  final Map<int, ({int column, int columnsPerScreen})> _exitStateByFile =
+      <int, ({int column, int columnsPerScreen})>{};
+  final List<({int fileIndex, NavigationIntent intent})> _history =
+      <({int fileIndex, NavigationIntent intent})>[];
 
   int _activeSlot = 0;
   int? _swapOnReadySlot;
@@ -229,10 +174,7 @@ final class NavigationCoordinator {
           ? NavigationIntent(restoreColumn: exit.column)
           : const NavigationIntent(atEnd: true);
     } else {
-      _exitStateByFile[fromFile] = _FileExitState(
-        column: exitColumn,
-        columnsPerScreen: columnsPerScreen,
-      );
+      _exitStateByFile[fromFile] = (column: exitColumn, columnsPerScreen: columnsPerScreen);
       intent = const NavigationIntent();
     }
     await navigate(target, intent);
@@ -372,36 +314,22 @@ final class NavigationCoordinator {
         _historyEntryMatches(_history[_historyIndex], currentFileIndex, currentOffset)) {
       return;
     }
-    _history.add(_HistoryEntry(currentFileIndex, NavigationIntent(offset: currentOffset)));
+    _history.add((fileIndex: currentFileIndex, intent: NavigationIntent(offset: currentOffset)));
     _historyIndex = _history.length - 1;
   }
 
   void _recordJumpDestination(final int fileIndex, final NavigationIntent intent) {
-    _history.add(_HistoryEntry(fileIndex, intent));
+    _history.add((fileIndex: fileIndex, intent: intent));
     _historyIndex = _history.length - 1;
     host.navigationStateDidChange();
   }
 
   bool _historyEntryMatches(
-    final _HistoryEntry entry,
+    final ({int fileIndex, NavigationIntent intent}) entry,
     final int currentFileIndex,
     final int currentOffset,
   ) =>
       entry.fileIndex == currentFileIndex &&
       entry.intent.offset != null &&
       entry.intent.offset == currentOffset;
-}
-
-final class _HistoryEntry {
-  const _HistoryEntry(this.fileIndex, this.intent);
-
-  final int fileIndex;
-  final NavigationIntent intent;
-}
-
-final class _FileExitState {
-  const _FileExitState({required this.column, required this.columnsPerScreen});
-
-  final int column;
-  final int columnsPerScreen;
 }

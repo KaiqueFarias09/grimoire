@@ -10,6 +10,9 @@ import '../features/annotations/export_document.dart';
 import '../features/annotations/export_rendering.dart';
 import '../features/annotations/export_snapshot.dart';
 
+part 'annotations_sheet_color_dot.dart';
+part 'annotations_sheet_decoration_chip.dart';
+
 /// Opens the annotation browser (highlights + bookmarks) as a bottom
 /// sheet.
 Future<void> showAnnotationsSheet(final BuildContext context, final ViewerController controller) {
@@ -369,85 +372,5 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
       case HighlightDecoration.strikeout:
         return Icon(Icons.format_strikethrough, color: color);
     }
-  }
-}
-
-class _ColorDot extends StatelessWidget {
-  const _ColorDot({
-    required this.color,
-    required this.selected,
-    required this.label,
-    required this.onTap,
-  });
-
-  final Color color;
-  final bool selected;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(final BuildContext context) {
-    return Semantics(
-      label: label,
-      selected: selected,
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: selected
-                ? Border.fromBorderSide(
-                    BorderSide(color: Theme.of(context).colorScheme.onSurface, width: 2.5),
-                  )
-                : null,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DecorationChip extends StatelessWidget {
-  const _DecorationChip({
-    required this.icon,
-    required this.selected,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool selected;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(final BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      label: label,
-      selected: selected,
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: selected ? theme.colorScheme.primaryContainer : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: selected ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurface,
-          ),
-        ),
-      ),
-    );
   }
 }

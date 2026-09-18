@@ -45,15 +45,16 @@ class ViewerHtmlExportOptions {
 
   /// Renders one bookmark; null return uses the default list item.
   final ViewerHtmlPartFormatter? bookmark;
-}
 
-const String _defaultCss = '''
+  /// Built-in stylesheet used when [css] is not supplied.
+  static const String defaultCss = '''
 body { font-family: Georgia, serif; margin: 2rem auto; max-width: 42rem; padding: 0 1rem; }
 .elv-author { color: #666; }
 .elv-chapter { margin-top: 2rem; }
 .elv-note { color: #555; font-style: italic; margin: 0.25rem 0 0.75rem; border-left: 3px solid #ccc; padding-left: 0.75rem; }
 .elv-location { font-size: 0.85em; color: #888; }
 .elv-bookmarks li { margin: 0.25rem 0; }''';
+}
 
 /// Renders [model] as HTML.
 String renderHtml(final ViewerExportModel model, final ViewerHtmlExportOptions options) {
@@ -106,7 +107,7 @@ String renderHtml(final ViewerExportModel model, final ViewerHtmlExportOptions o
       '<meta charset="utf-8">\n'
       '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
       '<title>${_e(model.bookTitle)}</title>\n'
-      '<style>${options.css ?? _defaultCss}</style>\n'
+      '<style>${options.css ?? ViewerHtmlExportOptions.defaultCss}</style>\n'
       '</head>\n<body>\n$article</body>\n</html>\n';
 }
 

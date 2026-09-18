@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../controller/viewer_controller.dart';
 
+part 'search_overlay_match_cycle_bar.dart';
+part 'search_overlay_mode_picker.dart';
+
 /// Opens the in-book search as a full-screen dialog.
 Future<void> showSearchOverlay(final BuildContext context, final ViewerController controller) {
   return showDialog<void>(
@@ -201,82 +204,6 @@ class _SearchOverlayState extends State<SearchOverlay> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Mode dropdown mirroring Calibre's search `<select>`: contains,
-/// whole words, regex and near.
-class _ModePicker extends StatelessWidget {
-  const _ModePicker({required this.mode, required this.onSelected});
-
-  final SearchMode mode;
-  final ValueChanged<SearchMode?> onSelected;
-
-  static const Map<SearchMode, String> _labels = {
-    SearchMode.contains: 'Contains',
-    SearchMode.wholeWords: 'Whole words',
-    SearchMode.regex: 'Regex',
-    SearchMode.proximity: 'Near',
-  };
-
-  @override
-  Widget build(final BuildContext context) {
-    return DropdownButton<SearchMode>(
-      value: mode,
-      items: [
-        for (final entry in _labels.entries)
-          DropdownMenuItem<SearchMode>(value: entry.key, child: Text(entry.value)),
-      ],
-      onChanged: onSelected,
-      isDense: true,
-      underline: const SizedBox.shrink(),
-    );
-  }
-}
-
-/// Prev/next match cycling with a position counter, shown while a
-/// search is active. Calibre parity: matches stay marked in the page
-/// and next/previous cycles them.
-class _MatchCycleBar extends StatelessWidget {
-  const _MatchCycleBar({required this.controller});
-
-  final ViewerController controller;
-
-  @override
-  Widget build(final BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (final context, final _) {
-        if (controller.searchResults.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final (cursor, total) = controller.searchCursorState;
-        final position = cursor < 0 ? '-' : '${(cursor % total) + 1}';
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 12, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${controller.searchResults.length} results · match $position of $total',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Previous match',
-                icon: const Icon(Icons.keyboard_arrow_up),
-                onPressed: controller.previousSearchMatch,
-              ),
-              IconButton(
-                tooltip: 'Next match',
-                icon: const Icon(Icons.keyboard_arrow_down),
-                onPressed: controller.nextSearchMatch,
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }
