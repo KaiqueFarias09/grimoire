@@ -1,3 +1,4 @@
+import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -48,8 +49,8 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
   bool _bookmarksTab = false;
   bool _sortByCreated = false;
   String _query = '';
-  final Set<ViewerHighlightColor> _colors = <ViewerHighlightColor>{};
-  final Set<ViewerHighlightDecoration> _decorations = <ViewerHighlightDecoration>{};
+  final Set<HighlightColor> _colors = <HighlightColor>{};
+  final Set<HighlightDecoration> _decorations = <HighlightDecoration>{};
 
   bool get _filtersActive => _query.isNotEmpty || _colors.isNotEmpty || _decorations.isNotEmpty;
 
@@ -58,13 +59,12 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
     colors: _colors.isEmpty ? null : _colors,
     decorations: _decorations.isEmpty ? null : _decorations,
     sort: _sortByCreated ? AnnotationSort.recentlyCreated : AnnotationSort.documentOrder,
-    invalidCreatedAt: DateTime(2000),
   );
 
-  List<ViewerHighlight> get _filteredHighlights =>
+  List<HighlightRecord> get _filteredHighlights =>
       _annotationQuery.apply(widget.controller.highlights);
 
-  Map<String, List<ViewerHighlight>> get _groupedHighlights => _annotationQuery.groupBySection(
+  Map<String, List<HighlightRecord>> get _groupedHighlights => _annotationQuery.groupBySection(
     widget.controller.highlights,
     sectionTitle: (final fileIndex) =>
         widget.controller.chapterTitleFor(fileIndex) ?? 'Section ${fileIndex + 1}',
@@ -129,9 +129,9 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
           Row(
             spacing: 8,
             children: [
-              for (final color in ViewerHighlightColor.palette)
+              for (final color in viewerHighlightPalette)
                 _ColorDot(
-                  color: color.light,
+                  color: color.lightColor,
                   selected: _colors.contains(color),
                   label: 'Filter highlights by color',
                   onTap: () => setState(() {
@@ -155,10 +155,10 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
             spacing: 8,
             children: [
               for (final (decoration, icon) in const [
-                (ViewerHighlightDecoration.background, Icons.highlight),
-                (ViewerHighlightDecoration.underline, Icons.format_underlined),
-                (ViewerHighlightDecoration.strikeout, Icons.format_strikethrough),
-                (ViewerHighlightDecoration.wavy, Icons.waves),
+                (HighlightDecoration.background, Icons.highlight),
+                (HighlightDecoration.underline, Icons.format_underlined),
+                (HighlightDecoration.strikeout, Icons.format_strikethrough),
+                (HighlightDecoration.wavy, Icons.waves),
               ])
                 _DecorationChip(
                   icon: icon,
@@ -253,7 +253,9 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
             dense: true,
             leading: const Icon(Icons.bookmark_border),
             title: Text(bookmark.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(bookmark.position),
+            subtitle: Text(
+              'Section ${bookmark.sectionIndex + 1}, character ${bookmark.charOffset}',
+            ),
             onTap: () {
               Navigator.of(context).maybePop();
               widget.controller.goToBookmark(bookmark);
@@ -307,7 +309,7 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
     )?.showSnackBar(SnackBar(content: Text('Annotations copied as ${format.toUpperCase()}')));
   }
 
-  Future<void> _editNote(final ViewerHighlight highlight) async {
+  Future<void> _editNote(final HighlightRecord highlight) async {
     final field = TextEditingController(text: highlight.note ?? '');
     final saved = await showDialog<String>(
       context: context,
@@ -349,15 +351,15 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
     );
   }
 
-  static Widget _styleIcon(final ViewerHighlight highlight) {
-    final color = highlight.color.light;
+  static Widget _styleIcon(final HighlightRecord highlight) {
+    final color = highlight.color.lightColor;
     switch (highlight.decoration) {
-      case ViewerHighlightDecoration.background:
+      case HighlightDecoration.background:
         return Icon(Icons.highlight, color: color);
-      case ViewerHighlightDecoration.underline:
-      case ViewerHighlightDecoration.wavy:
+      case HighlightDecoration.underline:
+      case HighlightDecoration.wavy:
         return Icon(Icons.format_underlined, color: color);
-      case ViewerHighlightDecoration.strikeout:
+      case HighlightDecoration.strikeout:
         return Icon(Icons.format_strikethrough, color: color);
     }
   }

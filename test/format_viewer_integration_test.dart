@@ -299,7 +299,10 @@ Future<void> _assertTextViewerBehavior(
   expect(session.controller.fileFraction, closeTo(0.25, 0.0001));
   expect(session.controller.progress, greaterThan(0));
   expect(session.controller.progress, lessThan(1));
-  expect(ViewerPosition.deserialize(session.controller.position.serialize()), isNotNull);
+  expect(
+    locatorFromJson(locatorToJson(session.controller.position.locator)),
+    session.controller.position.locator,
+  );
 
   engine.postMessage({
     'type': 'selectionChanged',
@@ -311,7 +314,7 @@ Future<void> _assertTextViewerBehavior(
 
   final highlight = await session.controller.addHighlightFromSelection(note: 'Fixture note');
   expect(highlight, isNotNull);
-  expect(highlight!.fileIndex, 0);
+  expect(highlight!.sectionIndex, 0);
   expect(highlight.text, searchTerm);
   expect(highlight.note, 'Fixture note');
   expect(
@@ -322,7 +325,8 @@ Future<void> _assertTextViewerBehavior(
   );
 
   final bookmark = session.controller.addBookmark('Fixture bookmark');
-  expect(bookmark.position, session.controller.position.serialize());
+  expect(bookmark.sectionIndex, session.controller.position.fileIndex);
+  expect(bookmark.charOffset, session.controller.position.charOffset);
   final annotations = jsonDecode(session.controller.exportAnnotations()) as Map<String, dynamic>;
   expect(annotations['highlights'], hasLength(1));
   expect(annotations['bookmarks'], hasLength(1));
@@ -386,7 +390,8 @@ Future<void> _assertComicFixture(
   expect(session.controller.searchResults, isEmpty);
 
   final bookmark = session.controller.addBookmark('Comic fixture');
-  expect(bookmark.position, 'eLv1:0:0');
+  expect(bookmark.sectionIndex, 0);
+  expect(bookmark.charOffset, 0);
   final annotations = jsonDecode(session.controller.exportAnnotations()) as Map<String, dynamic>;
   expect(annotations['bookmarks'], hasLength(1));
 }

@@ -15,7 +15,7 @@ Future<void> runNarrationAndBridgeBenchmarks() async {
 
   final big = bigSingleFile;
   final bigHtml = big.largestChapter.content;
-  final bigText = documentText(bigHtml);
+  final bigText = DocumentTextScanner(bigHtml).scan();
   group.add(
     'segmentText (2 MB chapter)',
     () => segmentText(bigText),
@@ -24,7 +24,7 @@ Future<void> runNarrationAndBridgeBenchmarks() async {
   );
 
   final many = manyChapters;
-  final chapterText = documentText(many.book.files.html[75].content);
+  final chapterText = documentTextOf(many.book.files.html[75]);
   group.add(
     'segmentText (13 KB chapter)',
     () => segmentText(chapterText),

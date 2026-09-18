@@ -369,7 +369,7 @@ void main() {
       expect(html, contains('pdf.min.js'));
       expect(html, contains(server.pdfDocumentUrl.toString()));
       // The canonical invariant holds for the served page too.
-      expect(documentText(html), 'First page text.');
+      expect(DocumentTextScanner(html).scan(), 'First page text.');
     });
 
     test('the document route serves the raw bytes with ranges', () async {

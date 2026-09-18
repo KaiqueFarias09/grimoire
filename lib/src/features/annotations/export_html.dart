@@ -149,14 +149,21 @@ String? _defaultLocationLink(
   final ViewerExportChapter chapter,
   final ViewerExportLocationLinks locationLinks,
 ) {
+  final parts = <String>[];
   if ((locationLinks == ViewerExportLocationLinks.cfi ||
           locationLinks == ViewerExportLocationLinks.both) &&
       item.cfi != null &&
       item.cfi!.isNotEmpty) {
-    return '<a class="elv-location" href="${_e(item.cfi!)}">'
-        '${_e(chapter.title ?? 'Location')}</a>';
+    parts.add('<a href="${_e(item.cfi!)}">${_e(chapter.title ?? 'Location')}</a>');
   }
-  return null;
+  if ((locationLinks == ViewerExportLocationLinks.textLocator ||
+          locationLinks == ViewerExportLocationLinks.both) &&
+      item.locator != null) {
+    final locator = item.locator!;
+    parts.add('Section ${locator.sectionIndex + 1}, characters ${locator.start}-${locator.end}');
+  }
+
+  return parts.isEmpty ? null : '<span class="elv-location">${parts.join(' · ')}</span>';
 }
 
 ViewerExportChapter _bookmarkChapter(final ViewerExportModel model) {

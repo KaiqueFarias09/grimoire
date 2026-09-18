@@ -162,12 +162,11 @@ String? _defaultLocationLink(
       item.cfi!.isNotEmpty) {
     links.add('[${chapter.title ?? 'Location'}](${item.cfi})');
   }
-  if ((locationLinks == ViewerExportLocationLinks.eLivre ||
+  if ((locationLinks == ViewerExportLocationLinks.textLocator ||
           locationLinks == ViewerExportLocationLinks.both) &&
-      item.locatorStart != null &&
-      item.locatorStart!.isNotEmpty) {
-    final label = links.isEmpty ? (chapter.title ?? 'Location') : 'loc';
-    links.add('[$label](${item.locatorStart})');
+      item.locator != null) {
+    final locator = item.locator!;
+    links.add('Section ${locator.sectionIndex + 1}, characters ${locator.start}-${locator.end}');
   }
   return links.isEmpty ? null : links.join(' · ');
 }

@@ -72,7 +72,7 @@ EpubBook buildTestBook({
       uniqueIdentifier: 'uid',
       version: '2.0',
       metadata: metadata,
-      manifest: Epub2Manifest(
+      manifest: Manifest(
         items: [
           ManifestItem(path: 'chapter1.html', id: 'c1', mediaType: 'application/xhtml+xml'),
           ManifestItem(path: 'chapter2.html', id: 'c2', mediaType: 'application/xhtml+xml'),

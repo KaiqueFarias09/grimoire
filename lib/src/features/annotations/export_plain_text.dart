@@ -39,15 +39,16 @@ String renderPlainText(final ViewerExportModel model) {
     }
   }
 
-  return buffer.toString().trimRight() + '\n';
+  return '${buffer.toString().trimRight()}\n';
 }
 
 String _locatorText(final ViewerExportItem item, final ViewerExportLocationLinks mode) {
   final parts = <String>[
     if (mode == ViewerExportLocationLinks.cfi || mode == ViewerExportLocationLinks.both)
       if (item.cfi != null && item.cfi!.isNotEmpty) item.cfi!,
-    if (mode == ViewerExportLocationLinks.eLivre || mode == ViewerExportLocationLinks.both)
-      if (item.locatorStart != null && item.locatorStart!.isNotEmpty) item.locatorStart!,
+    if (mode == ViewerExportLocationLinks.textLocator || mode == ViewerExportLocationLinks.both)
+      if (item.locator case final locator?)
+        'Section ${locator.sectionIndex + 1}, characters ${locator.start}-${locator.end}',
   ];
   return parts.isEmpty ? '' : '[${parts.join(' · ')}]';
 }

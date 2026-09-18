@@ -45,9 +45,8 @@ class ELivreView extends StatefulWidget {
   /// Optional external controller.
   final ViewerController? controller;
 
-  /// Serialized position ([ViewerPosition.serialize]) restored on
-  /// start.
-  final String? initialPosition;
+  /// Canonical text position restored on start.
+  final TextLocator? initialPosition;
 
   /// Called on every position change (convenience over the
   /// controller's `addListener`).
@@ -170,7 +169,7 @@ class _ELivreViewState extends State<ELivreView> {
       widget.onFootnoteTap?.call(event);
     });
     if (widget.initialPosition != null) {
-      await controller.goToSerializedPosition(widget.initialPosition!);
+      await controller.goToLocator(widget.initialPosition!);
     }
     if (!_wired && (widget.onPositionChanged != null || widget.onSelection != null)) {
       _wired = true;

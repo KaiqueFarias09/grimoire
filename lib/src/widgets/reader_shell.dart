@@ -1,3 +1,4 @@
+import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
 
 import '../controller/viewer_controller.dart';
@@ -236,12 +237,12 @@ class _SelectionToolbar extends StatelessWidget {
 
   final ViewerController controller;
 
-  static const List<(ViewerHighlightColor, String)> _colors = [
-    (ViewerHighlightColor.yellow, 'Yellow'),
-    (ViewerHighlightColor.green, 'Green'),
-    (ViewerHighlightColor.blue, 'Blue'),
-    (ViewerHighlightColor.pink, 'Pink'),
-    (ViewerHighlightColor.purple, 'Purple'),
+  static const List<(HighlightColor, String)> _colors = [
+    (PaletteHighlightColor.yellow, 'Yellow'),
+    (PaletteHighlightColor.green, 'Green'),
+    (PaletteHighlightColor.blue, 'Blue'),
+    (PaletteHighlightColor.pink, 'Pink'),
+    (PaletteHighlightColor.purple, 'Purple'),
   ];
 
   @override
@@ -267,34 +268,29 @@ class _SelectionToolbar extends StatelessWidget {
                       tooltip: tooltip,
                       isSelected:
                           controller.defaultHighlightColor == color &&
-                          controller.defaultHighlightDecoration ==
-                              ViewerHighlightDecoration.background,
-                      icon: _Swatch(color: color.light),
+                          controller.defaultHighlightDecoration == HighlightDecoration.background,
+                      icon: _Swatch(color: color.lightColor),
                       onPressed: () {
                         controller
                           ..defaultHighlightColor = color
-                          ..defaultHighlightDecoration = ViewerHighlightDecoration.background;
+                          ..defaultHighlightDecoration = HighlightDecoration.background;
                         controller.addHighlightFromSelection();
                         controller.clearSelection();
                       },
                     ),
                   const VerticalDivider(width: 8, indent: 10, endIndent: 10),
                   for (final (decoration, icon, tooltip) in const [
-                    (ViewerHighlightDecoration.wavy, Icons.format_underlined, 'Red wavy underline'),
-                    (
-                      ViewerHighlightDecoration.strikeout,
-                      Icons.format_strikethrough,
-                      'Red strikeout',
-                    ),
+                    (HighlightDecoration.wavy, Icons.format_underlined, 'Red wavy underline'),
+                    (HighlightDecoration.strikeout, Icons.format_strikethrough, 'Red strikeout'),
                   ])
                     IconButton(
                       iconSize: 20,
                       tooltip: tooltip,
                       isSelected: controller.defaultHighlightDecoration == decoration,
-                      icon: Icon(icon, color: ViewerHighlightColor.red.light),
+                      icon: Icon(icon, color: PaletteHighlightColor.red.lightColor),
                       onPressed: () {
                         controller
-                          ..defaultHighlightColor = ViewerHighlightColor.red
+                          ..defaultHighlightColor = PaletteHighlightColor.red
                           ..defaultHighlightDecoration = decoration;
                         controller.addHighlightFromSelection();
                         controller.clearSelection();

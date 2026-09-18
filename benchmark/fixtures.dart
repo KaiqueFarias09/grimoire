@@ -27,7 +27,7 @@ final class ViewerFixture {
   late final int totalChars = () {
     var total = 0;
     for (final file in book.files.html) {
-      total += documentText(file.content).length;
+      total += documentTextOf(file).length;
     }
     return total;
   }();
@@ -97,7 +97,7 @@ EpubBook _buildBook({required final String title, required final List<String> ch
       uniqueIdentifier: 'uid',
       version: '2.0',
       metadata: metadata,
-      manifest: Epub2Manifest(
+      manifest: Manifest(
         items: [
           for (var i = 0; i < chapters.length; i++)
             ManifestItem(

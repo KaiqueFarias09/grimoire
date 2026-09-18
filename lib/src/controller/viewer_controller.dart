@@ -70,7 +70,7 @@ class ViewerController extends ChangeNotifier
     );
     _annotations = AnnotationController(overlay: _ViewerAnnotationOverlay(this))
       ..addListener(notifyListeners);
-    readingState = ReadingState.of(book);
+    readingProgression = BookProgression.of(book);
     _buildChapterTitles();
     _subscription = bridge.events.listen(_onEvent);
   }
@@ -97,8 +97,8 @@ class ViewerController extends ChangeNotifier
   /// app decides how to open it.
   void Function(String href)? onExternalLink;
 
-  /// Per-book reading state (lengths + progress math).
-  late final ReadingState readingState;
+  /// Per-book canonical text progression.
+  late final BookProgression readingProgression;
 
   final ViewerEngineFactory _engineFactory;
   StreamSubscription<ViewerEvent>? _subscription;
@@ -213,7 +213,10 @@ class ViewerController extends ChangeNotifier
   ViewerPosition get position => _position;
 
   /// Book-wide progress `0..1` for the current position.
-  double get progress => readingState.progressOf(_position);
+  double get progress => readingProgression.fractionOf(
+    sectionIndex: _position.fileIndex,
+    charOffset: _position.charOffset,
+  );
 
   double _fileFraction = 0;
 
@@ -299,11 +302,11 @@ class ViewerController extends ChangeNotifier
 
   /// Bookmarks in creation order.
   @override
-  List<ViewerBookmark> get bookmarks => _annotations.bookmarks;
+  List<BookmarkRecord> get bookmarks => _annotations.bookmarks;
 
   /// Highlights in creation order.
   @override
-  List<ViewerHighlight> get highlights => _annotations.highlights;
+  List<HighlightRecord> get highlights => _annotations.highlights;
 
   /// Whether the book renders as comic pages (image-only items).
   bool get isComicMode => book.readingOrder.any((final item) => !item.isHtml);
@@ -360,23 +363,23 @@ class ViewerController extends ChangeNotifier
   }
 
   /// Taps on highlights (resolved against [highlights]).
-  Stream<ViewerHighlight> get highlightTapEvents => _annotations.highlightTapEvents;
+  Stream<HighlightRecord> get highlightTapEvents => _annotations.highlightTapEvents;
 
   /// The color [addHighlightFromSelection] applies when called
   /// without one. The built-in selection bar updates it from the
   /// user's taps, so quick highlights remember the choice (Calibre's
   /// default highlight style).
-  ViewerHighlightColor get defaultHighlightColor => _annotations.defaultColor;
+  HighlightColor get defaultHighlightColor => _annotations.defaultColor;
 
-  set defaultHighlightColor(final ViewerHighlightColor color) {
+  set defaultHighlightColor(final HighlightColor color) {
     _annotations.defaultColor = color;
   }
 
   /// The decoration [addHighlightFromSelection] applies when called
   /// without one; see [defaultHighlightColor].
-  ViewerHighlightDecoration get defaultHighlightDecoration => _annotations.defaultDecoration;
+  HighlightDecoration get defaultHighlightDecoration => _annotations.defaultDecoration;
 
-  set defaultHighlightDecoration(final ViewerHighlightDecoration decoration) {
+  set defaultHighlightDecoration(final HighlightDecoration decoration) {
     _annotations.defaultDecoration = decoration;
   }
 
@@ -563,7 +566,7 @@ class ViewerController extends ChangeNotifier
     var tocOrder = 0;
     void walk(final List<NavPoint> points) {
       for (final point in points) {
-        final title = documentText(point.label).replaceAll(RegExp(r'\s+'), ' ').trim();
+        final title = extractPlainText(point.label);
         final target = _navigation.resolveTarget(point.content, _position.fileIndex);
         if (title.isNotEmpty && target != null) {
           entries.add((target.$1, tocOrder, title));
@@ -615,7 +618,7 @@ class ViewerController extends ChangeNotifier
     if (element == null) {
       return null;
     }
-    final text = documentText(element).replaceAll(RegExp(r'\s+'), ' ').trim();
+    final text = extractPlainText(element);
     if (text.isEmpty) {
       return null;
     }
@@ -762,13 +765,9 @@ class ViewerController extends ChangeNotifier
     notifyListeners();
   }
 
-  /// Restores a serialized position ([ViewerPosition.serialize]).
-  Future<void> goToSerializedPosition(final String raw) async {
-    final position = ViewerPosition.deserialize(raw);
-    if (position == null) {
-      return;
-    }
-    await goToPosition(position);
+  /// Navigates to a canonical text locator.
+  Future<void> goToLocator(final TextLocator locator) {
+    return goToPosition(ViewerPosition(fileIndex: locator.sectionIndex, charOffset: locator.start));
   }
 
   /// Navigates to [position].
@@ -782,15 +781,27 @@ class ViewerController extends ChangeNotifier
   // --- bookmarks ---
 
   /// Bookmarks the current position.
-  ViewerBookmark addBookmark([final String? title]) =>
-      _annotations.addBookmark(title: title, position: _position.serialize(), progress: progress);
+  BookmarkRecord addBookmark([final String? title]) {
+    return _annotations.addBookmark(
+      title: title,
+      sectionIndex: _position.fileIndex,
+      charOffset: _position.charOffset,
+      progress: progress,
+    );
+  }
 
   /// Removes a bookmark.
   void removeBookmark(final String id) => _annotations.removeBookmark(id);
 
   /// Jumps to a bookmark.
-  Future<void> goToBookmark(final ViewerBookmark bookmark) {
-    return goToSerializedPosition(bookmark.position);
+  Future<void> goToBookmark(final BookmarkRecord bookmark) {
+    return goToLocator(
+      TextLocator(
+        sectionIndex: bookmark.sectionIndex,
+        start: bookmark.charOffset,
+        end: bookmark.charOffset,
+      ),
+    );
   }
 
   // --- highlights ---
@@ -799,9 +810,9 @@ class ViewerController extends ChangeNotifier
   /// Highlights the active selection with [color] and [decoration],
   /// defaulting to [defaultHighlightColor] and
   /// [defaultHighlightDecoration].
-  Future<ViewerHighlight?> addHighlightFromSelection({
-    final ViewerHighlightColor? color,
-    final ViewerHighlightDecoration? decoration,
+  Future<HighlightRecord?> addHighlightFromSelection({
+    final HighlightColor? color,
+    final HighlightDecoration? decoration,
     final String? note,
   }) async {
     final selection = _lastSelection;
@@ -840,18 +851,28 @@ class ViewerController extends ChangeNotifier
   );
 
   /// Jumps to a highlight and flashes its selection.
-  Future<void> goToHighlight(final ViewerHighlight highlight) => _navigation.jumpTo(
+  Future<void> goToHighlight(final HighlightRecord highlight) => _navigation.jumpTo(
     currentFileIndex: _position.fileIndex,
     currentOffset: _position.charOffset,
-    fileIndex: highlight.fileIndex,
+    fileIndex: highlight.sectionIndex,
     intent: NavigationIntent(selection: (highlight.start, highlight.end)),
   );
 
   /// Relocates a persisted highlight against the current text of its
   /// file: exact offsets win, then the highlighted text relocates
   /// them; `null` when the text no longer exists.
-  static (int, int)? relocateHighlight(final ViewerHighlight highlight, final String text) {
-    return AnnotationController.relocateHighlight(highlight, text);
+  static (int, int)? relocateHighlight(final HighlightRecord highlight, final String text) {
+    final relocated = relocateTextLocator(
+      TextLocator(
+        sectionIndex: 0,
+        start: highlight.start,
+        end: highlight.end,
+        quote: TextQuote(before: highlight.before, text: highlight.text, after: highlight.after),
+      ),
+      [text],
+    );
+
+    return relocated == null ? null : (relocated.start, relocated.end);
   }
 
   /// Plain text per reading-order index, extracted once (the book is
@@ -880,7 +901,7 @@ class ViewerController extends ChangeNotifier
       final name = book.readingOrder[fileIndex].name;
       for (final file in book.files.html) {
         if (file.path == name) {
-          return documentText(file.content);
+          return documentTextOf(file);
         }
       }
       return '';
@@ -1067,7 +1088,7 @@ class ViewerController extends ChangeNotifier
       // Extract each section's text at most once per search.
       final text = textBySection.putIfAbsent(
         match.sectionName,
-        () => documentText(htmlByPath[match.sectionName] ?? ''),
+        () => DocumentTextScanner(htmlByPath[match.sectionName] ?? '').scan(),
       );
       results.add(
         ViewerSearchResult(
@@ -1430,11 +1451,11 @@ class ViewerController extends ChangeNotifier
 
   /// Next/previous annotation (highlights in reading order) relative to
   /// the current position; wraps at the ends.
-  Future<ViewerHighlight?> nextAnnotation() => _stepAnnotation(1);
+  Future<HighlightRecord?> nextAnnotation() => _stepAnnotation(1);
 
-  Future<ViewerHighlight?> previousAnnotation() => _stepAnnotation(-1);
+  Future<HighlightRecord?> previousAnnotation() => _stepAnnotation(-1);
 
-  Future<ViewerHighlight?> _stepAnnotation(final int direction) async {
+  Future<HighlightRecord?> _stepAnnotation(final int direction) async {
     final highlight = _annotations.adjacentHighlight(_position, direction);
     if (highlight == null) {
       return null;
@@ -1447,8 +1468,8 @@ class ViewerController extends ChangeNotifier
   /// and [decoration].
   Future<void> updateHighlightStyle(
     final String id, {
-    final ViewerHighlightColor? color,
-    final ViewerHighlightDecoration? decoration,
+    final HighlightColor? color,
+    final HighlightDecoration? decoration,
   }) => _annotations.updateHighlightStyle(
     id,
     activeSlot: _navigation.activeSlot,
@@ -1466,7 +1487,7 @@ class ViewerController extends ChangeNotifier
   String exportAnnotations() => _annotations.exportAnnotations();
 
   /// Imports annotations, merging by identity and keeping the newest
-  /// timestamp (the ported Calibre merge semantics, annot_merge.dart).
+  /// timestamp using eLivre's canonical merge semantics.
   Future<void> importAnnotations(final String json) => _annotations.importAnnotations(
     json,
     activeSlot: _navigation.activeSlot,
@@ -1861,7 +1882,7 @@ class ViewerController extends ChangeNotifier
   }
 
   /// CFI of the current reading position (dual-write alongside
-  /// `eLv1:`; both address the same characters).
+  /// [TextLocator]; both address the same characters).
   String? get positionCfi {
     final doc = _cfiDocFor(_position.fileIndex);
     if (doc == null) return null;
@@ -1996,7 +2017,7 @@ final class _ViewerAnnotationOverlay implements AnnotationOverlayPort {
   Future<void> applyHighlights(
     final int slot,
     final int fileIndex,
-    final List<ViewerHighlight> highlights,
+    final List<HighlightRecord> highlights,
   ) => _controller._sendTo(slot, <String, Object?>{
     'action': 'applyHighlights',
     'items': <Map<String, Object?>>[
@@ -2005,7 +2026,7 @@ final class _ViewerAnnotationOverlay implements AnnotationOverlayPort {
           'id': highlight.id,
           'start': highlight.start,
           'end': highlight.end,
-          'decoration': highlight.decoration.wireName,
+          'decoration': highlight.decoration.name,
           'colorLight': highlight.color.lightHex,
           'colorDark': highlight.color.darkHex,
         },

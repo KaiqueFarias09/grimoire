@@ -23,18 +23,18 @@ void main() {
   /// deterministic.
   Future<void> seedAnnotations() async {
     await controller.importAnnotations(
-      '{"highlights": ['
-      '{"id":"h1","fileIndex":0,"start":0,"end":18,"text":"Chapter one text here.",'
+      '{"formatVersion":1,"highlights": ['
+      '{"id":"h1","sectionIndex":0,"start":0,"end":18,"text":"Chapter one text here.",'
       '"before":"","after":"","decoration":"background",'
-      '"color":{"light":"#ffeb6b","dark":"#906e00"},'
+      '"color":"yellow",'
       '"note":"first note","createdAt":"2026-09-01T10:00:00Z",'
       '"cfi":"epubcfi(/6/4!/4/2,/1:0,/1:18)"},'
-      '{"id":"h2","fileIndex":1,"start":7,"end":12,"text":"content",'
+      '{"id":"h2","sectionIndex":1,"start":7,"end":12,"text":"content",'
       '"before":"","after":"","decoration":"wavy",'
-      '"color":{"light":"#ff0000","dark":"#ff0000"},'
+      '"color":"red",'
       '"createdAt":"2026-09-02T10:00:00Z"}],'
       '"bookmarks": ['
-      '{"id":"b1","title":"Chapter Two start","position":"eLv1:1:0",'
+      '{"id":"b1","title":"Chapter Two start","sectionIndex":1,"charOffset":0,'
       '"createdAt":"2026-09-02T09:00:00Z"}]}',
     );
   }
@@ -72,14 +72,14 @@ void main() {
 
       final yellow = buildViewerExportModel(
         controller,
-        options: ViewerExportOptions(colors: {ViewerHighlightColor.yellow}),
+        options: ViewerExportOptions(colors: {PaletteHighlightColor.yellow}),
       );
       expect(yellow.highlightItems, hasLength(1));
       expect(yellow.highlightItems.first.text, 'Chapter one text here.');
 
       final wavy = buildViewerExportModel(
         controller,
-        options: ViewerExportOptions(decorations: {ViewerHighlightDecoration.wavy}),
+        options: ViewerExportOptions(decorations: {HighlightDecoration.wavy}),
       );
       expect(wavy.highlightItems, hasLength(1));
       expect(wavy.highlightItems.first.fileIndex, 1);
@@ -172,21 +172,21 @@ void main() {
       expect(markdown, isNot(contains('epubcfi')));
     });
 
-    test('location links support eLivre and both', () async {
+    test('location details support canonical text locators and CFI', () async {
       await seedAnnotations();
       final both = buildViewerExportModel(
         controller,
         options: const ViewerExportOptions(locationLinks: ViewerExportLocationLinks.both),
       ).toMarkdown();
-      expect(both, contains('eLv1:0:0'));
+      expect(both, contains('Section 1, characters 0-18'));
       expect(both, contains('epubcfi'));
 
-      final eLivreOnly = buildViewerExportModel(
+      final textOnly = buildViewerExportModel(
         controller,
-        options: const ViewerExportOptions(locationLinks: ViewerExportLocationLinks.eLivre),
+        options: const ViewerExportOptions(locationLinks: ViewerExportLocationLinks.textLocator),
       ).toMarkdown();
-      expect(eLivreOnly, contains('[Chapter One](eLv1:0:0)'));
-      expect(eLivreOnly, isNot(contains('epubcfi')));
+      expect(textOnly, contains('Section 1, characters 0-18'));
+      expect(textOnly, isNot(contains('epubcfi')));
     });
   });
 
@@ -195,10 +195,11 @@ void main() {
       await seedAnnotations();
       // Seed a highlight carrying characters that MUST be escaped.
       await controller.importAnnotations(
-        '{"highlights": [{"id":"h3","fileIndex":0,"start":19,"end":24,'
+        '{"formatVersion":1,"highlights": [{"id":"h3","sectionIndex":0,'
+        '"start":19,"end":24,'
         '"text":"<b>bold</b> & \\"quoted\\"","before":"","after":"",'
         '"decoration":"underline",'
-        '"color":{"light":"#add8ff","dark":"#265589"},'
+        '"color":"blue",'
         '"createdAt":"2026-09-03T10:00:00Z"}], "bookmarks": []}',
       );
       final html = buildViewerExportModel(
@@ -209,7 +210,7 @@ void main() {
       expect(html, contains('<title>Test Book</title>'));
       expect(html, contains('<p>&lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;</p>'));
       expect(html, contains('<aside class="elv-note">first note</aside>'));
-      expect(html, contains('<a class="elv-location" href="epubcfi(/6/4!/4/2,/1:0,/1:18)">'));
+      expect(html, contains('<a href="epubcfi(/6/4!/4/2,/1:0,/1:18)">'));
     });
 
     test('fragment mode and custom css', () async {
@@ -249,7 +250,7 @@ void main() {
       expect(text, contains('Chapter One'));
       expect(text, contains('Chapter one text here.'));
       expect(text, contains('Note: first note'));
-      expect(text, contains('[epubcfi(/6/4!/4/2,/1:0,/1:18) · eLv1:0:0]'));
+      expect(text, contains('[epubcfi(/6/4!/4/2,/1:0,/1:18) · Section 1, characters 0-18]'));
       expect(text, contains('Bookmarks'));
       expect(text, contains('- Chapter Two start'));
     });

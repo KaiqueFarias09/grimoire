@@ -1,4 +1,4 @@
-import 'viewer_annotations.dart';
+import 'package:e_livre/e_livre.dart';
 
 /// Ordering shared by annotation browsing and export snapshots.
 enum AnnotationSort {
@@ -17,26 +17,22 @@ class AnnotationQuery {
     this.colors,
     this.decorations,
     this.sort = AnnotationSort.documentOrder,
-    this.invalidCreatedAt,
   });
 
   /// Case-insensitive query over highlighted text and notes.
   final String? text;
 
   /// Allowed colors. Null keeps every color; an empty set keeps none.
-  final Set<ViewerHighlightColor>? colors;
+  final Set<HighlightColor>? colors;
 
   /// Allowed decorations. Null keeps every decoration; an empty set keeps none.
-  final Set<ViewerHighlightDecoration>? decorations;
+  final Set<HighlightDecoration>? decorations;
 
   /// Result ordering.
   final AnnotationSort sort;
 
-  /// Timestamp used when a stored creation value is invalid.
-  final DateTime? invalidCreatedAt;
-
   /// Returns a new filtered and ordered list without mutating [source].
-  List<ViewerHighlight> apply(final Iterable<ViewerHighlight> source) {
+  List<HighlightRecord> apply(final Iterable<HighlightRecord> source) {
     final normalizedText = text?.trim().toLowerCase();
     final result = source.where((final highlight) {
       if (colors != null && !colors!.contains(highlight.color)) {
@@ -56,14 +52,13 @@ class AnnotationQuery {
     switch (sort) {
       case AnnotationSort.documentOrder:
         result.sort((final a, final b) {
-          final byFile = a.fileIndex.compareTo(b.fileIndex);
+          final byFile = a.sectionIndex.compareTo(b.sectionIndex);
           return byFile != 0 ? byFile : a.start.compareTo(b.start);
         });
       case AnnotationSort.recentlyCreated:
-        final fallback = invalidCreatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         result.sort((final a, final b) {
-          final aAt = DateTime.tryParse(a.createdAtIso) ?? fallback;
-          final bAt = DateTime.tryParse(b.createdAtIso) ?? fallback;
+          final aAt = a.createdAt;
+          final bAt = b.createdAt;
           return bAt.compareTo(aAt);
         });
     }
@@ -71,14 +66,14 @@ class AnnotationQuery {
   }
 
   /// Applies this query and groups results by a host-provided section title.
-  Map<String, List<ViewerHighlight>> groupBySection(
-    final Iterable<ViewerHighlight> source, {
+  Map<String, List<HighlightRecord>> groupBySection(
+    final Iterable<HighlightRecord> source, {
     required final String Function(int fileIndex) sectionTitle,
   }) {
-    final groups = <String, List<ViewerHighlight>>{};
+    final groups = <String, List<HighlightRecord>>{};
     for (final highlight in apply(source)) {
-      final title = sectionTitle(highlight.fileIndex);
-      (groups[title] ??= <ViewerHighlight>[]).add(highlight);
+      final title = sectionTitle(highlight.sectionIndex);
+      (groups[title] ??= <HighlightRecord>[]).add(highlight);
     }
     return groups;
   }

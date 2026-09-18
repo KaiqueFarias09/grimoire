@@ -23,192 +23,76 @@ Book _comicBook() {
 }
 
 void main() {
-  group('ViewerHighlight', () {
-    test('json round-trips', () {
-      const highlight = ViewerHighlight(
-        id: 'hl-1',
-        fileIndex: 0,
-        start: 10,
-        end: 20,
-        text: 'highlighted',
-        before: 'text before ',
-        after: ' text after',
-        color: ViewerHighlightColor.purple,
-        decoration: ViewerHighlightDecoration.wavy,
-        createdAtIso: '2026-08-30T00:00:00Z',
-        note: 'my note',
-        cfi: 'epubcfi(/6/4!/4/2,/1:0,/1:11)',
-      );
-      final json = highlight.toJson();
-      final restored = ViewerHighlight.fromJson(json)!;
-      expect(restored.id, highlight.id);
-      expect(restored.fileIndex, highlight.fileIndex);
-      expect(restored.start, highlight.start);
-      expect(restored.end, highlight.end);
-      expect(restored.text, highlight.text);
-      expect(restored.before, highlight.before);
-      expect(restored.after, highlight.after);
-      expect(restored.color, highlight.color);
-      expect(restored.decoration, highlight.decoration);
-      expect(restored.note, highlight.note);
-      expect(restored.cfi, highlight.cfi);
-    });
+  group('canonical annotation integration', () {
+    final highlight = HighlightRecord(
+      id: 'hl-1',
+      sectionIndex: 0,
+      start: 10,
+      end: 20,
+      text: 'highlighted',
+      before: 'text before ',
+      after: ' text after',
+      color: PaletteHighlightColor.purple,
+      decoration: HighlightDecoration.wavy,
+      createdAt: DateTime.utc(2026, 8, 30),
+      note: 'my note',
+      cfi: 'epubcfi(/6/4!/4/2,/1:0,/1:11)',
+    );
 
-    test('json round-trips default decoration', () {
-      const highlight = ViewerHighlight(
-        id: 'hl-2',
-        fileIndex: 3,
-        start: 0,
-        end: 4,
-        text: 'word',
-        before: '',
-        after: '',
-        color: ViewerHighlightColor.yellow,
-        createdAtIso: '',
+    test('eLivre codec round-trips viewer annotations', () {
+      final encoded = encodeAnnotations(
+        AnnotationCollection(highlights: [highlight], bookmarks: const []),
       );
-      final restored = ViewerHighlight.fromJson(highlight.toJson())!;
-      expect(restored.decoration, ViewerHighlightDecoration.background);
-      expect(restored.color, ViewerHighlightColor.yellow);
-    });
 
-    test('json rejects malformed payloads', () {
-      expect(ViewerHighlight.fromJson({}), isNull);
-      expect(
-        ViewerHighlight.fromJson({
-          'id': 'x',
-          'fileIndex': 0,
-          'start': 0,
-          'end': 1,
-          'text': 'a',
-          'decoration': 'bogus',
-          'color': ViewerHighlightColor.green.toJson(),
-        }),
-        isNull,
-      );
-      expect(
-        ViewerHighlight.fromJson({
-          'id': 'x',
-          'fileIndex': 0,
-          'start': 0,
-          'end': 1,
-          'text': 'a',
-          'decoration': 'background',
-        }),
-        isNull,
-      );
-      expect(
-        ViewerHighlight.fromJson({
-          'id': 'x',
-          'fileIndex': 0,
-          'start': 0,
-          'end': 1,
-          'text': 'a',
-          'decoration': 'background',
-          'color': {'light': '#ffeb6b'},
-        }),
-        isNull,
-      );
-    });
-
-    test('highlight color parses hex halves and rejects junk', () {
-      final color = ViewerHighlightColor.fromJson(ViewerHighlightColor.purple.toJson());
-      expect(color, ViewerHighlightColor.purple);
-      expect(ViewerHighlightColor.fromJson({'light': '#ffeb6b', 'dark': 'nope'}), isNull);
-      expect(ViewerHighlightColor.fromJson('#ffeb6b'), isNull);
+      expect(decodeAnnotations(encoded)!.highlights.single, highlight);
     });
 
     test('highlight color resolves by background brightness', () {
       expect(
-        ViewerHighlightColor.yellow.resolve(const Color(0xFFFFFFFF)).toARGB32(),
-        ViewerHighlightColor.yellow.light.toARGB32(),
+        PaletteHighlightColor.yellow.resolve(const Color(0xFFFFFFFF)).toARGB32(),
+        PaletteHighlightColor.yellow.lightColor.toARGB32(),
       );
       expect(
-        ViewerHighlightColor.yellow.resolve(const Color(0xFF151515)).toARGB32(),
-        ViewerHighlightColor.yellow.dark.toARGB32(),
+        PaletteHighlightColor.yellow.resolve(const Color(0xFF151515)).toARGB32(),
+        PaletteHighlightColor.yellow.darkColor.toARGB32(),
       );
     });
 
     test('relocateHighlight finds exact matches', () {
-      const highlight = ViewerHighlight(
+      final exact = HighlightRecord(
         id: 'x',
-        fileIndex: 0,
+        sectionIndex: 0,
         start: 2,
         end: 5,
         text: 'llo',
         before: 'he',
         after: ' wo',
-        color: ViewerHighlightColor.green,
-        createdAtIso: '',
+        color: PaletteHighlightColor.green,
+        createdAt: DateTime.utc(2026),
       );
-      expect(ViewerController.relocateHighlight(highlight, 'hello world'), (2, 5));
+
+      expect(ViewerController.relocateHighlight(exact, 'hello world'), (2, 5));
     });
 
-    test('relocateHighlight drifts when offsets shift', () {
-      const highlight = ViewerHighlight(
-        id: 'x',
-        fileIndex: 0,
-        start: 5,
-        end: 8,
-        text: 'llo',
-        before: '',
-        after: '',
-        color: ViewerHighlightColor.blue,
-        createdAtIso: '',
+    test('highlights and selections expose canonical locators', () {
+      expect(
+        highlight.locator,
+        const TextLocator(
+          sectionIndex: 0,
+          start: 10,
+          end: 20,
+          quote: TextQuote(before: 'text before ', text: 'highlighted', after: ' text after'),
+        ),
       );
-      // 'llo' moved to index 3.
-      expect(ViewerController.relocateHighlight(highlight, 'Say hello world'), (6, 9));
-    });
-
-    test('relocateHighlight returns null when text is gone', () {
-      const highlight = ViewerHighlight(
-        id: 'x',
-        fileIndex: 0,
-        start: 0,
-        end: 3,
-        text: 'gone',
-        before: '',
-        after: '',
-        color: ViewerHighlightColor.red,
-        decoration: ViewerHighlightDecoration.strikeout,
-        createdAtIso: '',
+      expect(
+        const ViewerSelection(fileIndex: 1, text: 'thing', start: 3, end: 8).locator,
+        const TextLocator(
+          sectionIndex: 1,
+          start: 3,
+          end: 8,
+          quote: TextQuote(before: '', text: 'thing', after: ''),
+        ),
       );
-      expect(ViewerController.relocateHighlight(highlight, 'different entirely'), isNull);
-    });
-  });
-
-  group('ViewerLocator', () {
-    test('serialize and parse round-trip', () {
-      const locator = ViewerLocator(fileIndex: 2, start: 10, end: 25);
-      final (start, end) = locator.serialize();
-      expect(start, 'eLv1:2:10');
-      expect(end, 'eLv1:2:25');
-      expect(ViewerLocator.parse(start, end), locator);
-      expect(locator.startSerialized, 'eLv1:2:10');
-      expect(locator.endSerialized, 'eLv1:2:25');
-    });
-
-    test('parse rejects mismatched files and empty or inverted ranges', () {
-      expect(ViewerLocator.parse('eLv1:0:5', 'eLv1:1:9'), isNull);
-      expect(ViewerLocator.parse('eLv1:0:9', 'eLv1:0:9'), isNull);
-      expect(ViewerLocator.parse('eLv1:0:9', 'eLv1:0:2'), isNull);
-      expect(ViewerLocator.parse('junk', 'eLv1:0:9'), isNull);
-      expect(ViewerLocator.parse('eLv1:0:2'), isNull);
-    });
-
-    test('highlights and selections expose locators', () {
-      const highlight = ViewerHighlight(
-        id: 'x',
-        fileIndex: 1,
-        start: 3,
-        end: 8,
-        text: 'thing',
-        before: '',
-        after: '',
-        color: ViewerHighlightColor.blue,
-        createdAtIso: '',
-      );
-      expect(highlight.locator, const ViewerLocator(fileIndex: 1, start: 3, end: 8));
-      expect(highlight.locator.serialize(), ('eLv1:1:3', 'eLv1:1:8'));
     });
   });
 
@@ -289,7 +173,8 @@ void main() {
       await controller.start();
 
       final bookmark = controller.addBookmark();
-      expect(bookmark.position, startsWith('eLv1:'));
+      expect(bookmark.sectionIndex, 0);
+      expect(bookmark.charOffset, 0);
       expect(controller.bookmarks, hasLength(1));
 
       controller.removeBookmark(bookmark.id);
@@ -404,34 +289,41 @@ void main() {
     });
 
     test('importAnnotations merges by identity and keeps the newest', () async {
-      const color = '{"light":"#ffeb6b","dark":"#906e00"}';
       const h1 =
-          '{"id":"h1","fileIndex":0,"start":0,"end":5,"text":"x",'
-          '"decoration":"background","color":$color,"createdAt":"2026-09-01T10:00:00Z"}';
+          '{"id":"h1","sectionIndex":0,"start":0,"end":5,"text":"x",'
+          '"before":"","after":"","decoration":"background","color":"yellow",'
+          '"createdAt":"2026-09-01T10:00:00Z"}';
       await controller.importAnnotations(
-        '{"highlights": [$h1,'
+        '{"formatVersion":1,"highlights": [$h1,'
         // The same id twice in one import: the second is older and loses.
-        '{"id":"h9","fileIndex":0,"start":0,"end":2,"text":"x",'
-        '"decoration":"background","color":$color,"createdAt":"2026-09-03T10:00:00Z"},'
-        '{"id":"h9","fileIndex":0,"start":0,"end":3,"text":"x",'
-        '"decoration":"background","color":$color,"createdAt":"2026-09-02T10:00:00Z"}],'
+        '{"id":"h9","sectionIndex":0,"start":0,"end":2,"text":"x",'
+        '"before":"","after":"","decoration":"background","color":"yellow",'
+        '"createdAt":"2026-09-03T10:00:00Z"},'
+        '{"id":"h9","sectionIndex":0,"start":0,"end":3,"text":"x",'
+        '"before":"","after":"","decoration":"background","color":"yellow",'
+        '"createdAt":"2026-09-02T10:00:00Z"}],'
         '"bookmarks": ['
-        '{"id":"b1","title":"Spot","position":"eLv1:0:0","createdAt":"2026-09-01T10:00:00Z"},'
-        '{"id":"b2","title":"Keep","position":"eLv1:1:0","createdAt":"2026-09-01T10:00:00Z"}]}',
+        '{"id":"b1","title":"Spot","sectionIndex":0,"charOffset":0,'
+        '"createdAt":"2026-09-01T10:00:00Z"},'
+        '{"id":"b2","title":"Keep","sectionIndex":1,"charOffset":0,'
+        '"createdAt":"2026-09-01T10:00:00Z"}]}',
       );
       expect(controller.highlights.map((final h) => h.end), <int>[5, 2]);
       expect(controller.bookmarks.map((final b) => b.title), <String>['Spot', 'Keep']);
 
       await controller.importAnnotations(
-        '{"highlights": ['
+        '{"formatVersion":1,"highlights": ['
         // Same id, newer: replaces in place.
-        '{"id":"h1","fileIndex":0,"start":0,"end":6,"text":"x",'
-        '"decoration":"background","color":$color,"createdAt":"2026-09-04T10:00:00Z"}],'
+        '{"id":"h1","sectionIndex":0,"start":0,"end":6,"text":"x",'
+        '"before":"","after":"","decoration":"background","color":"yellow",'
+        '"createdAt":"2026-09-04T10:00:00Z"}],'
         '"bookmarks": ['
         // Same title as b1, newer: replaces by title.
-        '{"id":"b3","title":"Spot","position":"eLv1:0:9","createdAt":"2026-09-04T10:00:00Z"},'
+        '{"id":"b3","title":"Spot","sectionIndex":0,"charOffset":9,'
+        '"createdAt":"2026-09-04T10:00:00Z"},'
         // Same position as b2, newer: replaces by position.
-        '{"id":"b4","title":"Fresh","position":"eLv1:1:0","createdAt":"2026-09-04T10:00:00Z"}]}',
+        '{"id":"b4","title":"Fresh","sectionIndex":1,"charOffset":0,'
+        '"createdAt":"2026-09-04T10:00:00Z"}]}',
       );
       expect(controller.highlights, hasLength(2));
       expect(controller.highlights.first.end, 6);
@@ -451,16 +343,16 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       controller
-        ..defaultHighlightColor = ViewerHighlightColor.purple
-        ..defaultHighlightDecoration = ViewerHighlightDecoration.wavy;
+        ..defaultHighlightColor = PaletteHighlightColor.purple
+        ..defaultHighlightDecoration = HighlightDecoration.wavy;
       final highlight = await controller.addHighlightFromSelection();
-      expect(highlight!.color, ViewerHighlightColor.purple);
-      expect(highlight.decoration, ViewerHighlightDecoration.wavy);
+      expect(highlight!.color, PaletteHighlightColor.purple);
+      expect(highlight.decoration, HighlightDecoration.wavy);
 
       // Explicit arguments still win over the defaults.
-      final blue = await controller.addHighlightFromSelection(color: ViewerHighlightColor.blue);
-      expect(blue!.color, ViewerHighlightColor.blue);
-      expect(blue.decoration, ViewerHighlightDecoration.wavy);
+      final blue = await controller.addHighlightFromSelection(color: PaletteHighlightColor.blue);
+      expect(blue!.color, PaletteHighlightColor.blue);
+      expect(blue.decoration, HighlightDecoration.wavy);
     });
 
     test('useHostChrome keeps chrome hidden but reports toggle events', () async {
@@ -1072,7 +964,7 @@ void main() {
           jsUrl: '/__viewer__/viewer.js',
         );
 
-        expect(documentText(html), lines.map((final l) => l.text).join('\n'));
+        expect(DocumentTextScanner(html).scan(), lines.map((final l) => l.text).join('\n'));
         expect(html, contains('elv-facsimile'));
         expect(html, contains('__pdfdoc__'));
         expect(html, contains("scriptBase = '/__pdfjs__'"));

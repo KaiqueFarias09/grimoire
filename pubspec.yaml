@@ -19,7 +19,7 @@ topics:
   - viewer
 
 dependencies:
-  e_livre: ^3.3.0
+  e_livre: ^3.0.0
   flutter:
     sdk: flutter
   webview_flutter: ^4.10.0
@@ -33,12 +33,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-
-# Local monorepo validation uses the sibling E10 checkout; publication uses
-# the hosted constraint above because dependency_overrides are not published.
-dependency_overrides:
-  e_livre:
-    path: ../eLivre
 
 flutter:
   assets:

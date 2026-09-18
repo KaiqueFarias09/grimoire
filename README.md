@@ -90,10 +90,10 @@ ELivreView(book: book, controller: controller);
 
 // Highlights (selection toolbar appears automatically):
 await controller.addHighlightFromSelection(
-  color: ViewerHighlightColor.purple,
-  decoration: ViewerHighlightDecoration.background,
+  color: PaletteHighlightColor.purple,
+  decoration: HighlightDecoration.background,
 );
-final highlightJson = controller.highlights.map((h) => h.toJson()).toList();
+final annotationsJson = controller.exportAnnotations();
 
 // Bookmarks:
 final bookmark = controller.addBookmark('Chapter 5');
@@ -108,13 +108,13 @@ await controller.setJustify(true);
 await controller.setHyphenate(true);
 
 // Quick highlights remember the user's choice:
-controller.defaultHighlightColor = ViewerHighlightColor.purple;
+controller.defaultHighlightColor = PaletteHighlightColor.purple;
 final highlight = await controller.addHighlightFromSelection();
-print(highlight?.locator.serialize()); // ('eLv1:0:12', 'eLv1:0:31')
+print(locatorToJson(highlight!.locator));
 
 // Progress without polling, plus chapter titles and reading time:
 controller.pageChanges.listen(
-  (change) => saveProgress(change.position.serialize(), change.chapterTitle),
+  (change) => saveProgress(locatorToJson(change.position.locator), change.chapterTitle),
 );
 controller.readingSessions.listen((session) => trackTime(session.duration));
 
@@ -196,7 +196,7 @@ handles loopback internally).
 | Chapter transitions | serial iframe reload → dual-webview preloading (spare loads next file) |
 | Pagination | CSS multi-column + scroll math (`paged_mode.pyj` → `assets/viewer/viewer.js`) |
 | Chrome | host page JS → Flutter widgets (`ReaderShell`, `TocSheet`, `BookmarksSheet`, `SearchOverlay`) |
-| Positions | EPUB CFI → reflow-stable char offsets (`eLv1:` serialization) |
+| Positions | EPUB CFI → canonical `TextLocator` character offsets |
 | Highlights | range CFI → char-offset ranges + context-text fuzzy relocation |
 | Search | Web Worker text scan → Dart regex over the same text model |
 | PDF | text extracted and reflowed by eLivre; facsimile pages render via lazily-downloaded pdf.js with a text layer pinned to the same canonical text space |

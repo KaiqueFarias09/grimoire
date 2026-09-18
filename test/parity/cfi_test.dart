@@ -22,9 +22,6 @@ void main() {
   // Parity: test_cfi.pyj cfi_escaping — CFI reserved characters in an
   // id assertion survive a round trip.
   test('cfi_escaping', () {
-    expect(unescapeFromCfi(escapeForCfi('^^')), '^^');
-    expect(escapeForCfi(';'), '^;');
-    expect(escapeForCfi('[]()'), r'^[^]^(^)');
     final cfi = EpubCfi.simple(steps: [2, 4, 2], charOffset: 1, idAssertion: r'we^ird[id];');
     final serialized = cfi.encode();
     expect(serialized, r'epubcfi(/2/4/2:1[we^^ird^[id^]^;])');

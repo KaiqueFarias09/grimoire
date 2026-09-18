@@ -1,6 +1,7 @@
+import 'package:e_livre/e_livre.dart';
+
 import 'annotation_query.dart';
 import 'export_document.dart';
-import 'viewer_annotations.dart';
 
 /// Snapshots annotations into an immutable export document.
 ViewerExportModel buildViewerExportModel(
@@ -14,16 +15,14 @@ ViewerExportModel buildViewerExportModel(
           decorations: options.decorations,
           sort: options.sort,
         ).apply(source.highlights)
-      : const <ViewerHighlight>[];
+      : const <HighlightRecord>[];
 
-  final bookmarks = options.includeBookmarks ? [...source.bookmarks] : <ViewerBookmark>[];
+  final bookmarks = options.includeBookmarks ? [...source.bookmarks] : <BookmarkRecord>[];
   if (options.sort == AnnotationSort.recentlyCreated) {
-    bookmarks.sort(
-      (final a, final b) => _createdAt(b.createdAtIso).compareTo(_createdAt(a.createdAtIso)),
-    );
+    bookmarks.sort((final a, final b) => b.createdAt.compareTo(a.createdAt));
   }
 
-  ViewerExportItem toItem(final ViewerHighlight highlight) {
+  ViewerExportItem toItem(final HighlightRecord highlight) {
     final item = ViewerExportItem.highlight(highlight);
     return options.includeNotes
         ? item
@@ -34,8 +33,7 @@ ViewerExportModel buildViewerExportModel(
             decoration: item.decoration,
             createdAtIso: item.createdAtIso,
             cfi: item.cfi,
-            locatorStart: item.locatorStart,
-            locatorEnd: item.locatorEnd,
+            locator: item.locator,
             fileIndex: item.fileIndex,
           );
   }
@@ -45,14 +43,14 @@ ViewerExportModel buildViewerExportModel(
     chapters.add(
       ViewerExportChapter(
         title: null,
-        fileIndex: highlights.isEmpty ? 0 : highlights.first.fileIndex,
+        fileIndex: highlights.isEmpty ? 0 : highlights.first.sectionIndex,
         items: [for (final highlight in highlights) toItem(highlight)],
       ),
     );
   } else {
-    final byFile = <int, List<ViewerHighlight>>{};
+    final byFile = <int, List<HighlightRecord>>{};
     for (final highlight in highlights) {
-      (byFile[highlight.fileIndex] ??= <ViewerHighlight>[]).add(highlight);
+      (byFile[highlight.sectionIndex] ??= <HighlightRecord>[]).add(highlight);
     }
     final fileIndexes = byFile.keys.toList()..sort();
     for (final fileIndex in fileIndexes) {
@@ -74,6 +72,3 @@ ViewerExportModel buildViewerExportModel(
     options: options,
   );
 }
-
-DateTime _createdAt(final String iso) =>
-    DateTime.tryParse(iso) ?? DateTime.fromMillisecondsSinceEpoch(0);

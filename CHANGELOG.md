@@ -90,7 +90,7 @@
   (chapter headings, highlights, notes, location links, bookmarks,
   front matter, CSS) can be overridden with callbacks, or hosts can
   walk the pure-data model and render anything themselves. Location
-  links support CFI, `eLv1` or both.
+  location details support CFI, canonical `TextLocator` coordinates or both.
 - **Chapter-title API**: `chapterTitleFor(fileIndex)` and
   `currentChapterTitle` map reading-order indexes to their covering
   TOC section title (built once from the book's navigation, empty
@@ -133,22 +133,18 @@
   own UI, but `chromeVisible` stays false and `toggleChrome` /
   `showChrome` / `hideChrome` are no-ops — hosts no longer need to
   fight the built-in chrome with `hideChrome()` on every change.
-- **`ViewerLocator`**: public range locator over the shared
-  documentText space, with `serialize()` /
-  `startSerialized` / `endSerialized` (`eLv1:` strings for host
-  persistence), `parse(start, end)`, and value equality.
-  `ViewerHighlight.locator` and `ViewerSelection.locator` expose it,
-  so hosts stop hand-building `eLv1:file:offset` strings.
+- **Canonical locators**: viewer positions, highlights and selections
+  expose eLivre's `TextLocator` directly. Host persistence uses
+  `locatorToJson` / `locatorFromJson` instead of a viewer-owned wire
+  format.
 
 ### Changed
 
-- **Breaking**: highlight appearance is now color + decoration instead
-  of the four-value `ViewerHighlightStyle` enum, so hosts get full
-  control over marker colors (Calibre's model). `ViewerHighlightColor`
-  carries a light and a dark value per color; the built-in palette
-  matches Calibre's `builtin_colors_light/dark` (yellow, green, blue,
-  pink, purple). `ViewerHighlightDecoration` separates how the marker
-  draws: background, underline, strikeout, wavy. A purple wavy
+- **Breaking**: highlight appearance uses eLivre's canonical
+  `HighlightColor` and `HighlightDecoration` types. The viewer maps
+  palette tokens to Flutter light/dark colors while persistence stays
+  owned by eLivre. The built-in palette matches Calibre's colors
+  (yellow, green, blue, pink, purple). A purple wavy
   underline is expressible. `addHighlightFromSelection` takes
   `color`/`decoration`; `updateHighlightStyle` takes the same as named
   parameters.
@@ -204,7 +200,7 @@ Initial release.
   scroll math, tap zones, keyboard paging, resize re-jump and the
   Android scroll-race watcher.
 - `ViewerController`: page turns, TOC navigation, serialized
-  positions (`eLv1:file:offset`), global progress, file-boundary
+  canonical text positions, global progress, file-boundary
   transitions and internal link following.
 - Themes (light/sepia/dark/system + custom, optional book color
   override), font size and margin controls with position-preserving

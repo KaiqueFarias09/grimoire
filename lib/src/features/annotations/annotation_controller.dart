@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math' as math;
 
+import 'package:e_livre/e_livre.dart';
 import 'package:flutter/foundation.dart';
 
 import '../navigation/viewer_position.dart';
@@ -10,7 +9,7 @@ import 'viewer_annotations.dart';
 /// The rendering seam used by [AnnotationController].
 abstract interface class AnnotationOverlayPort {
   /// Replaces every highlight overlay for [fileIndex] in [slot].
-  Future<void> applyHighlights(int slot, int fileIndex, List<ViewerHighlight> highlights);
+  Future<void> applyHighlights(int slot, int fileIndex, List<HighlightRecord> highlights);
 
   /// Removes one highlight overlay from [slot].
   Future<void> removeHighlight(int slot, String id);
@@ -22,68 +21,73 @@ class AnnotationController extends ChangeNotifier {
   AnnotationController({required final AnnotationOverlayPort overlay}) : _overlay = overlay;
 
   final AnnotationOverlayPort _overlay;
-  final List<ViewerBookmark> _bookmarks = <ViewerBookmark>[];
-  final List<ViewerHighlight> _highlights = <ViewerHighlight>[];
-  final StreamController<ViewerHighlight> _highlightTaps =
-      StreamController<ViewerHighlight>.broadcast();
+  final List<BookmarkRecord> _bookmarks = <BookmarkRecord>[];
+  final List<HighlightRecord> _highlights = <HighlightRecord>[];
+  final StreamController<HighlightRecord> _highlightTaps =
+      StreamController<HighlightRecord>.broadcast();
   final StreamController<void> _changes = StreamController<void>.broadcast();
 
-  ViewerHighlightColor _defaultColor = ViewerHighlightColor.yellow;
-  ViewerHighlightDecoration _defaultDecoration = ViewerHighlightDecoration.background;
+  HighlightColor _defaultColor = PaletteHighlightColor.yellow;
+  HighlightDecoration _defaultDecoration = HighlightDecoration.background;
   int _bookmarkCounter = 0;
   int _highlightCounter = 0;
 
   /// Bookmarks in creation order.
-  List<ViewerBookmark> get bookmarks => List<ViewerBookmark>.unmodifiable(_bookmarks);
+  List<BookmarkRecord> get bookmarks => List<BookmarkRecord>.unmodifiable(_bookmarks);
 
   /// Highlights in creation order.
-  List<ViewerHighlight> get highlights => List<ViewerHighlight>.unmodifiable(_highlights);
+  List<HighlightRecord> get highlights => List<HighlightRecord>.unmodifiable(_highlights);
 
   /// Taps resolved to the matching highlight.
-  Stream<ViewerHighlight> get highlightTapEvents => _highlightTaps.stream;
+  Stream<HighlightRecord> get highlightTapEvents => _highlightTaps.stream;
 
   /// Fires after any persisted annotation mutation.
   Stream<void> get changes => _changes.stream;
 
   /// The color used by quick highlights.
-  ViewerHighlightColor get defaultColor => _defaultColor;
+  HighlightColor get defaultColor => _defaultColor;
 
-  set defaultColor(final ViewerHighlightColor color) {
+  set defaultColor(final HighlightColor color) {
     if (color == _defaultColor) {
       return;
     }
+
     _defaultColor = color;
     notifyListeners();
   }
 
   /// The decoration used by quick highlights.
-  ViewerHighlightDecoration get defaultDecoration => _defaultDecoration;
+  HighlightDecoration get defaultDecoration => _defaultDecoration;
 
-  set defaultDecoration(final ViewerHighlightDecoration decoration) {
+  set defaultDecoration(final HighlightDecoration decoration) {
     if (decoration == _defaultDecoration) {
       return;
     }
+
     _defaultDecoration = decoration;
     notifyListeners();
   }
 
-  /// Adds a bookmark for a serialized reading position.
-  ViewerBookmark addBookmark({
-    required final String position,
+  /// Adds a bookmark for a canonical reading position.
+  BookmarkRecord addBookmark({
+    required final int sectionIndex,
+    required final int charOffset,
     required final double progress,
     final String? title,
   }) {
     _bookmarkCounter++;
-    final bookmark = ViewerBookmark(
+    final bookmark = BookmarkRecord(
       id: 'bm-$_bookmarkCounter-${DateTime.now().millisecondsSinceEpoch}',
       title: title?.isNotEmpty == true
           ? title!
           : 'Bookmark $_bookmarkCounter · ${(progress * 100).round()}%',
-      position: position,
-      createdAtIso: DateTime.now().toIso8601String(),
+      sectionIndex: sectionIndex,
+      charOffset: charOffset,
+      createdAt: DateTime.now(),
     );
     _bookmarks.add(bookmark);
     _didMutate();
+
     return bookmark;
   }
 
@@ -97,20 +101,20 @@ class AnnotationController extends ChangeNotifier {
   }
 
   /// Adds a highlight and applies the updated overlays to [slot].
-  Future<ViewerHighlight> addHighlight({
+  Future<HighlightRecord> addHighlight({
     required final ViewerSelection selection,
     required final String before,
     required final String after,
     required final int slot,
     final String? cfi,
-    final ViewerHighlightColor? color,
-    final ViewerHighlightDecoration? decoration,
+    final HighlightColor? color,
+    final HighlightDecoration? decoration,
     final String? note,
   }) async {
     _highlightCounter++;
-    final highlight = ViewerHighlight(
+    final highlight = HighlightRecord(
       id: 'hl-$_highlightCounter-${DateTime.now().millisecondsSinceEpoch}',
-      fileIndex: selection.fileIndex,
+      sectionIndex: selection.fileIndex,
       start: selection.start,
       end: selection.end,
       text: selection.text,
@@ -118,13 +122,14 @@ class AnnotationController extends ChangeNotifier {
       after: after,
       color: color ?? _defaultColor,
       decoration: decoration ?? _defaultDecoration,
-      createdAtIso: DateTime.now().toIso8601String(),
+      createdAt: DateTime.now(),
       note: note,
       cfi: cfi,
     );
     _highlights.add(highlight);
     await applyHighlightsToEngine(slot, selection.fileIndex);
     _didMutate();
+
     return highlight;
   }
 
@@ -138,42 +143,46 @@ class AnnotationController extends ChangeNotifier {
     if (index == -1) {
       return;
     }
+
     final highlight = _highlights.removeAt(index);
-    if (activeFileIndex == highlight.fileIndex) {
+    if (activeFileIndex == highlight.sectionIndex) {
       await _overlay.removeHighlight(activeSlot, id);
     }
     _didMutate();
   }
 
   /// Applies all highlights belonging to [fileIndex] to [slot].
-  Future<void> applyHighlightsToEngine(final int slot, final int fileIndex) =>
-      _overlay.applyHighlights(slot, fileIndex, <ViewerHighlight>[
-        for (final highlight in _highlights)
-          if (highlight.fileIndex == fileIndex) highlight,
-      ]);
+  Future<void> applyHighlightsToEngine(final int slot, final int fileIndex) {
+    return _overlay.applyHighlights(slot, fileIndex, <HighlightRecord>[
+      for (final highlight in _highlights)
+        if (highlight.sectionIndex == fileIndex) highlight,
+    ]);
+  }
 
   /// Returns the annotation adjacent to [position], wrapping at the ends.
-  ViewerHighlight? adjacentHighlight(final ViewerPosition position, final int direction) {
+  HighlightRecord? adjacentHighlight(final ViewerPosition position, final int direction) {
     final ordered = [..._highlights]
       ..sort((final a, final b) {
-        final byFile = a.fileIndex.compareTo(b.fileIndex);
+        final byFile = a.sectionIndex.compareTo(b.sectionIndex);
         return byFile != 0 ? byFile : a.start.compareTo(b.start);
       });
     if (ordered.isEmpty) {
       return null;
     }
+
     if (direction > 0) {
       return ordered.firstWhere(
         (final highlight) =>
-            highlight.fileIndex > position.fileIndex ||
-            (highlight.fileIndex == position.fileIndex && highlight.start > position.charOffset),
+            highlight.sectionIndex > position.fileIndex ||
+            (highlight.sectionIndex == position.fileIndex && highlight.start > position.charOffset),
         orElse: () => ordered.first,
       );
     }
+
     return ordered.lastWhere(
       (final highlight) =>
-          highlight.fileIndex < position.fileIndex ||
-          (highlight.fileIndex == position.fileIndex && highlight.start < position.charOffset),
+          highlight.sectionIndex < position.fileIndex ||
+          (highlight.sectionIndex == position.fileIndex && highlight.start < position.charOffset),
       orElse: () => ordered.last,
     );
   }
@@ -182,15 +191,17 @@ class AnnotationController extends ChangeNotifier {
   Future<void> updateHighlightStyle(
     final String id, {
     required final int activeSlot,
-    final ViewerHighlightColor? color,
-    final ViewerHighlightDecoration? decoration,
+    final HighlightColor? color,
+    final HighlightDecoration? decoration,
   }) async {
     final index = _highlights.indexWhere((final highlight) => highlight.id == id);
     if (index < 0) {
       return;
     }
-    _highlights[index] = _highlights[index].copyWith(color: color, decoration: decoration);
-    await applyHighlightsToEngine(activeSlot, _highlights[index].fileIndex);
+
+    final updated = _highlights[index].withStyle(color: color, decoration: decoration);
+    _highlights[index] = updated;
+    await applyHighlightsToEngine(activeSlot, updated.sectionIndex);
     _didMutate();
   }
 
@@ -200,7 +211,8 @@ class AnnotationController extends ChangeNotifier {
     if (index < 0) {
       return;
     }
-    _highlights[index] = _highlights[index].copyWith(note: note);
+
+    _highlights[index] = _highlights[index].withNote(note);
     _didMutate();
   }
 
@@ -214,11 +226,12 @@ class AnnotationController extends ChangeNotifier {
     }
   }
 
-  /// Serializes all annotations for host-owned persistence.
-  String exportAnnotations() => jsonEncode(<String, Object?>{
-    'highlights': [for (final highlight in _highlights) highlight.toJson()],
-    'bookmarks': [for (final bookmark in _bookmarks) bookmark.toJson()],
-  });
+  /// Serializes all annotations with eLivre's canonical versioned codec.
+  String exportAnnotations() {
+    return encodeAnnotations(
+      AnnotationCollection(highlights: [..._highlights], bookmarks: [..._bookmarks]),
+    );
+  }
 
   /// Merges persisted annotations and refreshes the active overlay.
   Future<void> importAnnotations(
@@ -226,72 +239,22 @@ class AnnotationController extends ChangeNotifier {
     required final int activeSlot,
     required final int activeFileIndex,
   }) async {
-    final decoded = jsonDecode(json);
-    if (decoded is! Map<String, dynamic>) {
+    final incoming = decodeAnnotations(json);
+    if (incoming == null) {
       return;
     }
-    final incomingHighlights = <ViewerHighlight>[];
-    for (final item in (decoded['highlights'] as List<dynamic>? ?? [])) {
-      if (item is Map<String, dynamic>) {
-        final highlight = ViewerHighlight.fromJson(item);
-        if (highlight != null) {
-          incomingHighlights.add(highlight);
-        }
-      }
-    }
-    final incomingBookmarks = <ViewerBookmark>[
-      for (final item in (decoded['bookmarks'] as List<dynamic>? ?? []))
-        if (item is Map<String, dynamic>) ViewerBookmark.fromJson(item),
-    ];
 
-    final highlightIndexById = <String, int>{
-      for (var index = 0; index < _highlights.length; index++) _highlights[index].id: index,
-    };
-    for (final incoming in incomingHighlights) {
-      final at = highlightIndexById[incoming.id] ?? -1;
-      if (at < 0) {
-        highlightIndexById[incoming.id] = _highlights.length;
-        _highlights.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_highlights[at].createdAtIso) > 0) {
-        _highlights[at] = incoming;
-      }
-    }
+    final highlightMerge = mergeHighlights(_highlights, incoming.highlights);
+    final bookmarkMerge = mergeBookmarks(_bookmarks, incoming.bookmarks);
+    _highlights
+      ..clear()
+      ..addAll(highlightMerge.highlights);
+    _bookmarks
+      ..clear()
+      ..addAll(bookmarkMerge.bookmarks);
 
-    final bookmarkIndexByTitle = <String, int>{
-      for (var index = 0; index < _bookmarks.length; index++) _bookmarks[index].title: index,
-    };
-    final bookmarkIndexByPosition = <String, int>{
-      for (var index = 0; index < _bookmarks.length; index++) _bookmarks[index].position: index,
-    };
-    for (final incoming in incomingBookmarks) {
-      final byTitle = bookmarkIndexByTitle[incoming.title];
-      final byPosition = bookmarkIndexByPosition[incoming.position];
-      final at = byTitle == null
-          ? (byPosition ?? -1)
-          : (byPosition == null ? byTitle : math.min(byTitle, byPosition));
-      if (at < 0) {
-        bookmarkIndexByTitle.putIfAbsent(incoming.title, () => _bookmarks.length);
-        bookmarkIndexByPosition.putIfAbsent(incoming.position, () => _bookmarks.length);
-        _bookmarks.add(incoming);
-      } else if (incoming.createdAtIso.compareTo(_bookmarks[at].createdAtIso) > 0) {
-        _bookmarks[at] = incoming;
-      }
-    }
     await applyHighlightsToEngine(activeSlot, activeFileIndex);
     _didMutate();
-  }
-
-  /// Relocates [highlight] against [text].
-  static (int, int)? relocateHighlight(final ViewerHighlight highlight, final String text) {
-    if (highlight.text.isEmpty || text.isEmpty) {
-      return null;
-    }
-    if (highlight.end <= text.length &&
-        text.substring(highlight.start, highlight.end) == highlight.text) {
-      return (highlight.start, highlight.end);
-    }
-    final at = text.indexOf(highlight.text);
-    return at == -1 ? null : (at, at + highlight.text.length);
   }
 
   void _didMutate() {

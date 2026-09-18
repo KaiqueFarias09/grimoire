@@ -1,8 +1,7 @@
+import 'package:e_livre/e_livre.dart';
 import 'package:flutter/foundation.dart';
 
-import '../navigation/viewer_position.dart';
 import 'annotation_query.dart';
-import 'viewer_annotations.dart';
 
 /// The immutable annotation data needed to assemble an export document.
 abstract interface class ViewerExportSource {
@@ -13,10 +12,10 @@ abstract interface class ViewerExportSource {
   Iterable<String> get bookAuthors;
 
   /// Highlights in creation order.
-  List<ViewerHighlight> get highlights;
+  List<HighlightRecord> get highlights;
 
   /// Bookmarks in creation order.
-  List<ViewerBookmark> get bookmarks;
+  List<BookmarkRecord> get bookmarks;
 
   /// The navigation title covering [fileIndex], when available.
   String? chapterTitleFor(int fileIndex);
@@ -30,8 +29,8 @@ enum ViewerExportLocationLinks {
   /// EPUB CFI (`epubcfi(...)`), Calibre/Readium interoperable.
   cfi,
 
-  /// The viewer's own `eLv1:` locator.
-  eLivre,
+  /// Canonical section and character-offset locator.
+  textLocator,
 
   /// Both locators.
   both,
@@ -68,10 +67,10 @@ class ViewerExportOptions {
   final bool includeNotes;
 
   /// Keeps only highlights in these colors; null keeps all.
-  final Set<ViewerHighlightColor>? colors;
+  final Set<HighlightColor>? colors;
 
   /// Keeps only highlights with these decorations; null keeps all.
-  final Set<ViewerHighlightDecoration>? decorations;
+  final Set<HighlightDecoration>? decorations;
 
   /// Case-insensitive filter over highlight text and notes; null
   /// keeps everything. Empty string keeps everything.
@@ -96,39 +95,38 @@ class ViewerExportItem {
     this.decoration,
     this.createdAtIso = '',
     this.cfi,
-    this.locatorStart,
-    this.locatorEnd,
+    this.locator,
     this.fileIndex = 0,
   });
 
   /// Highlight entry.
-  factory ViewerExportItem.highlight(final ViewerHighlight highlight) {
+  factory ViewerExportItem.highlight(final HighlightRecord highlight) {
     return ViewerExportItem(
       kind: ViewerExportItemKind.highlight,
       text: highlight.text,
       note: highlight.note,
       color: highlight.color,
       decoration: highlight.decoration,
-      createdAtIso: highlight.createdAtIso,
+      createdAtIso: highlight.createdAt.toIso8601String(),
       cfi: highlight.cfi,
-      locatorStart: highlight.locator.startSerialized,
-      locatorEnd: highlight.locator.endSerialized,
-      fileIndex: highlight.fileIndex,
+      locator: highlight.locator,
+      fileIndex: highlight.sectionIndex,
     );
   }
 
   /// Bookmark entry.
-  factory ViewerExportItem.bookmark(final ViewerBookmark bookmark) {
+  factory ViewerExportItem.bookmark(final BookmarkRecord bookmark) {
     return ViewerExportItem(
       kind: ViewerExportItemKind.bookmark,
       text: bookmark.title,
-      createdAtIso: bookmark.createdAtIso,
-      fileIndex: _bookmarkFileIndex(bookmark.position),
+      createdAtIso: bookmark.createdAt.toIso8601String(),
+      locator: TextLocator(
+        sectionIndex: bookmark.sectionIndex,
+        start: bookmark.charOffset,
+        end: bookmark.charOffset,
+      ),
+      fileIndex: bookmark.sectionIndex,
     );
-  }
-
-  static int _bookmarkFileIndex(final String position) {
-    return ViewerPosition.deserialize(position)?.fileIndex ?? 0;
   }
 
   /// Highlight or bookmark.
@@ -141,10 +139,10 @@ class ViewerExportItem {
   final String? note;
 
   /// Highlight color (highlights only).
-  final ViewerHighlightColor? color;
+  final HighlightColor? color;
 
   /// Highlight decoration (highlights only).
-  final ViewerHighlightDecoration? decoration;
+  final HighlightDecoration? decoration;
 
   /// Creation timestamp as stored (ISO 8601, may be empty).
   final String createdAtIso;
@@ -152,11 +150,8 @@ class ViewerExportItem {
   /// EPUB CFI of the highlight start, when known.
   final String? cfi;
 
-  /// The `eLv1:` start locator, when known.
-  final String? locatorStart;
-
-  /// The `eLv1:` end locator, when known.
-  final String? locatorEnd;
+  /// The canonical text locator, when known.
+  final TextLocator? locator;
 
   /// Reading-order index of the file.
   final int fileIndex;
@@ -166,7 +161,13 @@ class ViewerExportItem {
 }
 
 /// The kind of an exported entry.
-enum ViewerExportItemKind { highlight, bookmark }
+enum ViewerExportItemKind {
+  /// A highlighted text range.
+  highlight,
+
+  /// A bookmarked position.
+  bookmark,
+}
 
 /// One chapter group of exportable entries.
 @immutable
@@ -221,7 +222,3 @@ class ViewerExportModel {
     }
   }
 }
-
-/// One exported bookmark entry. Alias of [ViewerExportItem] kept for
-/// readability of the [ViewerExportModel.bookmarks] list.
-typedef ViewerExportBookmark = ViewerExportItem;

@@ -16,3 +16,5 @@ example/.steward/
 
 # viewer.js benchmark driver
 benchmark/viewer_js/node_modules/
+# Local sibling-package overrides are development-only.
+pubspec_overrides.yaml

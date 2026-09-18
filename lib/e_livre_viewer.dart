@@ -1,7 +1,27 @@
 /// A Calibre-style ebook reader widget for Flutter.
 library;
 
-export 'package:e_livre/e_livre.dart' show SearchMode;
+export 'package:e_livre/e_livre.dart'
+    show
+        AnnotationCollection,
+        BookmarkRecord,
+        BookProgression,
+        CustomHighlightColor,
+        HighlightColor,
+        HighlightDecoration,
+        HighlightPalette,
+        HighlightRecord,
+        PaletteHighlightColor,
+        SearchMode,
+        TextLocator,
+        TextQuote,
+        decodeAnnotations,
+        encodeAnnotations,
+        locatorFromJson,
+        locatorToJson,
+        mergeBookmarks,
+        mergeHighlights,
+        relocateTextLocator;
 
 export 'src/controller/viewer_controller.dart' show ViewerController;
 export 'src/features/annotations/annotation_query.dart' show AnnotationQuery, AnnotationSort;
@@ -11,7 +31,6 @@ export 'src/features/annotations/export_document.dart'
         ViewerExportSource,
         ViewerExportChapter,
         ViewerExportItem,
-        ViewerExportBookmark,
         ViewerExportItemKind,
         ViewerExportOptions,
         ViewerExportLocationLinks;
@@ -22,12 +41,7 @@ export 'src/features/annotations/export_markdown.dart'
 export 'src/features/annotations/export_rendering.dart' show ViewerExportRendering;
 export 'src/features/annotations/export_snapshot.dart' show buildViewerExportModel;
 export 'src/features/annotations/viewer_annotations.dart'
-    show
-        ViewerSelection,
-        ViewerHighlight,
-        ViewerHighlightColor,
-        ViewerHighlightDecoration,
-        ViewerBookmark;
+    show HighlightColorRendering, ViewerSelection, viewerHighlightPalette;
 export 'src/features/bridge/viewer_bridge.dart'
     show
         ViewerBridge,
@@ -49,8 +63,7 @@ export 'src/features/bridge/viewer_bridge.dart'
 export 'src/features/mathjax/mathjax_loader.dart' show MathJaxLoader;
 export 'src/features/narration/text_segmentation.dart' show TextSegment, segmentText;
 export 'src/features/navigation/viewer_events.dart' show ViewerPageChange, ReadingSessionEvent;
-export 'src/features/navigation/viewer_position.dart'
-    show ViewerLocator, ViewerPosition, ReadingState;
+export 'src/features/navigation/viewer_position.dart' show ViewerPosition;
 export 'src/features/pdf/pdf_reading_mode.dart' show PdfReadingMode;
 export 'src/features/pdfjs/pdfjs_component.dart' show PdfJsSource;
 export 'src/features/pdfjs/pdfjs_loader.dart' show PdfJsLoader;
