@@ -15,25 +15,29 @@ ViewerController _controller(final EpubBook book) =>
     ViewerController(book, engineFactory: FakeViewerEngineFactory());
 
 /// Builds one highlight-JSON map over the fixture's text space.
-Map<String, dynamic> _highlightJson(final int index, final int start, final int end) =>
-    <String, dynamic>{
-      'id': 'ext-hl-$index',
-      'sectionIndex': 0,
-      'start': start,
-      'end': end,
-      'text': 'highlighted passage $index',
-      'before': 'before context ',
-      'after': ' after context',
-      'decoration': 'background',
-      'color': 'yellow',
-      'createdAt': '2026-09-05T10:${(index % 60).toString().padLeft(2, '0')}:00Z',
-    };
+Map<String, dynamic> _highlightJson(
+  final String prefix,
+  final int index,
+  final int start,
+  final int end,
+) => <String, dynamic>{
+  'id': '$prefix-hl-$index',
+  'sectionIndex': 0,
+  'start': start,
+  'end': end,
+  'text': 'highlighted passage $index',
+  'before': 'before context ',
+  'after': ' after context',
+  'decoration': 'background',
+  'color': 'yellow',
+  'createdAt': '2026-09-05T10:${(index % 60).toString().padLeft(2, '0')}:00Z',
+};
 
 String _importJson(final int count, {final String prefix = 'ext'}) => jsonEncode(<String, dynamic>{
   'formatVersion': 1,
   'highlights': [
     for (var i = 0; i < count; i++)
-      _highlightJson(i, (i * 512) % 1000000 + 10, (i * 512) % 1000000 + 50),
+      _highlightJson(prefix, i, (i * 512) % 1000000 + 10, (i * 512) % 1000000 + 50),
   ],
   'bookmarks': [
     for (var i = 0; i < count ~/ 10; i++)
@@ -67,14 +71,24 @@ Future<void> runAnnotationBenchmarks() async {
   final bigText = documentTextOf(big.largestChapter);
 
   for (final existing in const [1000, 5000, 20000]) {
-    final controller = _controller(big.book);
-    await controller.importAnnotations(_importJson(existing, prefix: 'seed'));
+    final measuredIterations = quickMode ? 3 : 5;
+    final controllers = <ViewerController>[];
+    for (var index = 0; index <= measuredIterations; index++) {
+      final controller = _controller(big.book);
+      await controller.importAnnotations(_importJson(existing, prefix: 'seed-$index'));
+      controllers.add(controller);
+    }
     final incoming = _importJson(1000, prefix: 'incoming-$existing');
-    group.add(
+    var sampleIndex = 0;
+    await group.addAsync(
       'importAnnotations 1k into $existing',
-      () => controller.importAnnotations(incoming),
+      () => controllers[sampleIndex++].importAnnotations(incoming),
+      iterations: measuredIterations,
       note: big.label,
     );
+    for (final controller in controllers) {
+      controller.dispose();
+    }
   }
 
   final exporter = _controller(big.book);

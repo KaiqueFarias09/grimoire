@@ -6,9 +6,8 @@
 #
 #   tool/coverage_gate.sh [floor_percent]
 #
-# The floor defaults to 72.8 — the measured coverage of the snapshot
-# baseline this quality candidate started from (the deterministic-test
-# rework had let it slip to 71.65%). Generated code is excluded from
+# The floor defaults to 72.8, the repository baseline measured with this
+# script when the coverage gate was introduced. Generated code is excluded from
 # the sum (see $_exclude), and test/helper files are never counted
 # because lcov only records lib/ sources here.
 #

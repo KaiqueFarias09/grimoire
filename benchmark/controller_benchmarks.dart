@@ -170,11 +170,8 @@ int _scriptsContaining(final FakeViewerEngine engine, final String action) =>
 Future<void> _navigationGroup() async {
   final group = BenchmarkGroup('Controller — page navigation');
 
-  // First load, Dart side: the boot batch every engine pays before the
-  // first page is interactive (settings, layout mode, fonts, margins),
-  // encoded through the bridge and evaluated by the fake engine. The
-  // controller is started and settled first, so the measured call
-  // really crosses the bridge into the engine.
+  // Settings update, Dart side: encode a changed font setting through
+  // the bridge and evaluate it on an already started fake engine.
   final many = manyChapters;
   final bootFactory = FakeViewerEngineFactory();
   final boot = ViewerController(many.book, engineFactory: bootFactory);
@@ -182,14 +179,15 @@ Future<void> _navigationGroup() async {
   await pumpEventQueue();
   final bootEngine = bootFactory.engines[0];
   final setFontSizeBefore = _scriptsContaining(bootEngine, 'setFontSize');
-  await group.addAsync(
-    'first-load bootstrap (settings batch to engine)',
-    () => boot.setFontSize(17),
-    note: '${many.label} · bridge encode + fake engine eval',
-  );
+  var useLargeFont = false;
+  await group.addAsync('font-size update (bridge to engine)', () {
+    useLargeFont = !useLargeFont;
+    return boot.setFontSize(useLargeFont ? 19 : 18);
+  }, note: '${many.label} · bridge encode + fake engine eval');
   // Spy: the timed call must have produced engine evaluations.
-  if (_scriptsContaining(bootEngine, 'setFontSize') == setFontSizeBefore) {
-    throw StateError('bootstrap benchmark did not reach the engine (no setFontSize script)');
+  if (matchesFilter('${group.title} — font-size update (bridge to engine)') &&
+      _scriptsContaining(bootEngine, 'setFontSize') == setFontSizeBefore) {
+    throw StateError('font-size benchmark did not reach the engine (no setFontSize script)');
   }
   boot.dispose();
 
@@ -207,10 +205,12 @@ Future<void> _navigationGroup() async {
   await group.addAsync('nextPage (page turn)', pager.nextPage, note: many.label);
   await group.addAsync('previousPage (page turn)', pager.previousPage, note: many.label);
   // Spy: both turn commands must have reached the engine.
-  if (_scriptsContaining(pagerEngine, 'nextColumn') == nextColumnsBefore) {
+  if (matchesFilter('${group.title} — nextPage (page turn)') &&
+      _scriptsContaining(pagerEngine, 'nextColumn') == nextColumnsBefore) {
     throw StateError('nextPage benchmark did not reach the engine (no nextColumn script)');
   }
-  if (_scriptsContaining(pagerEngine, 'previousColumn') == previousColumnsBefore) {
+  if (matchesFilter('${group.title} — previousPage (page turn)') &&
+      _scriptsContaining(pagerEngine, 'previousColumn') == previousColumnsBefore) {
     throw StateError('previousPage benchmark did not reach the engine');
   }
   pager.dispose();

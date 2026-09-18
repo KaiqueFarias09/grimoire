@@ -100,6 +100,43 @@ void main() {
       'later',
     );
   });
+
+  test('migrates the unversioned viewer annotation envelope without data loss', () async {
+    final overlay = _RecordingOverlay();
+    final annotations = AnnotationController(overlay: overlay);
+    addTearDown(annotations.dispose);
+
+    await annotations.importAnnotations(
+      '{"highlights":[{"id":"legacy-h","fileIndex":2,"start":3,"end":9,'
+      '"text":"marked","before":"a ","after":" value",'
+      '"decoration":"wavy","color":{"light":"#FF0000","dark":"#AA0000"},'
+      '"note":"keep me","createdAt":"2026-08-01T10:00:00Z",'
+      '"cfi":"epubcfi(/6/4:3)"}],'
+      '"bookmarks":[{"id":"legacy-b","title":"Saved place",'
+      '"position":"eLv1:2:17","createdAt":"2026-08-01T11:00:00Z",'
+      '"note":"also keep me"}]}',
+      activeSlot: 0,
+      activeFileIndex: 2,
+    );
+
+    final highlight = annotations.highlights.single;
+    expect(highlight.id, 'legacy-h');
+    expect(highlight.sectionIndex, 2);
+    expect(highlight.color, CustomHighlightColor(lightHex: '#ff0000', darkHex: '#aa0000'));
+    expect(highlight.decoration, HighlightDecoration.wavy);
+    expect(highlight.note, 'keep me');
+    expect(highlight.cfi, 'epubcfi(/6/4:3)');
+
+    final bookmark = annotations.bookmarks.single;
+    expect(bookmark.id, 'legacy-b');
+    expect(bookmark.sectionIndex, 2);
+    expect(bookmark.charOffset, 17);
+    expect(bookmark.note, 'also keep me');
+    expect(overlay.applied.single.$3.single.id, 'legacy-h');
+
+    final canonical = jsonDecode(annotations.exportAnnotations()) as Map<String, dynamic>;
+    expect(canonical['formatVersion'], 1);
+  });
 }
 
 final class _RecordingOverlay implements AnnotationOverlayPort {

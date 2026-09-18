@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:e_livre/e_livre.dart';
 import 'package:flutter/foundation.dart';
@@ -239,7 +240,7 @@ class AnnotationController extends ChangeNotifier {
     required final int activeSlot,
     required final int activeFileIndex,
   }) async {
-    final incoming = decodeAnnotations(json);
+    final incoming = decodeAnnotations(json) ?? _decodeLegacyAnnotations(json);
     if (incoming == null) {
       return;
     }
@@ -268,4 +269,129 @@ class AnnotationController extends ChangeNotifier {
     unawaited(_changes.close());
     super.dispose();
   }
+}
+
+/// Decodes the unversioned e_livre_viewer 0.2 persistence envelope.
+///
+/// The viewer owned these records before eLivre 3 made annotations a
+/// canonical library feature. Keeping this one-way import prevents an
+/// application upgrade from silently discarding a reader's saved marks.
+AnnotationCollection? _decodeLegacyAnnotations(final String source) {
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(source);
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map<String, dynamic> || decoded.containsKey('formatVersion')) {
+    return null;
+  }
+
+  final highlights = <HighlightRecord>[];
+  final rawHighlights = decoded['highlights'];
+  if (rawHighlights is List) {
+    for (final raw in rawHighlights) {
+      if (raw is! Map<String, dynamic>) continue;
+      final record = _legacyHighlight(raw);
+      if (record != null) highlights.add(record);
+    }
+  }
+
+  final bookmarks = <BookmarkRecord>[];
+  final rawBookmarks = decoded['bookmarks'];
+  if (rawBookmarks is List) {
+    for (final raw in rawBookmarks) {
+      if (raw is! Map<String, dynamic>) continue;
+      final record = _legacyBookmark(raw);
+      if (record != null) bookmarks.add(record);
+    }
+  }
+
+  return AnnotationCollection(highlights: highlights, bookmarks: bookmarks);
+}
+
+HighlightRecord? _legacyHighlight(final Map<String, dynamic> json) {
+  final id = json['id'];
+  final sectionIndex = json['fileIndex'];
+  final start = json['start'];
+  final end = json['end'];
+  final text = json['text'];
+  final createdAt = json['createdAt'];
+  final color = _legacyColor(json['color']);
+  final decoration = _legacyDecoration(json['decoration']);
+  final timestamp = createdAt is String ? DateTime.tryParse(createdAt) : null;
+  if (id is! String ||
+      sectionIndex is! int ||
+      start is! int ||
+      end is! int ||
+      text is! String ||
+      sectionIndex < 0 ||
+      start < 0 ||
+      end <= start ||
+      color == null ||
+      decoration == null ||
+      timestamp == null) {
+    return null;
+  }
+
+  return HighlightRecord(
+    id: id,
+    sectionIndex: sectionIndex,
+    start: start,
+    end: end,
+    text: text,
+    before: json['before'] is String ? json['before'] as String : '',
+    after: json['after'] is String ? json['after'] as String : '',
+    color: color,
+    decoration: decoration,
+    createdAt: timestamp,
+    note: json['note'] is String ? json['note'] as String : null,
+    cfi: json['cfi'] is String ? json['cfi'] as String : null,
+  );
+}
+
+BookmarkRecord? _legacyBookmark(final Map<String, dynamic> json) {
+  final id = json['id'];
+  final title = json['title'];
+  final position = json['position'];
+  final createdAt = json['createdAt'];
+  final timestamp = createdAt is String ? DateTime.tryParse(createdAt) : null;
+  if (id is! String || title is! String || position is! String || timestamp == null) {
+    return null;
+  }
+  final parts = position.split(':');
+  if (parts.length != 3 || parts.first != 'eLv1') return null;
+  final sectionIndex = int.tryParse(parts[1]);
+  final charOffset = int.tryParse(parts[2]);
+  if (sectionIndex == null || sectionIndex < 0 || charOffset == null || charOffset < 0) {
+    return null;
+  }
+
+  return BookmarkRecord(
+    id: id,
+    title: title,
+    sectionIndex: sectionIndex,
+    charOffset: charOffset,
+    createdAt: timestamp,
+    note: json['note'] is String ? json['note'] as String : null,
+  );
+}
+
+HighlightColor? _legacyColor(final Object? value) {
+  if (value is! Map<String, dynamic>) return null;
+  final light = value['light'];
+  final dark = value['dark'];
+  final pattern = RegExp(r'^#[0-9a-fA-F]{6}$');
+  if (light is! String || dark is! String || !pattern.hasMatch(light) || !pattern.hasMatch(dark)) {
+    return null;
+  }
+  return CustomHighlightColor(lightHex: light.toLowerCase(), darkHex: dark.toLowerCase());
+}
+
+HighlightDecoration? _legacyDecoration(final Object? value) {
+  if (value is! String) return null;
+  for (final decoration in HighlightDecoration.values) {
+    if (decoration.name == value) return decoration;
+  }
+  return null;
 }
