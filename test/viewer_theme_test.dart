@@ -1,6 +1,6 @@
-import 'package:e_livre_viewer/src/features/settings/viewer_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/features/settings/viewer_theme.dart';
 
 void main() {
   test('css vars render as css colors', () {

@@ -1,12 +1,12 @@
-name: e_livre_viewer
+name: grimoire
 version: 0.2.0
 description: >-
-  Calibre-style ebook reader for Flutter built on eLivre. Renders
+  Calibre-style ebook reader for Flutter built on Unseal. Renders
   EPUB, MOBI, AZW3, FB2/FBZ, TXT/TXZ, HTML/HTMLZ, DOCX, AZW4,
   CBZ/CBR/CB7/CBC, ODT and PDF with paginated layouts, themes, table
   of contents, search and text selection hooks.
-repository: https://github.com/KaiqueFarias09/eLivreViewer
-issue_tracker: https://github.com/KaiqueFarias09/eLivreViewer/issues
+repository: https://github.com/KaiqueFarias09/grimoire
+issue_tracker: https://github.com/KaiqueFarias09/grimoire/issues
 
 environment:
   sdk: ">=3.8.0 <4.0.0"
@@ -19,12 +19,12 @@ topics:
   - viewer
 
 dependencies:
-  e_livre: ^3.0.0
   flutter:
     sdk: flutter
   flutter_inappwebview: ^6.1.5
   mime: ^2.0.0
   shelf: ^1.4.0
+  unseal: ^1.0.0
   web: ^1.1.0
   webview_flutter: ^4.10.0
   xml: ^6.0.1

@@ -1,4 +1,4 @@
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 
 import 'annotation_query.dart';
 import 'viewer_export_location_links.dart';

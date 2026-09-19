@@ -1,4 +1,4 @@
-import 'package:e_livre/e_livre.dart' show PdfTextLine;
+import 'package:unseal/unseal.dart' show PdfTextLine;
 
 import 'book_html_pipeline.dart';
 

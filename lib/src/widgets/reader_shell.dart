@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
+import 'package:unseal/unseal.dart';
 
 import '../controller/viewer_controller.dart';
 import '../features/settings/viewer_theme.dart';

@@ -1,6 +1,6 @@
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/controller/viewer_controller.dart';
+import 'package:unseal/unseal.dart';
 
 import 'helpers/test_book.dart';
 

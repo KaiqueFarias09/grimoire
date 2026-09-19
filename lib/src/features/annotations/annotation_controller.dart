@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter/foundation.dart';
+import 'package:unseal/unseal.dart';
 
 import '../navigation/viewer_position.dart';
 import 'viewer_annotations.dart';
@@ -227,7 +227,7 @@ class AnnotationController extends ChangeNotifier {
     }
   }
 
-  /// Serializes all annotations with eLivre's canonical versioned codec.
+  /// Serializes all annotations with Unseal's canonical versioned codec.
   String exportAnnotations() {
     return encodeAnnotations(
       AnnotationCollection(highlights: [..._highlights], bookmarks: [..._bookmarks]),
@@ -271,9 +271,9 @@ class AnnotationController extends ChangeNotifier {
   }
 }
 
-/// Decodes the unversioned e_livre_viewer 0.2 persistence envelope.
+/// Decodes the unversioned legacy viewer persistence envelope.
 ///
-/// The viewer owned these records before eLivre 3 made annotations a
+/// The viewer owned these records before Unseal made annotations a
 /// canonical library feature. Keeping this one-way import prevents an
 /// application upgrade from silently discarding a reader's saved marks.
 AnnotationCollection? _decodeLegacyAnnotations(final String source) {

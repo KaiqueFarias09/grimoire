@@ -1,8 +1,13 @@
 /// A Calibre-style ebook reader widget for Flutter.
 library;
 
-export 'package:e_livre/e_livre.dart'
+export 'package:unseal/unseal.dart'
     show
+        Book,
+        BookFormat,
+        BookMetadata,
+        PdfBook,
+        Unseal,
         AnnotationCollection,
         BookmarkRecord,
         BookProgression,
@@ -74,4 +79,4 @@ export 'src/features/settings/viewer_margins.dart' show ViewerMargins;
 export 'src/features/settings/viewer_settings.dart'
     show BookPageCountMode, ViewerLayoutMode, ViewerFootnoteMode;
 export 'src/features/settings/viewer_theme.dart' show ViewerTheme;
-export 'src/widgets/elivre_view.dart' show ELivreView;
+export 'src/widgets/grimoire_view.dart' show GrimoireView;

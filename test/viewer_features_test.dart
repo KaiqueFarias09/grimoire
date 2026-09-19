@@ -1,15 +1,14 @@
 import 'dart:async';
-
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/e_livre_viewer.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
-import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:grimoire/src/features/serving/book_content.dart';
+import 'package:unseal/unseal.dart';
 
 import 'helpers/event_flush.dart';
 import 'helpers/test_book.dart';
@@ -81,7 +80,7 @@ void main() {
       cfi: 'epubcfi(/6/4!/4/2,/1:0,/1:11)',
     );
 
-    test('eLivre codec round-trips viewer annotations', () {
+    test('Unseal codec round-trips viewer annotations', () {
       final encoded = encodeAnnotations(
         AnnotationCollection(highlights: [highlight], bookmarks: const []),
       );

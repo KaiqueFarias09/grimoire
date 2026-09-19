@@ -1,4 +1,4 @@
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 
 /// The immutable annotation data needed to assemble an export document.
 abstract interface class ViewerExportSource {

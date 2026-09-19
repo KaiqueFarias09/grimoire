@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_component.dart';
-import 'package:e_livre_viewer/src/features/pdfjs/pdfjs_loader_io.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/features/pdfjs/pdfjs_component.dart';
+import 'package:grimoire/src/features/pdfjs/pdfjs_loader_io.dart';
 
 void main() {
   test(

@@ -49,7 +49,7 @@ class IframeEngine extends ViewerEngine {
       ..style.width = '100%'
       ..style.height = '100%'
       ..style.border = 'none'
-      ..setAttribute('title', 'eLivre reader slot $slot');
+      ..setAttribute('title', 'Grimoire reader slot $slot');
     _iframe = iframe;
     final url = _pendingUrl;
     if (url != null) {

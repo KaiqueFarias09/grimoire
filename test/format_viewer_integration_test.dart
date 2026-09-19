@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/e_livre_viewer.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:unseal/unseal.dart';
 
 void main() {
-  group('eLivre format fixtures through the viewer', () {
+  group('Unseal format fixtures through the viewer', () {
     test('TXT opens as a text document and keeps viewer behavior', () async {
       final session = await _openViewer('test/resources/books/txt/synthetic.txt');
       addTearDown(session.controller.dispose);
@@ -15,11 +15,11 @@ void main() {
       await _assertDocumentFixture(
         session,
         format: BookFormat.txt,
-        title: 'eLivre TXT Fixture',
+        title: 'unseal TXT Fixture',
         authors: ['Ada Lovelace'],
         languages: const [],
-        navigationTitle: 'eLivre TXT Fixture',
-        navigationLabels: ['eLivre TXT Fixture'],
+        navigationTitle: 'unseal TXT Fixture',
+        navigationLabels: ['unseal TXT Fixture'],
         readingOrder: ['index.html'],
         searchTerm: 'deterministic',
         pageMarker: 'deterministic plain-text fixture',
@@ -33,10 +33,10 @@ void main() {
       await _assertDocumentFixture(
         session,
         format: BookFormat.txtz,
-        title: 'eLivre TXTZ Fixture',
+        title: 'unseal TXTZ Fixture',
         authors: ['Ada Lovelace'],
         languages: ['en'],
-        navigationTitle: 'eLivre TXTZ Fixture',
+        navigationTitle: 'unseal TXTZ Fixture',
         navigationLabels: ['TXTZ chapter', 'chapter10'],
         readingOrder: ['chapter1.html', 'chapter10.html'],
         searchTerm: 'Markdown',
@@ -63,10 +63,10 @@ void main() {
       await _assertDocumentFixture(
         session,
         format: BookFormat.html,
-        title: 'eLivre HTML Fixture',
+        title: 'unseal HTML Fixture',
         authors: const [],
         languages: ['en'],
-        navigationTitle: 'eLivre HTML Fixture',
+        navigationTitle: 'unseal HTML Fixture',
         navigationLabels: ['HTML chapter'],
         readingOrder: ['index.html'],
         searchTerm: 'deterministic',
@@ -81,7 +81,7 @@ void main() {
       await _assertDocumentFixture(
         session,
         format: BookFormat.htmlz,
-        title: 'eLivre HTMLZ Fixture',
+        title: 'unseal HTMLZ Fixture',
         authors: ['Grace Hopper'],
         languages: ['en'],
         navigationTitle: 'HTML fallback title',
@@ -104,10 +104,10 @@ void main() {
       await _assertDocumentFixture(
         session,
         format: BookFormat.docx,
-        title: 'eLivre DOCX Fixture',
+        title: 'unseal DOCX Fixture',
         authors: ['Ada Lovelace'],
         languages: ['en'],
-        navigationTitle: 'eLivre DOCX Fixture',
+        navigationTitle: 'unseal DOCX Fixture',
         navigationLabels: ['DOCX chapter'],
         readingOrder: ['word/document.xhtml'],
         searchTerm: 'Open XML',
@@ -144,8 +144,8 @@ void main() {
       await _assertComicFixture(
         session,
         format: BookFormat.cb7,
-        title: 'eLivre CB7 Fixture',
-        authors: ['eLivre contributors'],
+        title: 'unseal CB7 Fixture',
+        authors: ['unseal contributors'],
         languages: ['mul'],
         readingOrder: ['001/page1.png'],
       );
@@ -159,7 +159,7 @@ void main() {
         session,
         format: BookFormat.cbc,
         title: 'First collection title',
-        authors: ['eLivre contributors'],
+        authors: ['unseal contributors'],
         languages: ['mul'],
         readingOrder: ['001/page1.png', '001/page1.png'],
       );
@@ -180,10 +180,10 @@ void main() {
       await _assertDocumentFixture(
         session,
         format: BookFormat.odt,
-        title: 'eLivre ODT Fixture',
+        title: 'unseal ODT Fixture',
         authors: ['Grace Hopper'],
         languages: ['en'],
-        navigationTitle: 'eLivre ODT Fixture',
+        navigationTitle: 'unseal ODT Fixture',
         navigationLabels: ['ODT chapter'],
         readingOrder: ['content.xhtml'],
         searchTerm: 'OpenDocument',
@@ -196,7 +196,7 @@ void main() {
 Future<({Book book, ViewerController controller, FakeViewerEngineFactory factory})> _openViewer(
   final String path,
 ) async {
-  final book = await BookReader.openFromPath(path);
+  final book = await Unseal.readFile(path);
   final factory = FakeViewerEngineFactory();
   final controller = ViewerController(book, engineFactory: factory)
     ..mathJaxEnabled = false

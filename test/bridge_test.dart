@@ -1,5 +1,5 @@
-import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/features/bridge/viewer_bridge.dart';
 
 void main() {
   test('decodes every event type', () async {

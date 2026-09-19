@@ -1,4 +1,4 @@
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 
 /// A reading position: file (by reading-order index) plus the
 /// character offset inside the file's text model.
@@ -26,7 +26,7 @@ class ViewerPosition {
   /// Total columns (pages) of the file at the current layout.
   final int columns;
 
-  /// The current character position in eLivre's canonical locator vocabulary.
+  /// The current character position in Unseal's canonical locator vocabulary.
   TextLocator get locator {
     return TextLocator(sectionIndex: fileIndex, start: charOffset, end: charOffset);
   }

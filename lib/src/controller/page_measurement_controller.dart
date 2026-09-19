@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 
 import '../features/settings/viewer_settings.dart';
 
@@ -61,7 +61,7 @@ final class PageMeasurementController {
 
   final Map<String, List<int?>> _pageCacheByKey = <String, List<int?>>{};
 
-  String get _cacheKey => 'elivre-pages/$_pageCacheKey/$_layoutSignature';
+  String get _cacheKey => 'grimoire-pages/$_pageCacheKey/$_layoutSignature';
 
   /// Immutable view of measured columns; null entries remain estimated.
   List<int?> get columns => List<int?>.unmodifiable(_measuredColumns);

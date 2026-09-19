@@ -1,4 +1,4 @@
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 
 /// Ordering shared by annotation browsing and export snapshots.
 enum AnnotationSort {

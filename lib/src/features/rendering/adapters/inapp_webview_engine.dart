@@ -37,7 +37,7 @@ class InAppWebViewEngine extends ViewerEngine {
       onWebViewCreated: (final controller) {
         _controller = controller;
         controller.addJavaScriptHandler(
-          handlerName: 'ELivreBridge',
+          handlerName: 'GrimoireBridge',
           callback: (final args) {
             if (args.isNotEmpty) {
               onMessage(args.first as Object, slot);

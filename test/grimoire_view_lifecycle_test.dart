@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:e_livre_viewer/e_livre_viewer.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
 
 import 'helpers/test_book.dart';
 
@@ -45,7 +45,7 @@ class _TrackedSelectionController extends ViewerController {
 }
 
 void main() {
-  testWidgets('ELivreView detaches from an external controller when disposed', (
+  testWidgets('GrimoireView detaches from an external controller when disposed', (
     final tester,
   ) async {
     final controller = _TrackedSelectionController(buildTestBook());
@@ -54,7 +54,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: ELivreView(
+        home: GrimoireView(
           book: controller.book,
           controller: controller,
           onPositionChanged: (final _) {},

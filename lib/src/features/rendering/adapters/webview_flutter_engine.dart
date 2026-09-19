@@ -16,7 +16,7 @@ class WebviewFlutterEngine extends ViewerEngine {
     unawaited(controller.setJavaScriptMode(JavaScriptMode.unrestricted));
     unawaited(
       controller.addJavaScriptChannel(
-        'ELivreBridge',
+        'GrimoireBridge',
         onMessageReceived: (final message) => onMessage(message.message, slot),
       ),
     );

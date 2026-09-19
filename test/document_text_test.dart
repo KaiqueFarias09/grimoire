@@ -1,5 +1,5 @@
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unseal/unseal.dart';
 
 void main() {
   test('matches DOM textContent semantics', () {

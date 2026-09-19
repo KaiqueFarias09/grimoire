@@ -243,7 +243,7 @@ class ViewerBridge {
   /// page controller.
   static String javaScriptFor(final Map<String, Object?> message) {
     final payload = jsonEncode(message);
-    return 'window.__elivre && window.__elivre($payload)';
+    return 'window.__grimoire && window.__grimoire($payload)';
   }
 
   /// Closes the event stream.

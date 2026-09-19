@@ -1,5 +1,5 @@
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unseal/unseal.dart';
 
 /// Parity tests ported from calibre
 /// src/pyj/read_book/test_cfi.pyj (cfi_escaping, cfi_roundtripping,
@@ -12,7 +12,7 @@ const String page = '''
   <body>
     <p id="p1">alpha beta</p>
     <p id="p2">one <b>two</b> three</p>
-    <p id="p3">calibre &amp; eLivre — quotes</p>
+    <p id="p3">calibre &amp; Unseal — quotes</p>
     <div id="wrap"><p id="p4">nested text here</p></div>
   </body>
 </html>

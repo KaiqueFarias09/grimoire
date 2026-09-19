@@ -1,6 +1,6 @@
-import 'package:e_livre_viewer/e_livre_viewer.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
 
 import 'helpers/test_book.dart';
 

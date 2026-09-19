@@ -1,5 +1,5 @@
-import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
 
 void main() {
   test('filters text, notes, color and decoration before document sorting', () {

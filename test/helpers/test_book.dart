@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 
 /// Builds a small in-memory EPUB-shaped book for tests.
 EpubBook buildTestBook({

@@ -1,5 +1,5 @@
-import 'package:e_livre_viewer/src/features/narration/text_segmentation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/features/narration/text_segmentation.dart';
 
 void main() {
   group('segmentText', () {

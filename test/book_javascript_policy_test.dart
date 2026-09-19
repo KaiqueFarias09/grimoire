@@ -1,6 +1,6 @@
-import 'package:e_livre_viewer/e_livre_viewer.dart';
-import 'package:e_livre_viewer/src/features/serving/book_server.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
+import 'package:grimoire/src/features/serving/book_server.dart';
 
 import 'helpers/test_book.dart';
 
@@ -9,7 +9,7 @@ void main() {
     final book = buildTestBook();
     final controller = ViewerController(book);
     addTearDown(controller.dispose);
-    final view = ELivreView(book: book);
+    final view = GrimoireView(book: book);
     final server = BookServer();
 
     expect(controller.bookJavaScriptPolicy, BookJavaScriptPolicy.disabled);
@@ -28,7 +28,7 @@ void main() {
       bookJavaScriptPolicy: BookJavaScriptPolicy.allowBookScripts,
     );
     addTearDown(controller.dispose);
-    final view = ELivreView(
+    final view = GrimoireView(
       book: book,
       bookJavaScriptPolicy: BookJavaScriptPolicy.allowBookScripts,
     );

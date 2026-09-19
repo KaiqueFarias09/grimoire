@@ -1,11 +1,10 @@
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/e_livre_viewer.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
 
 void main() {
-  test('real PDF flows from BookReader into both viewer modes', () async {
-    final book = await BookReader.openFromPath('test/resources/pdf/dickens-sample.pdf');
+  test('real PDF flows from Unseal into both viewer modes', () async {
+    final book = await Unseal.readFile('test/resources/pdf/dickens-sample.pdf');
     final factory = FakeViewerEngineFactory();
     final controller = ViewerController(book, engineFactory: factory)..pdfJsEnabled = false;
     addTearDown(controller.dispose);

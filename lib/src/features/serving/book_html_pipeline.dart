@@ -1,4 +1,4 @@
-import 'package:e_livre/e_livre.dart' show Book;
+import 'package:unseal/unseal.dart' show Book;
 
 import 'book_javascript_policy.dart';
 import 'book_resource_resolution.dart';
@@ -487,8 +487,8 @@ String injectMathJax(final String html, {required final String scriptBase}) {
       'options:{enableMenu:false},'
       'startup:{pageReady:function(){'
       'return MathJax.startup.promise.then(function(){'
-      'if(window.__elivreMathJaxDone){window.__elivreMathJaxDone();}'
-      'if(window.__elivre){window.__elivre({type:"mathjaxReady"});}'
+      'if(window.__grimoireMathJaxDone){window.__grimoireMathJaxDone();}'
+      'if(window.__grimoire){window.__grimoire({type:"mathjaxReady"});}'
       '});}}};'
       '</script>'
       '<script defer src="$component"></script>'

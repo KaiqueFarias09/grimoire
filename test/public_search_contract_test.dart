@@ -1,11 +1,11 @@
-import 'package:e_livre/e_livre.dart' as core;
-import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/grimoire.dart';
+import 'package:unseal/unseal.dart' as core;
 
 import 'helpers/test_book.dart';
 
 void main() {
-  test('public ViewerController search delegates to the public eLivre API', () async {
+  test('public ViewerController search delegates to the public Unseal API', () async {
     final core.Book book = buildTestBook();
     final controller = ViewerController(book);
     addTearDown(controller.dispose);

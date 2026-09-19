@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show Rect;
 
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:unseal/unseal.dart';
 
 import '../features/annotations/annotation_controller.dart';
 import '../features/annotations/export_document.dart' show ViewerExportSource;
@@ -85,7 +85,7 @@ class ViewerController extends ChangeNotifier
   Iterable<String> get bookAuthors => book.metadata.authors;
 
   /// Controls JavaScript authored by book HTML. The default disables
-  /// book scripts while keeping eLivreViewer's injected viewer and
+  /// book scripts while keeping grimoire's injected viewer and
   /// bridge scripts functional. Use [BookJavaScriptPolicy.allowBookScripts]
   /// only for trusted books.
   final BookJavaScriptPolicy bookJavaScriptPolicy;
@@ -394,7 +394,7 @@ class ViewerController extends ChangeNotifier
   /// controller keeps its own chrome hidden: center taps and Esc
   /// still emit [ChromeToggleEvent]s (so the host can toggle its own
   /// UI) but no longer flip [chromeVisible], and [toggleChrome],
-  /// [showChrome] and [hideChrome] become no-ops. `ELivreView` sets
+  /// [showChrome] and [hideChrome] become no-ops. `GrimoireView` sets
   /// this from `showShell: false`; hosts driving the viewer without
   /// the widget can set it directly.
   bool get useHostChrome => _useHostChrome;
@@ -1057,7 +1057,7 @@ class ViewerController extends ChangeNotifier
   /// Searches [query] across the book.
   ///
   /// [mode] selects the query interpretation (Calibre's contains /
-  /// whole words / regex / near). The matching itself lives in e_livre
+  /// whole words / regex / near). The matching itself lives in Unseal
   /// ([BookSearch]); this method maps the hits to viewer results over
   /// the shared document-text offset space, marks every hit of the
   /// visible file in the page (and re-marks it when chapters swap),
@@ -1501,7 +1501,7 @@ class ViewerController extends ChangeNotifier
   String exportAnnotations() => _annotations.exportAnnotations();
 
   /// Imports annotations, merging by identity and keeping the newest
-  /// timestamp using eLivre's canonical merge semantics.
+  /// timestamp using Unseal's canonical merge semantics.
   Future<void> importAnnotations(final String json) => _annotations.importAnnotations(
     json,
     activeSlot: _navigation.activeSlot,
@@ -1702,7 +1702,7 @@ class ViewerController extends ChangeNotifier
           if (handler != null) {
             handler(link.href);
           } else if (kDebugMode) {
-            debugPrint('eLivre viewer: external link ignored: ${link.href}');
+            debugPrint('Grimoire reader: external link ignored: ${link.href}');
           }
         } else {
           await _followInternalLink(link.href);
@@ -1732,7 +1732,7 @@ class ViewerController extends ChangeNotifier
   Future<void> _applySettingsTo(final int slot) async {
     // One round trip instead of twelve: the page side applies each
     // entry in order through the existing switch (the 'batch' case in
-    // window.__elivre). Message shapes are unchanged.
+    // window.__grimoire). Message shapes are unchanged.
     await _sendTo(slot, <String, Object?>{
       'action': 'batch',
       'messages': [

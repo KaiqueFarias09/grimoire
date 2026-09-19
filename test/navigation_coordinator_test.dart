@@ -1,5 +1,5 @@
-import 'package:e_livre_viewer/src/controller/navigation_coordinator.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/controller/navigation_coordinator.dart';
 
 void main() {
   test('jump history reuses ready engines and drops the forward tail', () async {

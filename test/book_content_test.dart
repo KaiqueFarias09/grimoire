@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:e_livre_viewer/src/features/serving/book_content.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/features/serving/book_content.dart';
 
 void main() {
   group('sanitizeBookHtml', () {

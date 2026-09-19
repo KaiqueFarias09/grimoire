@@ -58,7 +58,7 @@ class PdfJsLoader {
   }
 
   Future<Uint8List> _defaultFetch(final Uri url) async {
-    final client = HttpClient()..userAgent = 'e_livre_viewer';
+    final client = HttpClient()..userAgent = 'grimoire';
     try {
       final request = await client.getUrl(url);
       final response = await request.close();

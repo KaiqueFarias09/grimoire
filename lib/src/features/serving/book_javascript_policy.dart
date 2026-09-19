@@ -1,9 +1,9 @@
-import 'package:e_livre/e_livre.dart' show Book;
+import 'package:unseal/unseal.dart' show Book;
 
 /// Controls JavaScript authored by the book's HTML.
 ///
 /// The policy applies only to content supplied by the [Book]. The
-/// viewer, bridge, MathJax and PDF scripts injected by eLivreViewer
+/// viewer, bridge, MathJax and PDF scripts injected by grimoire
 /// remain functional in either mode.
 enum BookJavaScriptPolicy {
   /// Removes book-authored script elements, inline event handlers and

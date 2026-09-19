@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter/material.dart';
+import 'package:unseal/unseal.dart';
 
 import '../controller/viewer_controller.dart';
 import '../features/bridge/viewer_bridge.dart';
@@ -12,8 +12,8 @@ import 'reader_shell.dart';
 /// Renders a parsed [Book] as a Calibre-style paginated reader.
 ///
 /// ```dart
-/// final book = await EBook.openFromPath(path);
-/// ELivreView(book: book);
+/// final book = await Unseal.readFile(path);
+/// GrimoireView(book: book);
 /// ```
 ///
 /// The reader keeps two webviews: the visible one and a spare that
@@ -22,9 +22,9 @@ import 'reader_shell.dart';
 /// Pass your own [controller] to drive the reader (positions,
 /// bookmarks, highlights, search, themes) from the outside;
 /// otherwise the view creates and owns one.
-class ELivreView extends StatefulWidget {
+class GrimoireView extends StatefulWidget {
   /// Creates the reader view.
-  const ELivreView({
+  const GrimoireView({
     required this.book,
     this.controller,
     this.initialPosition,
@@ -77,17 +77,17 @@ class ELivreView extends StatefulWidget {
 
   /// Controls JavaScript authored by book HTML when this widget
   /// creates its own [ViewerController]. The default disables book
-  /// scripts while preserving eLivreViewer's injected viewer and
+  /// scripts while preserving grimoire's injected viewer and
   /// bridge scripts. Use [BookJavaScriptPolicy.allowBookScripts] only
   /// for trusted books. When [controller] is supplied, configure its
   /// policy through [ViewerController.bookJavaScriptPolicy].
   final BookJavaScriptPolicy bookJavaScriptPolicy;
 
   @override
-  State<ELivreView> createState() => _ELivreViewState();
+  State<GrimoireView> createState() => _GrimoireViewState();
 }
 
-class _ELivreViewState extends State<ELivreView> {
+class _GrimoireViewState extends State<GrimoireView> {
   ViewerController? _ownedController;
   late final Future<void> _startFuture;
   bool _wired = false;
@@ -106,7 +106,7 @@ class _ELivreViewState extends State<ELivreView> {
   }
 
   @override
-  void didUpdateWidget(final ELivreView oldWidget) {
+  void didUpdateWidget(final GrimoireView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.showShell != widget.showShell) {
       _controller.useHostChrome = !widget.showShell;

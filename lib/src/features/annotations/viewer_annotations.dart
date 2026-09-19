@@ -1,7 +1,7 @@
 import 'dart:ui' show Color;
 
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter/foundation.dart';
+import 'package:unseal/unseal.dart';
 
 /// The marker colors offered by the built-in viewer controls.
 const List<PaletteHighlightColor> viewerHighlightPalette = [
@@ -12,7 +12,7 @@ const List<PaletteHighlightColor> viewerHighlightPalette = [
   PaletteHighlightColor.purple,
 ];
 
-/// Resolves eLivre's storage-safe color vocabulary into Flutter colors.
+/// Resolves Unseal's storage-safe color vocabulary into Flutter colors.
 extension HighlightColorRendering on HighlightColor {
   /// Value over light page backgrounds.
   Color get lightColor => switch (this) {
@@ -78,7 +78,7 @@ class ViewerSelection {
   /// Exclusive character offset.
   final int end;
 
-  /// The selected range in eLivre's canonical locator vocabulary.
+  /// The selected range in Unseal's canonical locator vocabulary.
   TextLocator get locator {
     return TextLocator(
       sectionIndex: fileIndex,

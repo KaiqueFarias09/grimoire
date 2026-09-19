@@ -1,4 +1,4 @@
-/* eLivre viewer — per-document controller.
+/* Grimoire reader — per-document controller.
  *
  * Pagination follows the Calibre E-book viewer model: CSS
  * multi-column layout on <body> plus scroll math in the inline
@@ -6,13 +6,13 @@
  * layouts, text-selection reporting, persistent highlights and
  * pinch/pan for comic pages.
  *
- * Messages JS -> Dart go through ELivreBridge.postMessage(json).
- * Messages Dart -> JS call window.__elivre(json).
+ * Messages JS -> Dart go through GrimoireBridge.postMessage(json).
+ * Messages Dart -> JS call window.__grimoire(json).
  */
 (function () {
   'use strict';
 
-  var CHANNEL = 'ELivreBridge';
+  var CHANNEL = 'GrimoireBridge';
   var state = {
     fontSize: 17,
     margins: { left: 20, top: 20, right: 20, bottom: 20 },
@@ -46,7 +46,7 @@
 
   function post(message) {
     if (window.flutter_inappwebview) {
-      window.flutter_inappwebview.callHandler('ELivreBridge', message);
+      window.flutter_inappwebview.callHandler('GrimoireBridge', message);
       return;
     }
     if (window[CHANNEL] && window[CHANNEL].postMessage) {
@@ -292,7 +292,7 @@
     var nc = (se.scrollWidth + state.colGap) / (state.colSize + state.colGap);
     if (Math.floor(nc) !== nc) {
       // Probably non-reflowable content wider than the column.
-      console.warn('eLivre: column layout broken', {
+      console.warn('Grimoire reader: column layout broken', {
         colSize: state.colSize,
         gap: state.colGap,
         scrollWidth: se.scrollWidth,
@@ -1470,7 +1470,7 @@
 
   // MathJax typesetting re-flows the columns; the injected page
   // config calls this once the startup promise settles.
-  window.__elivreMathJaxDone = function () {
+  window.__grimoireMathJaxDone = function () {
     relayoutKeepingPosition();
     reportPosition();
   };
@@ -1918,7 +1918,7 @@
 
   // --- message API from Dart ---
 
-  window.__elivre = function (payload) {
+  window.__grimoire = function (payload) {
     var message;
     try {
       message = typeof payload === 'string' ? JSON.parse(payload) : payload;
@@ -2122,7 +2122,7 @@
         if (batch && batch.length) {
           state.batchDepth += 1;
           for (var bi = 0; bi < batch.length; bi++) {
-            window.__elivre(batch[bi]);
+            window.__grimoire(batch[bi]);
           }
           state.batchDepth -= 1;
           if (state.batchDepth === 0 && state.batchRelayoutPending) {
@@ -2630,7 +2630,7 @@
     if (state.pendingPosition) {
       var pending = state.pendingPosition;
       state.pendingPosition = null;
-      window.__elivre(pending);
+            window.__grimoire(pending);
     } else {
       reportPosition();
     }

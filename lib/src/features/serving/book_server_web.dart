@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:unseal/unseal.dart';
 import 'package:web/web.dart' as web;
 
 import '../mathjax/mathjax_component.dart';
@@ -33,14 +33,14 @@ class BookServer {
   }) : _assetLoader = assetLoader ?? _rootBundleLoader;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
-    final data = await rootBundle.load('packages/e_livre_viewer/assets/viewer/$name');
+    final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
     return data.buffer.asUint8List();
   }
 
   final Future<Uint8List> Function(String name) _assetLoader;
 
   /// Controls JavaScript authored by book HTML. The default removes
-  /// book scripts while leaving eLivreViewer's injected viewer and
+  /// book scripts while leaving grimoire's injected viewer and
   /// bridge scripts functional.
   final BookJavaScriptPolicy bookJavaScriptPolicy;
 

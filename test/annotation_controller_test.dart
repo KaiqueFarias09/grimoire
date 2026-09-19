@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/annotations/annotation_controller.dart';
-import 'package:e_livre_viewer/src/features/annotations/viewer_annotations.dart';
-import 'package:e_livre_viewer/src/features/navigation/viewer_position.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/features/annotations/annotation_controller.dart';
+import 'package:grimoire/src/features/annotations/viewer_annotations.dart';
+import 'package:grimoire/src/features/navigation/viewer_position.dart';
+import 'package:unseal/unseal.dart';
 
 void main() {
   test('owns annotation state and reports every persisted mutation', () async {
