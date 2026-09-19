@@ -1,7 +1,7 @@
 // Real-corpus fixtures loaded from the user's Calibre library.
 //
-// Ported from the eLivre package fixture loader. The library root
-// comes from the `ELIVRE_VIEWER_BENCH_LIBRARY` environment variable,
+// Ported from the Unseal package fixture loader. The library root
+// comes from the `GRIMOIRE_BENCH_LIBRARY` environment variable,
 // falling back to the machine's default Calibre location when it
 // exists. Book files stay outside the repository and load by path at
 // runtime; groups built on this loader skip gracefully — with a
@@ -49,7 +49,7 @@ List<LibraryBook>? _books;
 /// The library root comes exclusively from the environment so no
 /// machine-specific path is baked into the repository.
 String? _resolveRoot() {
-  final value = Platform.environment['ELIVRE_VIEWER_BENCH_LIBRARY'];
+  final value = Platform.environment['GRIMOIRE_BENCH_LIBRARY'];
   if (value == null || value.isEmpty) {
     return null;
   }
@@ -64,7 +64,7 @@ String? get libraryRoot => _libraryRoot;
 /// Prints the standard skip note for groups that need the real corpus.
 void skipLibraryGroup(final String groupLabel) {
   stdout.writeln(
-    '[$groupLabel] skipped — set ELIVRE_VIEWER_BENCH_LIBRARY to a '
+    '[$groupLabel] skipped — set GRIMOIRE_BENCH_LIBRARY to a '
     'Calibre library root to enable the real-corpus benchmarks.',
   );
 }

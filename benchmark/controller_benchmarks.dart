@@ -11,10 +11,10 @@
 
 import 'dart:async';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire/src/controller/viewer_controller.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:unseal/unseal.dart';
 
 import 'benchmark_harness.dart';
 import 'fixtures.dart';

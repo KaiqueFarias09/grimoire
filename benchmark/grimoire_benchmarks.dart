@@ -1,15 +1,15 @@
-// Entry point for the eLivre viewer benchmarks.
+// Entry point for the Grimoire reader benchmarks.
 //
 // Usage:
-//     flutter test benchmark/e_livre_viewer_benchmarks.dart
-//     ELIVRE_VIEWER_BENCH_FILTER=search \
-//       flutter test benchmark/e_livre_viewer_benchmarks.dart
-//     ELIVRE_VIEWER_BENCH_QUICK=1 \
-//       flutter test benchmark/e_livre_viewer_benchmarks.dart
+//     flutter test benchmark/grimoire_benchmarks.dart
+//     GRIMOIRE_BENCH_FILTER=search \
+//       flutter test benchmark/grimoire_benchmarks.dart
+//     GRIMOIRE_BENCH_QUICK=1 \
+//       flutter test benchmark/grimoire_benchmarks.dart
 //
 // The filter is a case-insensitive substring matched against
 // '<group> — <benchmark name>'. The real-corpus group needs a Calibre
-// library: set ELIVRE_VIEWER_BENCH_LIBRARY or rely on the default
+// library: set GRIMOIRE_BENCH_LIBRARY or rely on the default
 // location when it exists; otherwise the group prints a skip note.
 //
 // The controller and bridge code touch flutter foundation classes, so
@@ -37,12 +37,12 @@ Future<void> main() async {
   test('benchmark run completed', () => finished.future);
 
   final started = Stopwatch()..start();
-  final filter = Platform.environment['ELIVRE_VIEWER_BENCH_FILTER'];
+  final filter = Platform.environment['GRIMOIRE_BENCH_FILTER'];
   if (filter != null && filter.isNotEmpty) {
     benchmarkFilter = filter;
   }
-  quickMode = Platform.environment['ELIVRE_VIEWER_BENCH_QUICK'] == '1';
-  final jsonTarget = Platform.environment['ELIVRE_VIEWER_BENCH_JSON'];
+  quickMode = Platform.environment['GRIMOIRE_BENCH_QUICK'] == '1';
+  final jsonTarget = Platform.environment['GRIMOIRE_BENCH_JSON'];
   if (jsonTarget != null && jsonTarget.isNotEmpty) {
     if (jsonTarget == 'stdout') {
       jsonMode = JsonMode.stdout;

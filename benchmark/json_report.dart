@@ -1,4 +1,4 @@
-// Structured JSON output for the eLivre benchmarks (schemaVersion 1).
+// Structured JSON output for the Grimoire reader benchmarks (schemaVersion 1).
 //
 // The harness keeps ONE measurement code path; this module is the JSON
 // output MODE on top of it. Every recorded scenario emits the exact

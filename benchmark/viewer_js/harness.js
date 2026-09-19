@@ -17,7 +17,7 @@
   // absent; captured so the boot `ready` (with the character total)
   // can be observed.
   var readyInfo = null;
-  window.ELivreBridge = {
+  window.GrimoireBridge = {
     postMessage: function (raw) {
       var message = typeof raw === 'string' ? JSON.parse(raw) : raw;
       if (message && message.type === 'ready') {
@@ -50,7 +50,7 @@
   // Dispatch one viewer message and return the elapsed microseconds.
   function timeDispatch(message) {
     var begin = performance.now();
-    window.__elivre(message);
+    window.__grimoire(message);
     return (performance.now() - begin) * 1000;
   }
 
@@ -198,9 +198,9 @@
   // Clears every annotation span through the public message API; used
   // untimed so a timed op always starts from a known span count.
   function wipeAnnotations() {
-    window.__elivre({ action: 'applyHighlights', items: [] });
-    window.__elivre({ action: 'setSearchMatches', matches: [] });
-    window.__elivre({ action: 'ttsClear' });
+    window.__grimoire({ action: 'applyHighlights', items: [] });
+    window.__grimoire({ action: 'setSearchMatches', matches: [] });
+    window.__grimoire({ action: 'ttsClear' });
   }
 
   function highlightItems(prefix, count, chars) {
@@ -216,7 +216,7 @@
   // an empty clear phase; the comparability rows pay clear + wrap.
   function measureCleanApply(name, items, minRuns, budgetMs) {
     return measure(name, function () {
-      window.__elivre({ action: 'applyHighlights', items: [] });
+      window.__grimoire({ action: 'applyHighlights', items: [] });
       return timeDispatch({ action: 'applyHighlights', items: items });
     }, minRuns, budgetMs);
   }
@@ -244,9 +244,9 @@
     var suppressed = [];
     var begin = performance.now();
     for (var i = 0; i < minRuns; i++) {
-      window.__elivre({ action: 'applyHighlights', items: [] });
+      window.__grimoire({ action: 'applyHighlights', items: [] });
       applied.push(timeDispatch({ action: 'applyHighlights', items: items }));
-      window.__elivre({ action: 'applyHighlights', items: [] });
+      window.__grimoire({ action: 'applyHighlights', items: [] });
       suppressed.push(timeDispatchNoStyles({ action: 'applyHighlights', items: items }));
       if (i > 0 && i % 8 === 0 && performance.now() - begin > budgetMs) {
         break;
@@ -278,7 +278,7 @@
     wipeAnnotations();
     var clearMatches = spread(chars, 400, 12);
     rows.push(measure('setSearchMatches clear (400 spans)', function () {
-      window.__elivre({ action: 'setSearchMatches', matches: clearMatches });
+      window.__grimoire({ action: 'setSearchMatches', matches: clearMatches });
       return timeDispatch({ action: 'setSearchMatches', matches: [] });
     }, 20, 6000));
 
@@ -289,7 +289,7 @@
       return timeDispatch({ action: 'setFontSize', px: pristineSize });
     }, 10, 3000));
 
-    window.__elivre({ action: 'applyHighlights', items: highlightItems('iso-relayout-', 500, chars) });
+    window.__grimoire({ action: 'applyHighlights', items: highlightItems('iso-relayout-', 500, chars) });
     var annotatedSize = 17;
     rows.push(measure('setFontSize with 500 hl spans', function () {
       annotatedSize = annotatedSize === 17 ? 18 : 17;

@@ -8,7 +8,7 @@
 
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 
 import 'benchmark_harness.dart' show formatBytes;
 

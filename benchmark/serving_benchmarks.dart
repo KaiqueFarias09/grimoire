@@ -11,9 +11,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/serving/book_content.dart';
-import 'package:e_livre_viewer/src/features/serving/book_server_io.dart';
+import 'package:grimoire/src/features/serving/book_content.dart';
+import 'package:grimoire/src/features/serving/book_server_io.dart';
+import 'package:unseal/unseal.dart';
 
 import 'benchmark_harness.dart';
 import 'fixtures.dart';

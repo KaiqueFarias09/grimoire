@@ -2,9 +2,9 @@
 // segmentation the read-aloud / media-overlay layer pays, and the
 // JSON-to-JS encoding every controller message pays.
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/features/bridge/viewer_bridge.dart';
-import 'package:e_livre_viewer/src/features/narration/text_segmentation.dart';
+import 'package:grimoire/src/features/bridge/viewer_bridge.dart';
+import 'package:grimoire/src/features/narration/text_segmentation.dart';
+import 'package:unseal/unseal.dart';
 
 import 'benchmark_harness.dart';
 import 'fixtures.dart';

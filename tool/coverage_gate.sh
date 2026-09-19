@@ -1,5 +1,5 @@
 #!/bin/sh
-# Coverage non-regression gate for e_livre_viewer.
+# Coverage non-regression gate for grimoire.
 #
 # Runs the test suite with coverage, then fails when the line coverage
 # of the package's own Dart sources drops below the floor.

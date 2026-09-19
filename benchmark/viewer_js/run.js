@@ -159,7 +159,7 @@ function writeContractReport(payloads, browserVersion) {
       const medianUs = row.medianUs;
       records.push({
         schemaVersion: 1,
-        suite: 'e_livre_viewer_js',
+        suite: 'grimoire_js',
         scenario: 'viewer_js — ' + row.name,
         platform: process.platform + '-' + process.arch,
         sdk: sdk,
@@ -181,7 +181,7 @@ function writeContractReport(payloads, browserVersion) {
 
   const envelope = {
     schemaVersion: 1,
-    suite: 'e_livre_viewer_js',
+    suite: 'grimoire_js',
     generatedAt: new Date().toISOString(),
     platform: process.platform + '-' + process.arch,
     sdk: sdk,

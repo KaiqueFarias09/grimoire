@@ -1,6 +1,6 @@
-// Timing harness for the eLivre viewer benchmarks.
+// Timing harness for the Grimoire reader benchmarks.
 //
-// Ported from the eLivre package benchmark harness (same auto-
+// Ported from the Unseal package benchmark harness (same auto-
 // calibrated iteration counts, sample statistics and output shape) so
 // numbers from both suites read the same. Every benchmark runs with an
 // auto-calibrated iteration count so the whole suite stays fast: cheap
@@ -15,10 +15,10 @@
 // (ChangeNotifier, debugPrint), so the suite runs through
 // `flutter test` rather than `dart run`:
 //
-//     flutter test benchmark/e_livre_viewer_benchmarks.dart
-//     ELIVRE_VIEWER_BENCH_FILTER=search \
-//       flutter test benchmark/e_livre_viewer_benchmarks.dart
-//     ELIVRE_VIEWER_BENCH_QUICK=1 flutter test benchmark/e_livre_viewer_benchmarks.dart
+//     flutter test benchmark/grimoire_benchmarks.dart
+//     GRIMOIRE_BENCH_FILTER=search \
+//       flutter test benchmark/grimoire_benchmarks.dart
+//     GRIMOIRE_BENCH_QUICK=1 flutter test benchmark/grimoire_benchmarks.dart
 
 import 'dart:io';
 
@@ -380,16 +380,16 @@ void printBanner() {
     return;
   }
   stdout
-    ..writeln('eLivre viewer benchmarks')
+    ..writeln('Grimoire reader benchmarks')
     ..writeln(
       'Dart ${Platform.version.split(' ').first} · '
       '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
     )
     ..writeln(
-      'Usage: flutter test benchmark/e_livre_viewer_benchmarks.dart '
-      '[ELIVRE_VIEWER_BENCH_FILTER=<text>] [ELIVRE_VIEWER_BENCH_QUICK=1] '
-      '[ELIVRE_VIEWER_BENCH_LIBRARY=<calibre library root>] '
-      '[ELIVRE_VIEWER_BENCH_JSON=<report path or stdout>',
+      'Usage: flutter test benchmark/grimoire_benchmarks.dart '
+      '[GRIMOIRE_BENCH_FILTER=<text>] [GRIMOIRE_BENCH_QUICK=1] '
+      '[GRIMOIRE_BENCH_LIBRARY=<calibre library root>] '
+      '[GRIMOIRE_BENCH_JSON=<report path or stdout>',
     );
 }
 

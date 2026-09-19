@@ -1,6 +1,6 @@
 // Real-corpus benchmarks over the user's Calibre library.
 //
-// The library root comes from `ELIVRE_VIEWER_BENCH_LIBRARY`, falling
+// The library root comes from `GRIMOIRE_BENCH_LIBRARY`, falling
 // back to this machine's default Calibre location when it exists.
 // Book files stay outside the repository and load by path at runtime;
 // the group prints a skip note and does nothing when no library is
@@ -14,10 +14,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
-import 'package:e_livre_viewer/src/features/serving/book_server_io.dart';
+import 'package:grimoire/src/controller/viewer_controller.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:grimoire/src/features/serving/book_server_io.dart';
+import 'package:unseal/unseal.dart';
 
 import 'benchmark_harness.dart';
 import 'library_fixtures.dart';
@@ -75,11 +75,11 @@ Future<void> runLibraryCorpusBenchmarks() async {
       }
 
       // Parse one pick at a time; a failed parse omits the pick
-      // without failing the suite (probe pattern from eLivre).
+      // without failing the suite (probe pattern from Unseal).
       final Book book;
       try {
         final watch = Stopwatch()..start();
-        book = BookReader.parseBook(libraryBook.read());
+        book = Unseal.parse(libraryBook.read());
         watch.stop();
         stdout.writeln(
           '[Real library corpus] ${libraryBook.label} parsed in '

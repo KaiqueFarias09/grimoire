@@ -1,12 +1,12 @@
 // Annotation pipeline benchmarks: export, the id-map import merge,
-// canonical eLivre merge and highlight relocation — the shape hosts
+// canonical Unseal merge and highlight relocation — the shape hosts
 // pay on every annotationsChanged save and on cross-device sync.
 
 import 'dart:convert';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/src/controller/viewer_controller.dart';
-import 'package:e_livre_viewer/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:grimoire/src/controller/viewer_controller.dart';
+import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:unseal/unseal.dart';
 
 import 'benchmark_harness.dart';
 import 'fixtures.dart';
@@ -113,7 +113,7 @@ Future<void> runAnnotationBenchmarks() async {
   group.add(
     'mergeHighlights 10k+10k',
     () => mergeHighlights(annotationList('a', 10000), annotationList('b', 10000)),
-    note: 'canonical eLivre merge',
+    note: 'canonical Unseal merge',
   );
 
   final mid = bigText.length ~/ 2;
