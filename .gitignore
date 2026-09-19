@@ -31,3 +31,7 @@ benchmark/viewer_js/node_modules/
 
 # flutter test --coverage output (tool/coverage_gate.sh)
 /coverage/
+
+# Generated documentation and temporary benchmark output.
+/doc/
+/.tmp/
