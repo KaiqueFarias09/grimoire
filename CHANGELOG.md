@@ -4,7 +4,7 @@
 
 - **One-way annotation migration**: `importAnnotations` accepts the previous
   unversioned viewer persistence envelope and converts its highlights and
-  bookmarks to eLivre's canonical versioned records without data loss.
+  bookmarks to Unseal's canonical versioned records without data loss.
   `exportAnnotations` always writes the canonical format, so applications do
   not need to maintain two storage formats.
 - **Fixed-layout page turning**: comics and PDF facsimile pages now
@@ -15,7 +15,7 @@
   `PageLocator` for hosts; word marks are verified to apply to
   reflowed PDF pages.
 - **PDF support, both reading modes**: PDFs open through the same
-  `ViewerController` (eLivre's pure-Dart pipeline extracts the text,
+  `ViewerController` (Unseal's pure-Dart pipeline extracts the text,
   reflows it into one HTML section per page and keeps the original
   bytes). Reflow mode reads like any other book — pagination,
   themes, search, highlights and narration over the canonical
@@ -32,7 +32,7 @@
   the MathJax configuration hooks.
 - **Search modes**: `controller.search(query, {mode, caseSensitive,
   nearChars})` exposes Calibre's contains / whole words / regex /
-  near queries (matching lives in e_livre). The overlay gains a mode
+  near queries (matching lives in Unseal). The overlay gains a mode
   picker, case toggle and inline validation errors, marks every match
   on the visible page (re-marked when chapters swap), and wires the
   previously dormant next/previous match cycling with a position
@@ -133,25 +133,25 @@
   highlighting remembers the user's style (Calibre's default style
   behavior). Explicit arguments still win.
 - **Host chrome ownership**: `ViewerController.useHostChrome` (set
-  automatically by `ELivreView` under `showShell: false`). With it on,
+  automatically by `GrimoireView` under `showShell: false`). With it on,
   center taps and Esc still emit `ChromeToggleEvent`s for the host's
   own UI, but `chromeVisible` stays false and `toggleChrome` /
   `showChrome` / `hideChrome` are no-ops — hosts no longer need to
   fight the built-in chrome with `hideChrome()` on every change.
 - **Canonical locators**: viewer positions, highlights and selections
-  expose eLivre's `TextLocator` directly. Host persistence uses
+  expose Unseal's `TextLocator` directly. Host persistence uses
   `locatorToJson` / `locatorFromJson` instead of a viewer-owned wire
   format.
 
 ### Changed
 
-- eLivre is consumed through the release-target `^3.0.0` hosted contract. CI validates
+- Unseal is consumed through the release-target `^1.0.0` hosted contract. CI validates
   package analysis/tests and enforces the repository coverage floor while the
-  cross-package lane verifies the current eLivre + Viewer stack together.
-- **Breaking**: highlight appearance uses eLivre's canonical
+  cross-package lane verifies the current Unseal + Viewer stack together.
+- **Breaking**: highlight appearance uses Unseal's canonical
   `HighlightColor` and `HighlightDecoration` types. The viewer maps
   palette tokens to Flutter light/dark colors while persistence stays
-  owned by eLivre. The built-in palette matches Calibre's colors
+  owned by Unseal. The built-in palette matches Calibre's colors
   (yellow, green, blue, pink, purple). A purple wavy
   underline is expressible. `addHighlightFromSelection` takes
   `color`/`decoration`; `updateHighlightStyle` takes the same as named
@@ -182,7 +182,7 @@
   switches from paged columns to flowing vertical reading.
 - **Multi-column on tablets**: `setColumnsPerScreen(2)` (or 0 = auto
   based on screen width, Calibre-style).
-- **External link callback**: `onExternalLink` / `ELivreView.onExternalLink`
+- **External link callback**: `onExternalLink` / `GrimoireView.onExternalLink`
   hands http(s) taps to the host app.
 - **Comic mode**: pinch zoom, pan and double-tap zoom on image-only
   pages; `controller.isComicMode` detection.
@@ -200,7 +200,7 @@
 
 Initial release.
 
-- `ELivreView`: Calibre-style paginated reader for eLivre books
+- `GrimoireView`: Calibre-style paginated reader for Unseal books
   (EPUB, MOBI, AZW3, FB2, CBZ/CBR).
 - Loopback `BookServer` (shelf) serving parsed books to the WebView,
   with viewer script/style injection into served HTML.

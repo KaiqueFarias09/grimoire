@@ -1,7 +1,7 @@
-# e_livre_viewer
+# grimoire
 
 A Calibre-style ebook reader widget for Flutter, built on
-[eLivre](https://pub.dev/packages/e_livre). Renders EPUB, MOBI, AZW3
+[Unseal](https://pub.dev/packages/unseal). Renders EPUB, MOBI, AZW3
 (KF8), FB2/FBZ, TXT/TXZ, HTML/HTMLZ, DOCX, AZW4, comic archives
 (CBZ/CBR/CB7/CBC), ODT and PDF with paginated or scrolling layouts,
 themes, highlights, bookmarks, in-book search and a text-selection hook
@@ -12,7 +12,7 @@ Linux** (flutter_inappwebview, auto-selected) and **Web** (a native
 same-origin iframe through the SDK, no webview plugin).
 
 The architecture mirrors the Calibre E-book viewer: books are parsed
-to render-ready HTML by eLivre, hosted in memory (loopback HTTP
+to render-ready HTML by Unseal, hosted in memory (loopback HTTP
 server on native platforms, same-origin blob URLs on the web),
 rendered in dual webviews (one visible + one preloading the next
 chapter for instant transitions) and paginated with a CSS
@@ -20,27 +20,27 @@ multi-column layer using the same math Calibre uses.
 
 ## Supported formats
 
-All formats are parsed by eLivre and enter the viewer through its shared
+All formats are parsed by Unseal and enter the viewer through its shared
 HTML, resource, navigation and search pipeline. Reflowable formats use the
 normal paginated or scrolling reader; comics and PDF facsimile pages use the
 fixed-layout path where applicable.
 
 | Format | Viewer behavior | Limitations |
 | --- | --- | --- |
-| EPUB 2 and 3 | Reflowed HTML with CSS, images, fonts, navigation, links, search and selection. | Output is reading-oriented reflow, not a pixel-perfect copy of every EPUB renderer; DRM/encrypted assets follow eLivre's boundaries. |
+| EPUB 2 and 3 | Reflowed HTML with CSS, images, fonts, navigation, links, search and selection. | Output is reading-oriented reflow, not a pixel-perfect copy of every EPUB renderer; DRM/encrypted assets follow Unseal's boundaries. |
 | MOBI 6 and AZW3 (KF8) | Extracted content, styles, images, fonts and navigation are rendered by the same reader. | DRM-protected books and unsupported or malformed Kindle structures are rejected or may lose unsupported features. |
 | FB2 and FBZ | XML metadata, sections, styles, notes and internal links become reflowable HTML. | Semantic document structure is preserved; original page layout is not. |
 | TXT and TXTZ | UTF-8/UTF-16 text becomes safe XHTML; TXTZ can include multiple text sections, an OPF sidecar, CSS, images and fonts. | Markdown/Textile support is basic, not a full extension engine; plain TXT metadata is limited without a recognized header or OPF. |
 | HTML and HTMLZ | Source-preserving HTML/XHTML, head metadata and heading-based navigation are served directly. | HTMLZ selects one top-level `index.*` document as the spine; other HTML files remain resources. Book JavaScript is disabled by default by the viewer policy; this is not a complete HTML security sanitizer. |
 | DOCX | Common WordprocessingML paragraphs, styles, headings, lists, tables, hyperlinks and embedded images are converted to reflowable HTML. | It does not reproduce full Word layout; footnotes, tracked changes, equations, charts, advanced numbering and complex drawings may be lost. |
 | AZW4 | The embedded PDF is available through the viewer's PDF reflow and facsimile modes, with the original PDF bytes retained. | A valid unencrypted PDF payload is required; DRM is rejected, and this does not add a separate PDF renderer. |
-| CBZ and CBR | Image pages use comic mode with natural ordering, cover metadata and zoom/pan behavior. | CBR supports only eLivre's readable RAR variants; encrypted, split, solid, PPMd and virtual-machine archives are unsupported. |
+| CBZ and CBR | Image pages use comic mode with natural ordering, cover metadata and zoom/pan behavior. | CBR supports only Unseal's readable RAR variants; encrypted, split, solid, PPMd and virtual-machine archives are unsupported. |
 | CB7 | 7-Zip image pages, `ComicInfo.xml` metadata and natural ordering use comic mode. | Parsing is asynchronous and bounded per entry; encrypted entries and unsupported codecs are rejected. |
 | CBC | Calibre `comics.txt` collections resolve nested CBZ, CBR and CB7 files in declaration order. | The result is one flattened `ComicBook` page sequence, not a nested collection TOC. |
 | ODT | OpenDocument paragraphs, headings, inline styles, links, lists, tables, images and metadata become reflowable HTML. | It is not exact LibreOffice pagination; advanced styles, tracked changes, fields and complex drawings are outside the contract. |
 | PDF | Text PDFs support reflow mode; facsimile mode renders original pages with the canonical text layer, and scanned PDFs can select facsimile automatically. | It is a reading-oriented PDF path, not a general renderer; facsimile fidelity depends on supported codecs/operators and encrypted files need a supported password. |
 
-TXT/TXZ, HTML/HTMLZ, DOCX, AZW4 and ODT use eLivre's `DocumentBook`
+TXT/TXZ, HTML/HTMLZ, DOCX, AZW4 and ODT use Unseal's `DocumentBook`
 contract, so the viewer does not need a separate renderer for each format.
 CB7/CBC parsing is asynchronous and is awaited by the byte/path opening APIs.
 
@@ -56,7 +56,7 @@ Applications may opt in with `BookJavaScriptPolicy.allowBookScripts` only for
 books they fully trust:
 
 ```dart
-ELivreView(
+GrimoireView(
   book: book,
   bookJavaScriptPolicy: BookJavaScriptPolicy.allowBookScripts,
 );
@@ -70,12 +70,12 @@ running third-party code in the reader.
 ## Usage
 
 ```dart
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/e_livre_viewer.dart';
+import 'package:unseal/unseal.dart';
+import 'package:grimoire/grimoire.dart';
 
-final book = await BookReader.openFromPath('/books/wonderland.azw3');
+final book = await Unseal.readFile('/books/wonderland.azw3');
 
-ELivreView(
+GrimoireView(
   book: book,
   onSelection: (selection) => lookupDictionary(selection.text),
   onExternalLink: (href) => openUrl(href),
@@ -86,7 +86,7 @@ Drive the reader with your own controller:
 
 ```dart
 final controller = ViewerController(book);
-ELivreView(book: book, controller: controller);
+GrimoireView(book: book, controller: controller);
 
 // Highlights (selection toolbar appears automatically):
 await controller.addHighlightFromSelection(
@@ -95,8 +95,8 @@ await controller.addHighlightFromSelection(
 );
 final annotationsJson = controller.exportAnnotations();
 
-// Existing unversioned e_livre_viewer annotation JSON can be imported once.
-// Every subsequent export uses eLivre's canonical versioned v3 envelope.
+// Existing unversioned legacy viewer annotation JSON can be imported once.
+// Every subsequent export uses Unseal's canonical versioned envelope.
 await controller.importAnnotations(previouslySavedAnnotationsJson);
 
 // Bookmarks:
@@ -203,7 +203,7 @@ handles loopback internally).
 | Positions | EPUB CFI → canonical `TextLocator` character offsets |
 | Highlights | range CFI → char-offset ranges + context-text fuzzy relocation |
 | Search | Web Worker text scan → Dart regex over the same text model |
-| PDF | text extracted and reflowed by eLivre; facsimile pages render via lazily-downloaded pdf.js with a text layer pinned to the same canonical text space |
+| PDF | text extracted and reflowed by Unseal; facsimile pages render via lazily-downloaded pdf.js with a text layer pinned to the same canonical text space |
 
 ## License
 
