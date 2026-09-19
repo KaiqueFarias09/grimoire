@@ -89,20 +89,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
-  e_livre:
-    dependency: "direct main"
-    description:
-      path: "../../eLivre"
-      relative: true
-    source: path
-    version: "3.0.0"
-  e_livre_viewer:
-    dependency: "direct main"
-    description:
-      path: ".."
-      relative: true
-    source: path
-    version: "0.2.0"
   fake_async:
     dependency: transitive
     description:
@@ -133,7 +119,7 @@ packages:
     source: sdk
     version: "0.0.0"
   flutter_inappwebview:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
       name: flutter_inappwebview
       sha256: "3952d116ee93bad2946401377e7ade87b5ef200e95ecb5ba1affa1b6329a6867"
@@ -173,13 +159,12 @@ packages:
     source: hosted
     version: "0.1.0-beta.1"
   flutter_inappwebview_macos:
-    dependency: "direct overridden"
+    dependency: transitive
     description:
-      path: flutter_inappwebview_macos
-      ref: fc33a449b9290b127a471808e22eb7b0edebad92
-      resolved-ref: fc33a449b9290b127a471808e22eb7b0edebad92
-      url: "https://github.com/wangqiang1588/flutter_inappwebview.git"
-    source: git
+      name: flutter_inappwebview_macos
+      sha256: "545148cb5c46475ce669ab21621e9f2ad66e05f8e80b2cf49d4018879ab52393"
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.0-beta.3"
   flutter_inappwebview_platform_interface:
     dependency: transitive
@@ -231,6 +216,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  grimoire:
+    dependency: "direct main"
+    description:
+      path: ".."
+      relative: true
+    source: path
+    version: "0.2.0"
   hooks:
     dependency: transitive
     description:
@@ -604,6 +596,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  unseal:
+    dependency: "direct main"
+    description:
+      path: "../../unseal"
+      relative: true
+    source: path
+    version: "1.0.0"
   vector_math:
     dependency: transitive
     description:

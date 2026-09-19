@@ -1,6 +1,6 @@
 {
-    "name": "elivre_viewer_example",
-    "short_name": "elivre_viewer_example",
+    "name": "grimoire_example",
+    "short_name": "grimoire_example",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

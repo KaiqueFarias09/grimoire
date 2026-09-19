@@ -1,4 +1,4 @@
-package dev.elivre.elivre_viewer_example
+package dev.grimoire.grimoire_example
 
 import io.flutter.embedding.android.FlutterActivity
 

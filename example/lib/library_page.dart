@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
+import 'package:unseal/unseal.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -55,7 +55,7 @@ class _LibraryPageState extends State<LibraryPage> {
   @override
   Widget build(final BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('eLivre viewer')),
+      appBar: AppBar(title: const Text('Grimoire reader')),
       body: ListView(
         children: [
           for (final fixture in _fixtures)
@@ -78,7 +78,7 @@ class _LibraryPageState extends State<LibraryPage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final bytes = Uint8List.fromList((await rootBundle.load(fixture.asset)).buffer.asUint8List());
-      final book = await BookReader.openFromBytes(bytes);
+      final book = await Unseal.read(bytes);
       final cachePath = kIsWeb ? '' : (await getTemporaryDirectory()).path;
       if (!context.mounted) {
         return;

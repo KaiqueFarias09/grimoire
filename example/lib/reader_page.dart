@@ -1,6 +1,5 @@
-import 'package:e_livre/e_livre.dart';
-import 'package:e_livre_viewer/e_livre_viewer.dart';
 import 'package:flutter/material.dart';
+import 'package:grimoire/grimoire.dart';
 
 class ReaderPage extends StatefulWidget {
   const ReaderPage({required this.book, required this.cachePath, super.key});
@@ -31,7 +30,7 @@ class _ReaderPageState extends State<ReaderPage> {
   Widget build(final BuildContext context) {
     final pdfController = _pdfController;
     return Scaffold(
-      body: ELivreView(
+      body: GrimoireView(
         book: widget.book,
         controller: pdfController,
         onSelection: (final selection) {

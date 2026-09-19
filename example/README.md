@@ -1,6 +1,7 @@
-# elivre_viewer_example
+# grimoire_example
 
-A new Flutter project.
+Small Flutter application demonstrating the Grimoire reader with the
+local Unseal format fixtures.
 
 ## Getting Started
 

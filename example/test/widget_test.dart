@@ -1,17 +1,17 @@
 import 'dart:typed_data';
 
-import 'package:e_livre/e_livre.dart';
-import 'package:elivre_viewer_example/main.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grimoire_example/grimoire_example_app.dart';
+import 'package:unseal/unseal.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('library page lists the bundled fixtures', (final WidgetTester tester) async {
-    await tester.pumpWidget(const ElivreExampleApp());
+    await tester.pumpWidget(const GrimoireExampleApp());
     for (final label in _fixtureLabels) {
       await tester.scrollUntilVisible(find.text(label), 200, scrollable: find.byType(Scrollable));
       expect(find.text(label), findsOneWidget);
@@ -25,7 +25,7 @@ void main() {
       skip: kIsWeb ? 'Flutter web tests do not serve application asset bundles.' : false,
       () async {
         final bytes = Uint8List.fromList((await rootBundle.load(entry.key)).buffer.asUint8List());
-        final book = await BookReader.openFromBytes(bytes);
+        final book = await Unseal.read(bytes);
 
         expect(book.format, entry.value);
         expect(book.readingOrder, isNotEmpty);

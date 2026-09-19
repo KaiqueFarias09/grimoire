@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = elivre_viewer_example
+PRODUCT_NAME = grimoire_example
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = dev.elivre.elivreViewerExample
+PRODUCT_BUNDLE_IDENTIFIER = dev.grimoire.grimoireExample
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 dev.elivre. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 dev.grimoire. All rights reserved.
