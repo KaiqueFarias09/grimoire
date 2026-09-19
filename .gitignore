@@ -7,8 +7,12 @@ build/
 .fvm/
 *.iml
 .idea/
-example/.steward/
+
+# Steward configuration and generated state
+steward.yaml
 .steward/
+example/.steward/
+# AGENTS.md and docs/architecture.md are hand-maintained and remain tracked.
 
 # Local agent tooling
 .standardctl/
@@ -20,8 +24,9 @@ benchmark/viewer_js/node_modules/
 # Machine-local dependency overrides (tool/generate_local_overrides.sh).
 # Never commit: the published contract stays on the hosted constraint.
 /pubspec_overrides.yaml
+/example/pubspec_overrides.yaml
 
-# Libraries do not commit their lockfile (matches the e_livre package).
+# Libraries do not commit their lockfile (matches the Unseal package).
 /pubspec.lock
 
 # flutter test --coverage output (tool/coverage_gate.sh)

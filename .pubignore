@@ -1,0 +1,33 @@
+# Repository and local tooling
+.git/
+.github/
+.dart_tool/
+.steward/
+.standardctl/
+.zcode/
+.vscode/
+.idea/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+steward.yaml
+
+# Generated output
+build/
+coverage/
+doc/
+.dart-test-tmp/
+.tmp/
+pubspec.lock
+/pubspec_overrides.yaml
+/example/pubspec_overrides.yaml
+.flutter-plugins-dependencies
+*.log
+*.swp
+.DS_Store
+
+# Development-only suites and tooling
+benchmark/
+docs/
+test/
+tool/
