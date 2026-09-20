@@ -24,10 +24,13 @@ class LibraryPage extends StatelessWidget {
   @override
   Widget build(final BuildContext context) {
     final state = host.state;
-    final visible = demoBooks.where((final book) {
+    if (!state.shelfReady) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    final visible = state.books.where((final book) {
       if (state.libraryFilter == 'Todos') return true;
-      if (state.libraryFilter == 'Novos') return book.status == 'Novo';
-      return book.status == state.libraryFilter;
+      if (state.libraryFilter == 'Novos') return book.fixture.status == 'Novo';
+      return book.fixture.status == state.libraryFilter;
     }).toList();
     if (state.sort == 'Título') {
       visible.sort((final a, final b) => a.title.compareTo(b.title));
@@ -180,7 +183,7 @@ class _BookGrid extends StatelessWidget {
   const _BookGrid({required this.host, required this.books});
 
   final UbHost host;
-  final List<DemoBook> books;
+  final List<LoadedBook> books;
 
   @override
   Widget build(final BuildContext context) {

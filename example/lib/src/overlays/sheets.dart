@@ -5,7 +5,6 @@ library;
 import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
-import '../demo_data.dart';
 import '../ub_icon.dart';
 import '../pages/reader_screen.dart' show ReaderHooks;
 import 'package:unseal/unseal.dart' show NavPoint;
@@ -301,13 +300,13 @@ class _GlobalSearchSheet extends StatelessWidget {
     final state = host.state;
     final query = state.searchQuery.trim().toLowerCase();
     final results = query.isNotEmpty
-        ? demoBooks
+        ? state.books
               .where(
                 (final book) =>
-                    '${book.title} ${book.author} ${book.format}'.toLowerCase().contains(query),
+                    '${book.title} ${book.author} ${book.formatLabel}'.toLowerCase().contains(query),
               )
               .toList()
-        : demoBooks.take(3).toList();
+        : state.books.take(3).toList();
 
     final Widget resultMarkup = results.isNotEmpty
         ? _SheetList(
@@ -315,8 +314,8 @@ class _GlobalSearchSheet extends StatelessWidget {
               for (final book in results)
                 _SheetListRow(
                   title: book.title,
-                  subtitle: '${book.author} · ${book.format}',
-                  onTap: () => host.dispatch('open-detail', data: book.id),
+                  subtitle: '${book.author} · ${book.formatLabel}',
+                  onTap: () => host.dispatch('open-detail', data: book.fixture.id),
                   trailing: UbIcon(UbIcons.chevronRight, size: 18, color: palette.muted),
                 ),
             ],
@@ -354,7 +353,7 @@ class _ReaderSearchSheet extends StatelessWidget {
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     final state = host.state;
-    final book = demoBookById(state.selectedBook);
+    final book = state.bookById(state.selectedBook);
 
     final Widget results;
     if (state.searchRan) {
@@ -397,7 +396,7 @@ class _ReaderSearchSheet extends StatelessWidget {
 
     return _SheetFrame(
       title: 'Buscar no livro',
-      subtitle: book.title,
+      subtitle: book?.title ?? '',
       onClose: () => host.dispatch('close-sheet'),
       body: Column(
         children: <Widget>[

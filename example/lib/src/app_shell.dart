@@ -33,6 +33,20 @@ enum ReaderThemeMode { day, sepia, night }
 class UbAppState {
   UbPage page = UbPage.reading;
   String selectedBook = 'alice';
+
+  /// Parsed fixtures; empty until [shelfReady] flips.
+  List<LoadedBook> books = const <LoadedBook>[];
+  bool shelfReady = false;
+
+  LoadedBook? bookById(final String id) {
+    for (final book in books) {
+      if (book.fixture.id == id) {
+        return book;
+      }
+    }
+    return null;
+  }
+
   String libraryFilter = 'Todos';
   String sort = 'Recentes';
   List<DemoCollection> collections = List<DemoCollection>.of(initialCollections);
@@ -70,7 +84,12 @@ abstract class UbHost {
 }
 
 class BooksAppShell extends StatefulWidget {
-  const BooksAppShell({super.key});
+  const BooksAppShell({this.shelfLoader, super.key});
+
+  /// Overrides how the shelf fixtures are parsed; widget tests preload
+  /// the books under `runAsync` because asset IO never completes in
+  /// the fake clock zone.
+  final Future<List<LoadedBook>> Function()? shelfLoader;
 
   @override
   State<BooksAppShell> createState() => _BooksAppShellState();
@@ -92,11 +111,12 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
   void _mutate(final void Function() body) => setState(body);
 
   /// Screenshot automation for the side-by-side prototype checks:
-  /// `--dart-define=UB_START=library|detail:pdf|reader:mobi` and
+  /// `--dart-define=UB_START=library|detail:pdf|reader:txt` and
   /// `--dart-define=UB_OVERLAY=add|search|collections|summary|settings`.
   @override
   void initState() {
     super.initState();
+    unawaited(_loadShelf());
     final start = const String.fromEnvironment('UB_START');
     if (start.isNotEmpty) {
       final parts = start.split(':');
@@ -108,8 +128,8 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
           state.page = UbPage.detail;
         case 'reader':
           state.selectedBook = parts.length > 1 ? parts[1] : 'alice';
-          final book = demoBookById(state.selectedBook);
-          state.readerMode = switch (book.reader) {
+          final book = state.bookById(state.selectedBook);
+          state.readerMode = switch (book?.fixture.reader ?? 'reflow') {
             'comic' => ReaderMode.comic,
             'pages' => ReaderMode.pages,
             _ => ReaderMode.reflow,
@@ -130,6 +150,26 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
         state.sheet = UbSheet.summary;
       case 'settings':
         state.readerSettings = true;
+    }
+  }
+
+  /// Parses the bundled fixtures through Unseal so the shelf shows the
+  /// books' own metadata and covers.
+  Future<void> _loadShelf() async {
+    try {
+      final List<LoadedBook> books = await (widget.shelfLoader ?? loadDemoShelf)();
+      if (!mounted) {
+        return;
+      }
+      _mutate(() {
+        state.books = books;
+        state.shelfReady = true;
+      });
+    } on Exception catch (error) {
+      if (mounted) {
+        _mutate(() => state.shelfReady = true);
+        debugPrint('Demo shelf failed to load: $error');
+      }
     }
   }
 
@@ -155,8 +195,8 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
 
   void _openReader() {
     _mutate(() {
-      final book = demoBookById(state.selectedBook);
-      state.readerMode = switch (book.reader) {
+      final book = state.bookById(state.selectedBook);
+      state.readerMode = switch (book?.fixture.reader ?? 'reflow') {
         'comic' => ReaderMode.comic,
         'pages' => ReaderMode.pages,
         _ => ReaderMode.reflow,

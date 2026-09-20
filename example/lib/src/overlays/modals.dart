@@ -151,7 +151,7 @@ class _ImportModal extends StatelessWidget {
         ],
       );
     } else if (state.importType == 'pdf' && state.importStep == 2) {
-      body = _PdfPasswordStep(host: host);
+      body = _PdfPasswordStep(host: host, book: host.state.bookById('pdf')!);
     } else {
       body = _ImportConfirm(host: host);
     }
@@ -299,9 +299,10 @@ class _ImportOption extends StatelessWidget {
 }
 
 class _PdfPasswordStep extends StatefulWidget {
-  const _PdfPasswordStep({required this.host});
+  const _PdfPasswordStep({required this.host, required this.book});
 
   final UbHost host;
+  final LoadedBook book;
 
   @override
   State<_PdfPasswordStep> createState() => _PdfPasswordStepState();
@@ -325,7 +326,7 @@ class _PdfPasswordStepState extends State<_PdfPasswordStep> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         _ImportPreview(
-          book: demoBookById('pdf'),
+          book: widget.book,
           description: 'PDF protegido. Digite a senha para abrir este livro.',
         ),
         const SizedBox(height: 16),
@@ -377,12 +378,14 @@ class _ImportConfirm extends StatelessWidget {
   @override
   Widget build(final BuildContext context) {
     final state = host.state;
-    final imported = switch (state.importType) {
-      'pdf' => demoBookById('pdf'),
-      'comic' => demoBookById('comic'),
-      'office' => demoBookById('office'),
-      _ => demoBookById('alice'),
-    };
+    final imported = host.state.bookById(
+      switch (state.importType) {
+        'pdf' => 'pdf',
+        'comic' => 'comic',
+        'office' => 'office',
+        _ => 'alice',
+      },
+    )!;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,7 +393,7 @@ class _ImportConfirm extends StatelessWidget {
         _ImportPreview(
           book: imported,
           description:
-              '${imported.author} · ${imported.format}\nPronto para entrar na sua biblioteca.',
+              '${imported.author} · ${imported.formatLabel}\nPronto para entrar na sua biblioteca.',
         ),
         _ModalFooter(
           alignment: MainAxisAlignment.end,
@@ -411,7 +414,7 @@ class _ImportConfirm extends StatelessWidget {
 class _ImportPreview extends StatelessWidget {
   const _ImportPreview({required this.book, required this.description});
 
-  final DemoBook book;
+  final LoadedBook book;
   final String description;
 
   @override
@@ -422,7 +425,7 @@ class _ImportPreview extends StatelessWidget {
       decoration: BoxDecoration(color: palette.surface, borderRadius: BorderRadius.circular(10)),
       child: Row(
         children: <Widget>[
-          UbCover(book: book, width: 92, minHeight: 132),
+          UbCover(entry: book, width: 92, minHeight: 132),
           const SizedBox(width: 17),
           Expanded(
             child: Column(

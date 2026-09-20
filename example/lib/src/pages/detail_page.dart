@@ -4,7 +4,6 @@ library;
 import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
-import '../demo_data.dart';
 import '../ub_icon.dart';
 import '../ub_theme.dart';
 import '../ub_widgets.dart';
@@ -62,13 +61,16 @@ class _DetailBody extends StatelessWidget {
     final palette = UbScope.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
-    final book = demoBookById(host.state.selectedBook);
+    final book = host.state.bookById(host.state.selectedBook);
+    if (book == null) {
+      return const SizedBox.shrink();
+    }
 
     final coverWidth = isMobile ? 106.0 : 230.0;
     final gap = isMobile ? 20.0 : ubDetailGap(width);
     final titleSize = isMobile ? 30.0 : ubDetailTitleSize(width);
 
-    final Widget cover = UbCover(book: book, width: coverWidth);
+    final Widget cover = UbCover(entry: book, width: coverWidth);
     final Widget heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -109,7 +111,7 @@ class _DetailBody extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
         UbButton.dark(
-          book.progress > 0 ? 'Continuar lendo' : 'Começar a ler',
+          book.fixture.progress > 0 ? 'Continuar lendo' : 'Começar a ler',
           () => host.dispatch('open-reader'),
           icon: UbIcons.bookOpen,
         ),
@@ -134,9 +136,9 @@ class _DetailBody extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _MetaCell(label: 'Progresso', value: '${book.progress}%'),
+          _MetaCell(label: 'Progresso', value: '${book.fixture.progress}%'),
           const SizedBox(width: 12),
-          _MetaCell(label: 'Local', value: book.chapter),
+          _MetaCell(label: 'Local', value: book.fixture.chapter),
           const SizedBox(width: 12),
           const _MetaCell(label: 'Disponibilidade', value: 'Offline'),
         ],

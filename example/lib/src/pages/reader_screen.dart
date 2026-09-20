@@ -5,14 +5,12 @@
 library;
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:unseal/unseal.dart' show NavPoint;
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
 import '../app_shell.dart';
 import '../demo_data.dart';
@@ -42,7 +40,6 @@ class ReaderScreen extends StatefulWidget {
 }
 
 class _ReaderScreenState extends State<ReaderScreen> {
-  Book? _book;
   ViewerController? _controller;
   String? _loadError;
   double _liveProgress = 0;
@@ -54,27 +51,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
   // ignore: cancel_subscriptions
   StreamSubscription<ViewerEvent>? _chromeSub;
 
-  DemoBook get demoBook => demoBookById(widget.host.state.selectedBook);
+  LoadedBook? get entry => widget.host.state.bookById(widget.host.state.selectedBook);
 
   @override
   void initState() {
     super.initState();
-    final asset = demoBook.asset;
-    if (asset == null) {
-      _registerHooks();
-      return;
-    }
-    unawaited(_loadBook(asset));
+    unawaited(_startViewer());
   }
 
-  Future<void> _loadBook(final String asset) async {
+  Future<void> _startViewer() async {
+    final book = entry;
+    if (book == null) {
+      setState(() => _loadError = 'Livro indisponível.');
+      return;
+    }
     try {
-      final bytes = Uint8List.fromList((await rootBundle.load(asset)).buffer.asUint8List());
-      final book = await Unseal.read(bytes);
       final cachePath = kIsWeb ? '' : (await getTemporaryDirectory()).path;
       if (!mounted) return;
-      setState(() => _book = book);
-      await _buildController(book, cachePath);
+      await _buildController(book.book, cachePath);
     } on Exception catch (error) {
       if (mounted) {
         setState(() => _loadError = '$error');
@@ -106,6 +100,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
         }
       },
     );
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
     setState(() => _controller = controller);
     _registerHooks();
     if (book is PdfBook) {
@@ -144,7 +142,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     };
     ReaderHooks.applyMode = (final mode) {
       final controller = _controller;
-      if (controller != null && _book is PdfBook) {
+      if (controller != null && controller.book is PdfBook) {
         return controller.setPdfReadingMode(
           mode == ReaderMode.pages ? PdfReadingMode.facsimile : PdfReadingMode.reflow,
         );
@@ -178,7 +176,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         unawaited(controller.goToSearchMatch(0));
       }
     };
-    ReaderHooks.tocSource = () => _book?.navigation.navPoints ?? const <NavPoint>[];
+    ReaderHooks.tocSource = () => _controller?.book.navigation.navPoints ?? const <NavPoint>[];
   }
 
   @override
@@ -202,19 +200,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     final controller = _controller;
-    final isReal = controller != null && _book != null;
+    final book = entry;
     final width = MediaQuery.sizeOf(context).width;
     final horizontal = width < 720 ? 16.0 : (width < 900 ? 28.0 : ubPagePadding(width));
 
-    final double progress;
-    final String chapterLabel;
-    if (isReal) {
-      progress = _liveProgress;
-      chapterLabel = _liveChapter ?? demoBook.chapter;
-    } else {
-      progress = demoBook.progress / 100;
-      chapterLabel = demoBook.chapter;
-    }
+    final progress = _liveProgress > 0 ? _liveProgress : (book?.fixture.progress ?? 0) / 100;
+    final chapterLabel = _liveChapter ?? book?.fixture.chapter ?? '';
 
     final Widget body;
     if (_loadError != null) {
@@ -227,23 +218,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ),
       );
-    } else if (isReal) {
-      body = _RealPaper(controller: controller, demoBook: demoBook, host: widget.host);
-    } else if (demoBook.asset != null) {
-      body = const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    } else if (controller != null && book != null) {
+      body = _RealPaper(controller: controller, theme: widget.host.state.readerTheme);
     } else {
-      // Mock reader: a plain tap toggles the chrome the way the real
-      // viewer's center-third tap does.
-      body = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggleChrome,
-        child: SingleChildScrollView(
-          // The prototype's `.ub-page` paddings, plus clearance for
-          // the overlay bars.
-          padding: EdgeInsets.only(top: (width < 720 ? 25.0 : 34.0) + 56, bottom: 170),
-          child: _MockPaper(host: widget.host),
-        ),
-      );
+      body = const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
 
     return ColoredBox(
@@ -262,6 +240,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
               ),
             ),
           ),
+          // The webview owns taps on the page itself (its center third
+          // emits ChromeToggleEvent); the page gutters give the host a
+          // direct toggle surface, including while the viewer loads.
+          for (final side in <bool>[false, true])
+            Positioned(
+              top: 70,
+              bottom: 120,
+              left: side ? null : 0,
+              right: side ? 0 : null,
+              width: horizontal,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleChrome,
+              ),
+            ),
           _ReaderAppBar(
             host: widget.host,
             visible: _chromeVisible,
@@ -287,19 +280,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
 }
 
 class _RealPaper extends StatelessWidget {
-  const _RealPaper({required this.controller, required this.demoBook, required this.host});
+  const _RealPaper({required this.controller, required this.theme});
 
   final ViewerController controller;
-  final DemoBook demoBook;
-  final UbHost host;
+  final ReaderThemeMode theme;
 
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
-    final state = host.state;
     final Color paperColor;
     final Color paperBorder;
-    switch (state.readerTheme) {
+    switch (theme) {
       case ReaderThemeMode.day:
         paperColor = palette.paper;
         paperBorder = palette.lineSoft;
@@ -338,7 +329,7 @@ class _ReaderAppBar extends StatelessWidget {
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     final state = host.state;
-    final book = demoBookById(state.selectedBook);
+    final book = state.bookById(state.selectedBook);
 
     return Positioned(
       top: 0,
@@ -370,14 +361,14 @@ class _ReaderAppBar extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            book.title,
+                            book?.title ?? '',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 14, color: palette.ink),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${book.author} · ${book.chapter}',
+                            book == null ? '' : '${book.author} · ${book.fixture.chapter}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 12, color: palette.muted),
@@ -795,272 +786,6 @@ class _HostNote extends StatelessWidget {
               style: TextStyle(fontSize: 12, height: 1.45, color: palette.muted),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The prototype's static paper for books without a bundled fixture.
-class _MockPaper extends StatelessWidget {
-  const _MockPaper({required this.host});
-
-  final UbHost host;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final state = host.state;
-    final width = MediaQuery.sizeOf(context).width;
-    final isMobile = width < 720;
-    final book = demoBookById(state.selectedBook);
-
-    if (state.readerMode == ReaderMode.comic) {
-      return Container(
-        constraints: BoxConstraints(minHeight: isMobile ? 500 : 500),
-        padding: const EdgeInsets.all(32),
-        color: const Color(0xFFE3C8B7),
-        child: Center(
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxWidth: 430, minHeight: 390),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF1D1D1F), width: 7),
-              color: const Color(0xFFF2EEE8),
-            ),
-            child: const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    'A cidade\ndepois da chuva',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: UbType.serif,
-                      fontFamilyFallback: UbType.serifFallback,
-                      fontSize: 32,
-                      height: 1.15,
-                      leadingDistribution: TextLeadingDistribution.proportional,
-                      color: Color(0xFF1D1D1F),
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Página 18 · Toque para avançar',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF1D1D1F)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (state.readerMode == ReaderMode.pages) {
-      return Container(
-        constraints: BoxConstraints(minHeight: isMobile ? 460 : 500),
-        padding: EdgeInsets.all(isMobile ? 30 : ubPdfPadding(width)),
-        decoration: BoxDecoration(
-          color: palette.pdfSurface,
-          border: Border.all(color: palette.line),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'PÁGINA ${book.progress == 0 ? 12 : book.progress}',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 11 * 0.08,
-                color: palette.subtle,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'O pequeno atlas das ideias',
-              style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.w700,
-                height: 1.2,
-                leadingDistribution: TextLeadingDistribution.proportional,
-                color: Color(0xFF2C2C2E),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const _PdfParagraph(
-              'Uma página fixa pode preservar a composição original, as imagens e as margens do documento.',
-            ),
-            const SizedBox(height: 15),
-            const _PdfParagraph(
-              'Quando fizer sentido, o leitor também pode oferecer uma leitura contínua para acompanhar o texto com mais conforto.',
-            ),
-            const SizedBox(height: 15),
-            const _PdfParagraph(
-              'Escolha o modo de leitura em “Aa” para experimentar as duas experiências.',
-            ),
-          ],
-        ),
-      );
-    }
-
-    final (Color paperColor, Color textColor) = switch (state.readerTheme) {
-      ReaderThemeMode.day => (palette.paper, const Color(0xFF252525)),
-      ReaderThemeMode.sepia => (const Color(0xFFF3ECDC), const Color(0xFF252525)),
-      ReaderThemeMode.night => (palette.nightPaper, const Color(0xFFE9E9E9)),
-    };
-
-    return Container(
-      constraints: BoxConstraints(minHeight: isMobile ? 460 : 500),
-      padding: isMobile
-          ? const EdgeInsets.symmetric(horizontal: 22, vertical: 30)
-          : EdgeInsets.symmetric(
-              horizontal: ubPaperPaddingH(width),
-              vertical: ubPaperPaddingV(width),
-            ),
-      decoration: BoxDecoration(
-        color: paperColor,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: palette.lineSoft),
-        boxShadow: palette.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            book.chapter.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 11 * 0.11,
-              color: Color(0xFF8B6F5A),
-            ),
-          ),
-          const SizedBox(height: 11),
-          Text(
-            'Conselhos de uma lagarta',
-            style: TextStyle(
-              fontFamily: UbType.serif,
-              fontFamilyFallback: UbType.serifFallback,
-              fontSize: isMobile ? 27 : ubReaderH2Size(width),
-              fontWeight: FontWeight.w500,
-              letterSpacing: (isMobile ? 27 : ubReaderH2Size(width)) * -0.03,
-              height: 1.08,
-              leadingDistribution: TextLeadingDistribution.proportional,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 28),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 660),
-            child: Text(
-              'Alice estava começando a ficar muito cansada de ficar sentada ao lado da irmã na margem do rio, sem ter nada para fazer. Uma ou duas vezes ela tinha espiado o livro que a irmã estava lendo, mas não havia figuras nem diálogos.',
-              style: TextStyle(
-                fontFamily: UbType.serif,
-                fontFamilyFallback: UbType.serifFallback,
-                fontSize: isMobile ? 18 : ubReaderBodySize(width),
-                height: 1.75,
-                leadingDistribution: TextLeadingDistribution.proportional,
-                color: textColor,
-              ),
-            ),
-          ),
-          const SizedBox(height: 22),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 660),
-            child: _HighlightedParagraph(
-              highlighted: state.highlighted,
-              textColor: textColor,
-              isMobile: isMobile,
-              width: width,
-            ),
-          ),
-          const SizedBox(height: 20),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 660),
-            child: Text(
-              'Capítulo 5 de 12 · 38% concluído',
-              style: TextStyle(
-                fontSize: 11,
-                height: 1.4,
-                leadingDistribution: TextLeadingDistribution.proportional,
-                color: palette.muted,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PdfParagraph extends StatelessWidget {
-  const _PdfParagraph(this.text);
-
-  final String text;
-
-  @override
-  Widget build(final BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 14,
-        height: 1.65,
-        leadingDistribution: TextLeadingDistribution.proportional,
-        color: Color(0xFF2C2C2E),
-      ),
-    );
-  }
-}
-
-class _HighlightedParagraph extends StatelessWidget {
-  const _HighlightedParagraph({
-    required this.highlighted,
-    required this.textColor,
-    required this.isMobile,
-    required this.width,
-  });
-
-  final bool highlighted;
-  final Color textColor;
-  final bool isMobile;
-  final double width;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final style = TextStyle(
-      fontFamily: UbType.serif,
-      fontFamilyFallback: UbType.serifFallback,
-      fontSize: isMobile ? 18 : ubReaderBodySize(width),
-      height: 1.75,
-      leadingDistribution: TextLeadingDistribution.proportional,
-      color: textColor,
-    );
-    if (!highlighted) {
-      return Text(
-        'E para que serve um livro, pensou Alice, sem figuras nem diálogos?',
-        style: style,
-      );
-    }
-    return Text.rich(
-      TextSpan(
-        style: style,
-        children: <InlineSpan>[
-          WidgetSpan(
-            alignment: PlaceholderAlignment.baseline,
-            baseline: TextBaseline.alphabetic,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-              decoration: BoxDecoration(
-                color: palette.highlight,
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Text('E para que serve um livro', style: style),
-            ),
-          ),
-          const TextSpan(text: ', pensou Alice, sem figuras nem diálogos?'),
         ],
       ),
     );

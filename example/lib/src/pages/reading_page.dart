@@ -22,6 +22,12 @@ class ReadingPage extends StatelessWidget {
   Widget build(final BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
+    final state = host.state;
+    if (!state.shelfReady) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
+    final hero = state.bookById(state.selectedBook) ?? (state.books.isEmpty ? null : state.books.first);
 
     return SingleChildScrollView(
       key: const Key('ub-page-scroll'),
@@ -38,24 +44,21 @@ class ReadingPage extends StatelessWidget {
                 icon: UbIcons.plus,
               ),
             ),
-            _ContinueCard(host: host),
+            if (hero != null) _ContinueCard(host: host, book: hero),
             UbSectionHeading(
               title: 'Na sua biblioteca',
               subtitle: 'Continue uma história ou escolha a próxima.',
               actionLabel: isMobile ? 'Biblioteca' : 'Ver biblioteca',
               onAction: () => host.goToPage(UbPage.library),
             ),
-            _BookShelf(
-              host: host,
-              books: <DemoBook>[demoBooks[4], demoBooks[5], demoBooks[6], demoBooks[3]],
-            ),
+            _BookShelf(host: host, ids: const <String>['office', 'html', 'txt']),
             UbSectionHeading(
               title: 'Adicionados recentemente',
               subtitle: 'Livros que chegaram à sua biblioteca.',
               actionLabel: 'Biblioteca',
               onAction: () => host.goToPage(UbPage.library),
             ),
-            _BookShelf(host: host, books: <DemoBook>[demoBooks[1], demoBooks[2], demoBooks[7]]),
+            _BookShelf(host: host, ids: const <String>['pdf', 'comic']),
           ],
         ),
       ),
@@ -64,9 +67,10 @@ class ReadingPage extends StatelessWidget {
 }
 
 class _ContinueCard extends StatelessWidget {
-  const _ContinueCard({required this.host});
+  const _ContinueCard({required this.host, required this.book});
 
   final UbHost host;
+  final LoadedBook book;
 
   @override
   Widget build(final BuildContext context) {
@@ -74,7 +78,6 @@ class _ContinueCard extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
     final isCompact = width < 900;
-    final book = demoBookById(host.state.selectedBook);
 
     final coverWidth = isMobile ? 104.0 : (isCompact ? 140.0 : 174.0);
     final coverMinHeight = isMobile ? 154.0 : (isCompact ? 210.0 : 255.0);
@@ -90,7 +93,7 @@ class _ContinueCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          UbCover(book: book, width: coverWidth, minHeight: coverMinHeight),
+          UbCover(entry: book, width: coverWidth, minHeight: coverMinHeight),
           SizedBox(width: gap),
           Expanded(
             child: Column(
@@ -101,7 +104,7 @@ class _ContinueCard extends StatelessWidget {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: Text(
-                    '${book.author} · ${book.chapter}',
+                    '${book.author} · ${book.fixture.chapter}',
                     style: TextStyle(
                       fontSize: isMobile ? 12.0 : 15.0,
                       height: 1.5,
@@ -116,11 +119,11 @@ class _ContinueCard extends StatelessWidget {
                   child: Row(
                     children: <Widget>[
                       Text(
-                        '${book.progress}%',
+                        '${book.fixture.progress}%',
                         style: TextStyle(fontSize: isMobile ? 10 : 12, color: palette.muted),
                       ),
                       SizedBox(width: isMobile ? 7.0 : 12.0),
-                      Expanded(child: UbProgressBar(fraction: book.progress / 100)),
+                      Expanded(child: UbProgressBar(fraction: book.fixture.progress / 100)),
                       SizedBox(width: isMobile ? 7.0 : 12.0),
                       Text(
                         'Cap. 5 de 12',
@@ -135,7 +138,7 @@ class _ContinueCard extends StatelessWidget {
                   runSpacing: 5,
                   children: <Widget>[
                     Text(
-                      book.format,
+                      book.formatLabel,
                       style: TextStyle(fontSize: isMobile ? 10 : 12, color: palette.muted),
                     ),
                     Text(
@@ -158,7 +161,7 @@ class _ContinueCard extends StatelessWidget {
                     if (!isMobile)
                       UbButton.outline(
                         'Ver detalhes',
-                        () => host.dispatch('open-detail', data: book.id),
+                        () => host.dispatch('open-detail', data: book.fixture.id),
                         icon: UbIcons.info,
                       ),
                   ],
@@ -174,10 +177,15 @@ class _ContinueCard extends StatelessWidget {
 
 /// Horizontally scrollable shelf of fixed-width book cards.
 class _BookShelf extends StatelessWidget {
-  const _BookShelf({required this.host, required this.books});
+  const _BookShelf({required this.host, required this.ids});
 
   final UbHost host;
-  final List<DemoBook> books;
+  final List<String> ids;
+
+  List<LoadedBook> get books => <LoadedBook>[
+        for (final id in ids)
+          if (host.state.bookById(id) != null) host.state.bookById(id)!,
+      ];
 
   @override
   Widget build(final BuildContext context) {
@@ -204,7 +212,8 @@ class _BookShelf extends StatelessWidget {
 }
 
 /// Card height for a [coverMinHeight] cover: cover + 11 + title 16 +
-/// 3 + author 15 + 9 + status 13.
+/// 3 + author 15 + 9 + status 13. Cover-less books sit shorter, so the
+/// shelf sizes itself to the covered height.
 double _cardHeight(final double coverMinHeight) => coverMinHeight + 67;
 
 /// Shared book card used by shelves and the library grid.
@@ -217,25 +226,25 @@ class UbBookCard extends StatelessWidget {
   });
 
   final UbHost host;
-  final DemoBook book;
+  final LoadedBook book;
   final double coverMinHeight;
 
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     final String statusLabel;
-    if (book.progress >= 100) {
+    if (book.fixture.progress >= 100) {
       statusLabel = 'Concluído';
-    } else if (book.progress == 0) {
+    } else if (book.fixture.progress == 0) {
       statusLabel = 'Novo';
     } else {
-      statusLabel = '${book.progress}% lido';
+      statusLabel = '${book.fixture.progress}% lido';
     }
 
     return UbHover(
       builder: (final context, final hovered) {
         return GestureDetector(
-          onTap: () => host.dispatch('open-detail', data: book.id),
+          onTap: () => host.dispatch('open-detail', data: book.fixture.id),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -243,7 +252,7 @@ class UbBookCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 transform: Matrix4.translationValues(0, hovered ? -2 : 0, 0),
                 margin: const EdgeInsets.only(bottom: 11),
-                child: UbCover(book: book, minHeight: coverMinHeight),
+                child: UbCover(entry: book, minHeight: coverMinHeight),
               ),
               Text(
                 book.title,
@@ -269,9 +278,9 @@ class UbBookCard extends StatelessWidget {
               Row(
                 children: <Widget>[
                   Text(statusLabel, style: TextStyle(fontSize: 11, color: palette.muted)),
-                  if (book.progress > 0 && book.progress < 100) ...<Widget>[
+                  if (book.fixture.progress > 0 && book.fixture.progress < 100) ...<Widget>[
                     const SizedBox(width: 6),
-                    Expanded(child: UbProgressBar(fraction: book.progress / 100, height: 3)),
+                    Expanded(child: UbProgressBar(fraction: book.fixture.progress / 100, height: 3)),
                   ],
                 ],
               ),

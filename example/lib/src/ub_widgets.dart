@@ -2,7 +2,6 @@
 /// covers, progress bars and small labels, matching the prototype.
 library;
 
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -239,103 +238,89 @@ class UbIconButton extends StatelessWidget {
   }
 }
 
-/// The generated cover: spine strip, serif title, author, fixed tint.
+/// Book cover slot: the real cover image when Unseal found one,
+/// otherwise a subtle card that names the file type clearly (and sits
+/// a bit shorter than covered books).
 class UbCover extends StatelessWidget {
   const UbCover({
-    required this.book,
+    required this.entry,
     this.width,
     this.minHeight,
-    this.nameSize = 18,
-    this.authorSize = 10,
-    this.radius = 7,
-    this.spineWidth = 4,
     super.key,
   });
 
-  final DemoBook book;
+  final LoadedBook entry;
   final double? width;
   final double? minHeight;
-  final double nameSize;
-  final double authorSize;
-  final double radius;
-  final double spineWidth;
 
   @override
   Widget build(final BuildContext context) {
+    final palette = UbScope.of(context);
+    final coverFloor = minHeight;
     return LayoutBuilder(
       builder: (final context, final constraints) {
         final resolvedWidth = width ?? constraints.maxWidth;
-        final height = math.max(resolvedWidth / 0.68, minHeight ?? 0);
-        return _build(context, resolvedWidth, height);
-      },
-    );
-  }
+        // Covered books keep the prototype's 0.68 aspect; cover-less
+        // fallbacks are deliberately shorter.
+        final heightFactor = entry.hasCover ? 1 / 0.68 : 1 / 1.15;
+        final minHeightFloor = entry.hasCover ? (coverFloor ?? 0) : (coverFloor ?? 0) * 0.72;
+        final height = (resolvedWidth * heightFactor).clamp(minHeightFloor, double.infinity);
 
-  Widget _build(final BuildContext context, final double resolvedWidth, final double height) {
-    return Container(
-      width: resolvedWidth,
-      height: height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.horizontal(
-          left: Radius.circular(radius * 3 / 7),
-          right: Radius.circular(radius),
-        ),
-        boxShadow: <BoxShadow>[
-          const BoxShadow(color: Color(0x2B000000), blurRadius: 9, offset: Offset(1, 4)),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.horizontal(
-          left: Radius.circular(radius * 3 / 7),
-          right: Radius.circular(radius),
-        ),
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(child: ColoredBox(color: book.coverColor)),
-            Positioned(
-              top: 0,
-              bottom: 0,
-              left: 0,
-              width: spineWidth,
-              child: const ColoredBox(color: Color(0x80FFFFFF)),
+        return Container(
+          width: resolvedWidth,
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.horizontal(
+              left: Radius.circular(3),
+              right: Radius.circular(7),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(
-                    book.coverName,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: UbType.serif,
-                      fontFamilyFallback: UbType.serifFallback,
-                      fontSize: nameSize,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.04 * nameSize,
-                      height: 1.02,
-                      leadingDistribution: TextLeadingDistribution.proportional,
-                      color: const Color(0xFF1D1D1F),
+            boxShadow: entry.hasCover
+                ? const <BoxShadow>[BoxShadow(color: Color(0x2B000000), blurRadius: 9, offset: Offset(1, 4))]
+                : null,
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.horizontal(
+              left: Radius.circular(3),
+              right: Radius.circular(7),
+            ),
+            child: entry.hasCover
+                ? Image.memory(entry.coverBytes!, fit: BoxFit.cover, gaplessPlayback: true)
+                : Container(
+                    alignment: Alignment.center,
+                    color: palette.surface2,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        UbIcon(UbIcons.bookOpen, size: 20, color: palette.subtle),
+                        const SizedBox(height: 7),
+                        Text(
+                          entry.formatLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                            color: palette.muted,
+                          ),
+                        ),
+                        if (coverFloor != null && coverFloor >= 140) ...<Widget>[
+                          const SizedBox(height: 7),
+                          Text(
+                            entry.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 11, height: 1.35, color: palette.subtle),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  Text(
-                    book.author,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: authorSize,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF1D1D1F),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

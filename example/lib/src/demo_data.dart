@@ -1,51 +1,118 @@
-/// Demo library data mirroring the Unseal Books prototype.
+/// Demo shelf data: every entry is a real bundled fixture whose shelf
+/// information (title, authors, cover, format) comes from Unseal's
+/// parsed metadata. Progress, chapter and source remain demo state.
 library;
 
-import 'dart:ui';
+import 'dart:typed_data';
 
-/// A book entry on the demo shelf.
-///
-/// Entries with an [asset] open in the real Grimoire reader; the
-/// remaining entries render the prototype's mock paper so the reader
-/// chrome can be demoed without a matching fixture.
-class DemoBook {
-  const DemoBook({
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:unseal/unseal.dart';
+
+/// A bundled fixture plus the demo-only reading state shown on the
+/// shelf before the book is opened.
+class DemoFixture {
+  const DemoFixture({
     required this.id,
-    required this.title,
-    required this.author,
-    required this.format,
-    required this.coverColor,
+    required this.asset,
     required this.progress,
     required this.status,
     required this.chapter,
     required this.reader,
-    required this.description,
     required this.source,
-    this.asset,
+    required this.descriptionFallback,
   });
 
   final String id;
-  final String title;
-  final String author;
-  final String format;
-  final Color coverColor;
+  final String asset;
   final int progress;
   final String status;
   final String chapter;
-  final String reader;
-  final String description;
-  final String source;
-  final String? asset;
 
-  /// First up to five words of the title, as the generated cover shows.
-  String get coverName {
-    final words = title.split(' ');
-    return words.take(5).join(' ');
-  }
+  /// `reflow`, `pages`, or `comic`: the initial reader mode.
+  final String reader;
+  final String source;
+  final String descriptionFallback;
 }
 
+const demoFixtures = <DemoFixture>[
+  DemoFixture(
+    id: 'alice',
+    asset: 'assets/books/alice-kf8.azw3',
+    progress: 38,
+    status: 'Lendo',
+    chapter: 'Capítulo V',
+    reader: 'reflow',
+    source: 'Livro incluído no exemplo',
+    descriptionFallback:
+        'Alice cai em um mundo curioso, cheio de personagens improváveis, perguntas sem resposta e uma lógica que só faz sentido quando tudo parece impossível.',
+  ),
+  DemoFixture(
+    id: 'pdf',
+    asset: 'assets/books/dickens-sample.pdf',
+    progress: 12,
+    status: 'Lendo',
+    chapter: 'Página 12',
+    reader: 'pages',
+    source: 'Importado recentemente',
+    descriptionFallback:
+        'Um documento ilustrado para testar leitura por páginas, zoom, senha e retomada de progresso.',
+  ),
+  DemoFixture(
+    id: 'comic',
+    asset: 'assets/books/synthetic-pages.cb7',
+    progress: 64,
+    status: 'Lendo',
+    chapter: 'Página 18',
+    reader: 'comic',
+    source: 'Importado recentemente',
+    descriptionFallback: 'Uma história em quadrinhos para testar navegação por páginas e leitura visual.',
+  ),
+  DemoFixture(
+    id: 'office',
+    asset: 'assets/books/synthetic.docx',
+    progress: 0,
+    status: 'Novo',
+    chapter: 'Ainda não iniciado',
+    reader: 'reflow',
+    source: 'Importado recentemente',
+    descriptionFallback: 'Um documento convertido para uma experiência de leitura contínua.',
+  ),
+  DemoFixture(
+    id: 'html',
+    asset: 'assets/books/synthetic.html',
+    progress: 22,
+    status: 'Lendo',
+    chapter: 'Entrada 4',
+    reader: 'reflow',
+    source: 'Biblioteca',
+    descriptionFallback: 'Notas de viagem organizadas como um livro para leitura no dispositivo.',
+  ),
+  DemoFixture(
+    id: 'txt',
+    asset: 'assets/books/synthetic.txt',
+    progress: 100,
+    status: 'Concluído',
+    chapter: 'Concluído',
+    reader: 'reflow',
+    source: 'Biblioteca',
+    descriptionFallback: 'Uma coletânea simples para testar textos sem capa.',
+  ),
+];
+
+const initialCollections = <DemoCollection>[
+  DemoCollection(name: 'Todos os livros', count: 6, kind: 'all'),
+  DemoCollection(name: 'Lendo agora', count: 4, kind: 'status', filter: 'Lendo'),
+  DemoCollection(name: 'Concluídos', count: 1, kind: 'status', filter: 'Concluído'),
+  DemoCollection(name: 'Favoritos', count: 0, kind: 'custom'),
+];
+
 class DemoCollection {
-  const DemoCollection({required this.name, required this.count, required this.kind, this.filter});
+  const DemoCollection({
+    required this.name,
+    required this.count,
+    required this.kind,
+    this.filter,
+  });
 
   final String name;
   final int count;
@@ -55,128 +122,77 @@ class DemoCollection {
   final String? filter;
 }
 
-const demoBooks = <DemoBook>[
-  DemoBook(
-    id: 'alice',
-    title: 'Alice’s Adventures in Wonderland',
-    author: 'Lewis Carroll',
-    format: 'EPUB',
-    coverColor: Color(0xFFF1DF83),
-    progress: 38,
-    status: 'Lendo',
-    chapter: 'Capítulo V',
-    reader: 'reflow',
-    description:
-        'Alice cai em um mundo curioso, cheio de personagens improváveis, perguntas sem resposta e uma lógica que só faz sentido quando tudo parece impossível.',
-    source: 'Livro incluído no exemplo',
-    asset: 'assets/books/alice-kf8.azw3',
-  ),
-  DemoBook(
-    id: 'pdf',
-    title: 'O pequeno atlas das ideias',
-    author: 'Coleção Livros',
-    format: 'PDF',
-    coverColor: Color(0xFFD8E4EF),
-    progress: 12,
-    status: 'Lendo',
-    chapter: 'Página 12',
-    reader: 'pages',
-    description:
-        'Um documento ilustrado para testar leitura por páginas, zoom, senha e retomada de progresso.',
-    source: 'Importado recentemente',
-    asset: 'assets/books/dickens-sample.pdf',
-  ),
-  DemoBook(
-    id: 'comic',
-    title: 'A cidade depois da chuva',
-    author: 'Estúdio Norte',
-    format: 'CBZ',
-    coverColor: Color(0xFFF09A70),
-    progress: 64,
-    status: 'Lendo',
-    chapter: 'Página 18',
-    reader: 'comic',
-    description: 'Uma história em quadrinhos para testar navegação por páginas e leitura visual.',
-    source: 'Importado recentemente',
-    asset: 'assets/books/synthetic-pages.cb7',
-  ),
-  DemoBook(
-    id: 'office',
-    title: 'Cartas para uma casa nova',
-    author: 'M. Oliveira',
-    format: 'DOCX',
-    coverColor: Color(0xFFCBDCC8),
-    progress: 0,
-    status: 'Novo',
-    chapter: 'Ainda não iniciado',
-    reader: 'reflow',
-    description: 'Um documento convertido para uma experiência de leitura contínua.',
-    source: 'Importado recentemente',
-    asset: 'assets/books/synthetic.docx',
-  ),
-  DemoBook(
-    id: 'mobi',
-    title: 'A ilha misteriosa',
-    author: 'Júlio Verne',
-    format: 'MOBI',
-    coverColor: Color(0xFFE9D6C8),
-    progress: 100,
-    status: 'Concluído',
-    chapter: 'Concluído',
-    reader: 'reflow',
-    description: 'Um clássico para testar livros refluíveis concluídos e leitura novamente.',
-    source: 'Biblioteca',
-  ),
-  DemoBook(
-    id: 'classic',
-    title: 'Dom Casmurro',
-    author: 'Machado de Assis',
-    format: 'FB2',
-    coverColor: Color(0xFFD7C8A8),
-    progress: 0,
-    status: 'Novo',
-    chapter: 'Ainda não iniciado',
-    reader: 'reflow',
-    description: 'Clássico brasileiro em formato refluível.',
-    source: 'Biblioteca',
-  ),
-  DemoBook(
-    id: 'html',
-    title: 'Caderno de viagens',
-    author: 'Ana Reis',
-    format: 'HTML',
-    coverColor: Color(0xFFC4D9E9),
-    progress: 22,
-    status: 'Lendo',
-    chapter: 'Entrada 4',
-    reader: 'reflow',
-    description: 'Notas de viagem organizadas como um livro para leitura no dispositivo.',
-    source: 'Biblioteca',
-    asset: 'assets/books/synthetic.html',
-  ),
-  DemoBook(
-    id: 'txt',
-    title: 'Pequenas histórias',
-    author: 'Vários autores',
-    format: 'TXT',
-    coverColor: Color(0xFFE9C3C3),
-    progress: 100,
-    status: 'Concluído',
-    chapter: 'Concluído',
-    reader: 'reflow',
-    description: 'Uma coletânea simples para testar textos sem capa.',
-    source: 'Biblioteca',
-    asset: 'assets/books/synthetic.txt',
-  ),
-];
+/// A fixture parsed through Unseal: shelf presentation comes from the
+/// book's own metadata, with filename fallbacks when it has none.
+class LoadedBook {
+  const LoadedBook({
+    required this.fixture,
+    required this.book,
+    required this.title,
+    required this.author,
+    required this.formatLabel,
+    this.coverBytes,
+  });
 
-const initialCollections = <DemoCollection>[
-  DemoCollection(name: 'Todos os livros', count: 8, kind: 'all'),
-  DemoCollection(name: 'Lendo agora', count: 3, kind: 'status', filter: 'Lendo'),
-  DemoCollection(name: 'Concluídos', count: 2, kind: 'status', filter: 'Concluídos'),
-  DemoCollection(name: 'Favoritos', count: 0, kind: 'custom'),
-];
+  final DemoFixture fixture;
+  final Book book;
+  final String title;
+  final String author;
+  final String formatLabel;
+  final Uint8List? coverBytes;
 
-DemoBook demoBookById(final String id) {
-  return demoBooks.firstWhere((final book) => book.id == id, orElse: () => demoBooks.first);
+  bool get hasCover => coverBytes != null;
+
+  String get description => book.metadata.description ?? fixture.descriptionFallback;
+
+  /// A 1x1 "cover" (or anything smaller than 16px on a side) counts as
+  /// no cover at all.
+  static bool hasUsableCover(final BookCover? cover) {
+    if (cover == null) {
+      return false;
+    }
+    final width = cover.width;
+    final height = cover.height;
+    if (width == null || height == null) {
+      return true;
+    }
+    return width >= 16 && height >= 16;
+  }
+
+  static LoadedBook fromFixture(final DemoFixture fixture, final Book book) {
+    final metadata = book.metadata;
+    final title = (metadata.title == null || metadata.title!.trim().isEmpty)
+        ? titleFromAsset(fixture.asset)
+        : metadata.title!.trim();
+    final authors = metadata.authors.where((final author) => author.trim().isNotEmpty).toList();
+    return LoadedBook(
+      fixture: fixture,
+      book: book,
+      title: title,
+      author: authors.isEmpty ? 'Autor desconhecido' : authors.join(', '),
+      formatLabel: book.format.name.toUpperCase(),
+      coverBytes: hasUsableCover(metadata.cover) ? metadata.cover!.bytes : null,
+    );
+  }
+
+  /// "assets/books/dickens-sample.pdf" -> "Dickens Sample".
+  static String titleFromAsset(final String asset) {
+    final base = asset.split('/').last.split('.').first;
+    final words = base.replaceAll(RegExp('[-_]+'), ' ').split(' ');
+    return words
+        .where((final word) => word.isNotEmpty)
+        .map((final word) => word[0].toUpperCase() + word.substring(1))
+        .join(' ');
+  }
+}
+
+/// Parses every bundled fixture, keeping [demoFixtures] order.
+Future<List<LoadedBook>> loadDemoShelf() async {
+  final books = <LoadedBook>[];
+  for (final fixture in demoFixtures) {
+    final data = await rootBundle.load(fixture.asset);
+    final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
+    books.add(LoadedBook.fromFixture(fixture, await Unseal.read(bytes)));
+  }
+  return books;
 }

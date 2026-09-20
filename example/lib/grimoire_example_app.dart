@@ -2,10 +2,14 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import 'src/app_shell.dart';
+import 'src/demo_data.dart';
 import 'src/ub_theme.dart';
 
 class GrimoireExampleApp extends StatelessWidget {
-  const GrimoireExampleApp({super.key});
+  const GrimoireExampleApp({this.shelfLoader, super.key});
+
+  /// Passed through to [BooksAppShell]; see there for why tests use it.
+  final Future<List<LoadedBook>> Function()? shelfLoader;
 
   @override
   Widget build(final BuildContext context) {
@@ -15,7 +19,7 @@ class GrimoireExampleApp extends StatelessWidget {
       scrollBehavior: const _NoScrollbarBehavior(),
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      home: const _PaletteBridge(child: BooksAppShell()),
+      home: _PaletteBridge(child: BooksAppShell(shelfLoader: shelfLoader)),
       // `--dart-define=UB_FULLSCREEN=true` removes the safe-area insets
       // so screenshots line up 1:1 with the browser-rendered prototype.
       builder: (final context, final child) {
