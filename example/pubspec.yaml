@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_svg: ^2.3.0
   grimoire:
     path: ../
   path_provider: ^2.1.6
