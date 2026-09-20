@@ -47,6 +47,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
   String? _loadError;
   double _liveProgress = 0;
   String? _liveChapter;
+  bool _chromeVisible = true;
+
+  // Cancelled in dispose via a local copy (see dispose); the lint wants
+  // the cancel in the creating function, which is not possible here.
+  // ignore: cancel_subscriptions
+  StreamSubscription<ViewerEvent>? _chromeSub;
 
   DemoBook get demoBook => demoBookById(widget.host.state.selectedBook);
 
@@ -91,6 +97,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
         });
       }
     });
+    // With host chrome the center-third tap still emits ChromeToggleEvent;
+    // the host owns the bars, so toggle ours.
+    _chromeSub = controller.bridge.events.where((final event) => event is ChromeToggleEvent).listen(
+      (final _) {
+        if (mounted) {
+          _toggleChrome();
+        }
+      },
+    );
     setState(() => _controller = controller);
     _registerHooks();
     if (book is PdfBook) {
@@ -175,6 +190,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
     ReaderHooks.selectedChapter = null;
     ReaderHooks.jumpToSearch = null;
     ReaderHooks.tocSource = null;
+    final chromeSub = _chromeSub;
+    if (chromeSub != null) {
+      unawaited(chromeSub.cancel());
+    }
     _controller?.dispose();
     super.dispose();
   }
@@ -182,31 +201,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
-    final state = widget.host.state;
     final controller = _controller;
     final isReal = controller != null && _book != null;
     final width = MediaQuery.sizeOf(context).width;
     final horizontal = width < 720 ? 16.0 : (width < 900 ? 28.0 : ubPagePadding(width));
 
-    final Widget content;
+    final double progress;
+    final String chapterLabel;
     if (isReal) {
-      content = Column(
-        children: <Widget>[
-          Expanded(
-            child: _RealPaper(controller: controller, demoBook: demoBook, host: widget.host),
-          ),
-          _ReaderBottomBar(
-            host: widget.host,
-            progress: _liveProgress,
-            chapterLabel: _liveChapter ?? demoBook.chapter,
-          ),
-          if (state.readerSettings)
-            _ReaderSettingsPanel(host: widget.host, isPdf: _book is PdfBook, isComic: false),
-          const _HostNote(),
-        ],
-      );
-    } else if (_loadError != null) {
-      content = Center(
+      progress = _liveProgress;
+      chapterLabel = _liveChapter ?? demoBook.chapter;
+    } else {
+      progress = demoBook.progress / 100;
+      chapterLabel = demoBook.chapter;
+    }
+
+    final Widget body;
+    if (_loadError != null) {
+      body = Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
@@ -215,56 +227,62 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ),
       );
+    } else if (isReal) {
+      body = _RealPaper(controller: controller, demoBook: demoBook, host: widget.host);
     } else if (demoBook.asset != null) {
-      content = const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      body = const Center(child: CircularProgressIndicator(strokeWidth: 2));
     } else {
-      content = Column(
-        children: <Widget>[
-          _MockPaper(host: widget.host),
-          _ReaderBottomBar(
-            host: widget.host,
-            progress: demoBook.progress / 100,
-            chapterLabel: demoBook.chapter,
-          ),
-          if (state.readerSettings)
-            _ReaderSettingsPanel(host: widget.host, isPdf: false, isComic: false),
-          const _HostNote(),
-        ],
+      // Mock reader: a plain tap toggles the chrome the way the real
+      // viewer's center-third tap does.
+      body = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggleChrome,
+        child: SingleChildScrollView(
+          // The prototype's `.ub-page` paddings, plus clearance for
+          // the overlay bars.
+          padding: EdgeInsets.only(top: (width < 720 ? 25.0 : 34.0) + 56, bottom: 170),
+          child: _MockPaper(host: widget.host),
+        ),
       );
     }
 
     return ColoredBox(
       color: palette.bg,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
-          child: Column(
-            children: <Widget>[
-              _ReaderTopBar(host: widget.host),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1050),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: horizontal),
-                      child: isReal || demoBook.asset != null || _loadError != null
-                          ? content
-                          : SingleChildScrollView(
-                              // The prototype's `.ub-page` top padding.
-                              padding: EdgeInsets.only(top: width < 720 ? 25.0 : 34.0),
-                              child: content,
-                            ),
-                    ),
-                  ),
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1050),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  child: body,
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          _ReaderAppBar(
+            host: widget.host,
+            visible: _chromeVisible,
+            onBack: () => widget.host.dispatch('reader-back'),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _ReaderBottomChrome(
+              host: widget.host,
+              visible: _chromeVisible,
+              progress: progress,
+              chapterLabel: chapterLabel,
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  void _toggleChrome() {
+    setState(() => _chromeVisible = !_chromeVisible);
   }
 }
 
@@ -307,10 +325,14 @@ class _RealPaper extends StatelessWidget {
   }
 }
 
-class _ReaderTopBar extends StatelessWidget {
-  const _ReaderTopBar({required this.host});
+/// Pinned reader app bar: back, book title, author and the bookmark
+/// and settings actions. Slides away with the rest of the chrome.
+class _ReaderAppBar extends StatelessWidget {
+  const _ReaderAppBar({required this.host, required this.visible, required this.onBack});
 
   final UbHost host;
+  final bool visible;
+  final VoidCallback onBack;
 
   @override
   Widget build(final BuildContext context) {
@@ -318,76 +340,88 @@ class _ReaderTopBar extends StatelessWidget {
     final state = host.state;
     final book = demoBookById(state.selectedBook);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 38),
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        UbIcon(UbIcons.arrowLeft, size: 18, color: palette.blue),
-                        const SizedBox(width: 3),
-                        UbLinkButton(
-                          label: 'Voltar',
-                          chevron: false,
-                          onPressed: () => host.dispatch('reader-back'),
-                        ),
-                      ],
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: AnimatedSlide(
+        offset: visible ? Offset.zero : const Offset(0, -1),
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: Container(
+            decoration: BoxDecoration(
+              color: palette.bg,
+              border: Border(bottom: BorderSide(color: palette.lineSoft)),
+            ),
+            padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+            child: SizedBox(
+              height: 56,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: <Widget>[
+                    UbIconButton(icon: UbIcons.arrowLeft, tooltip: 'Voltar', onPressed: onBack),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            book.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 14, color: palette.ink),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${book.author} · ${book.chapter}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: palette.muted),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                    UbIconButton(
+                      icon: UbIcons.bookmark,
+                      tooltip: 'Marcar posição',
+                      active: state.bookmarked,
+                      onPressed: () => host.dispatch('toggle-bookmark'),
+                    ),
+                    const SizedBox(width: 4),
+                    UbIconButton(
+                      icon: UbIcons.type,
+                      tooltip: 'Temas e ajustes',
+                      active: state.readerSettings,
+                      onPressed: () => host.dispatch('toggle-reader-settings'),
+                    ),
+                  ],
                 ),
-                Text(
-                  book.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, color: palette.ink),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${book.author} · ${book.chapter}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: palette.muted),
-                ),
-              ],
+              ),
             ),
           ),
-          Row(
-            children: <Widget>[
-              UbIconButton(
-                icon: UbIcons.bookmark,
-                tooltip: 'Marcar posição',
-                active: state.bookmarked,
-                onPressed: () => host.dispatch('toggle-bookmark'),
-              ),
-              const SizedBox(width: 4),
-              UbIconButton(
-                icon: UbIcons.type,
-                tooltip: 'Temas e ajustes',
-                active: state.readerSettings,
-                onPressed: () => host.dispatch('toggle-reader-settings'),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ReaderBottomBar extends StatelessWidget {
-  const _ReaderBottomBar({required this.host, required this.progress, required this.chapterLabel});
+/// Pinned reader bottom chrome: the settings panel and host note when
+/// open, plus the navigation/progress bar. Slides away with the rest
+/// of the chrome on a center tap.
+class _ReaderBottomChrome extends StatelessWidget {
+  const _ReaderBottomChrome({
+    required this.host,
+    required this.visible,
+    required this.progress,
+    required this.chapterLabel,
+  });
 
   final UbHost host;
+  final bool visible;
   final double progress;
   final String chapterLabel;
 
@@ -396,6 +430,65 @@ class _ReaderBottomBar extends StatelessWidget {
     final palette = UbScope.of(context);
     final state = host.state;
     final isMobile = MediaQuery.sizeOf(context).width < 720;
+
+    return AnimatedSlide(
+      offset: visible ? Offset.zero : const Offset(0, 1),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: Container(
+          decoration: BoxDecoration(
+            color: palette.bg,
+            border: Border(top: BorderSide(color: palette.lineSoft)),
+          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (state.readerSettings) ...<Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _ReaderSettingsPanel(host: host, isPdf: false, isComic: false),
+                ),
+                const Padding(padding: EdgeInsets.fromLTRB(16, 10, 16, 0), child: _HostNote()),
+                const SizedBox(height: 10),
+              ],
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _ReaderBottomBarContent(
+                  host: host,
+                  progress: progress,
+                  chapterLabel: chapterLabel,
+                  isMobile: isMobile,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReaderBottomBarContent extends StatelessWidget {
+  const _ReaderBottomBarContent({
+    required this.host,
+    required this.progress,
+    required this.chapterLabel,
+    required this.isMobile,
+  });
+
+  final UbHost host;
+  final double progress;
+  final String chapterLabel;
+  final bool isMobile;
+
+  @override
+  Widget build(final BuildContext context) {
+    final palette = UbScope.of(context);
+    final state = host.state;
 
     final Widget progressBar = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 470),
@@ -422,40 +515,41 @@ class _ReaderBottomBar extends StatelessWidget {
 
     if (isMobile) {
       return Padding(
-        padding: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Column(
           children: <Widget>[
-            progressBar,
-            const SizedBox(height: 7),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: progressBar),
+            const SizedBox(height: 4),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: <Widget>[
-                _ReaderBottomButton(
-                  icon: UbIcons.list,
-                  label: 'Sumário',
-                  onPressed: () => host.dispatch('open-summary-sheet'),
+                Expanded(
+                  child: _ReaderBottomButton(
+                    icon: UbIcons.list,
+                    label: 'Sumário',
+                    onPressed: () => host.dispatch('open-summary-sheet'),
+                  ),
                 ),
-                _ReaderBottomButton(
-                  icon: UbIcons.search,
-                  label: 'Buscar',
-                  onPressed: () => host.dispatch('open-reader-search-sheet'),
+                Expanded(
+                  child: _ReaderBottomButton(
+                    icon: UbIcons.search,
+                    label: 'Buscar',
+                    onPressed: () => host.dispatch('open-reader-search-sheet'),
+                  ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                _ReaderBottomButton(
-                  icon: UbIcons.highlighter,
-                  label: 'Destacar',
-                  active: state.highlighted,
-                  onPressed: () => host.dispatch('toggle-highlight'),
+                Expanded(
+                  child: _ReaderBottomButton(
+                    icon: UbIcons.highlighter,
+                    label: 'Destacar',
+                    active: state.highlighted,
+                    onPressed: () => host.dispatch('toggle-highlight'),
+                  ),
                 ),
-                _ReaderBottomButton(
-                  icon: UbIcons.note,
-                  label: 'Nota',
-                  onPressed: () => host.dispatch('open-note'),
+                Expanded(
+                  child: _ReaderBottomButton(
+                    icon: UbIcons.note,
+                    label: 'Nota',
+                    onPressed: () => host.dispatch('open-note'),
+                  ),
                 ),
               ],
             ),
@@ -465,7 +559,7 @@ class _ReaderBottomBar extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: <Widget>[
           _ReaderBottomButton(
@@ -532,7 +626,13 @@ class _ReaderBottomButton extends StatelessWidget {
               children: <Widget>[
                 UbIcon(icon, size: 18, color: foreground),
                 const SizedBox(width: 6),
-                Text(label, style: TextStyle(fontSize: 12, color: foreground)),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: foreground),
+                  ),
+                ),
               ],
             ),
           ),
