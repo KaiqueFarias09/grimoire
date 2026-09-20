@@ -410,6 +410,9 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
       };
       final main = Column(
         children: <Widget>[
+          // No top bar: keep the pages below the system status bar and
+          // give desktop windows the same breathing room.
+          SizedBox(height: MediaQuery.paddingOf(context).top + (isMobile ? 0 : 12)),
           Expanded(child: pageBody),
           if (isMobile) _BottomNav(host: this),
         ],

@@ -37,11 +37,10 @@ class UbSheetHost extends StatelessWidget {
               onTap: () {},
               child: Container(
                 width: double.infinity,
+                // Fully extended: the whole screen minus any open keyboard.
+                height: MediaQuery.sizeOf(context).height - bottomInset,
                 margin: EdgeInsets.symmetric(horizontal: isMobile ? 0.0 : 18.0),
-                constraints: BoxConstraints(
-                  maxWidth: 680,
-                  maxHeight: (isMobile ? 0.88 : 0.82) * MediaQuery.sizeOf(context).height,
-                ),
+                constraints: const BoxConstraints(maxWidth: 680),
                 padding: EdgeInsets.fromLTRB(
                   isMobile ? 16 : 22,
                   10,
