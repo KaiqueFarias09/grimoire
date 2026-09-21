@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 
+import 'package:animations/animations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show KeyDownEvent, LogicalKeyboardKey;
@@ -98,17 +99,27 @@ class BooksAppShell extends StatefulWidget {
   State<BooksAppShell> createState() => _BooksAppShellState();
 }
 
-class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
+class _BooksAppShellState extends State<BooksAppShell>
+    with SingleTickerProviderStateMixin
+    implements UbHost {
   @override
   final UbAppState state = UbAppState();
   final FocusNode _keyboardFocusNode = FocusNode();
   Timer? _toastTimer;
   final GrimoirePageRenderer _pageRenderer = GrimoirePageRenderer();
 
+  /// Drives the cross-page fade-through; forwarded from zero on every
+  /// page change.
+  late final AnimationController _pageController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+  );
+
   @override
   void dispose() {
     _toastTimer?.cancel();
     _keyboardFocusNode.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -120,6 +131,8 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
   @override
   void initState() {
     super.initState();
+    // Start settled: the first page renders without a transition.
+    _pageController.value = 1.0;
     unawaited(_loadShelf());
     final start = const String.fromEnvironment('UB_START');
     if (start.isNotEmpty) {
@@ -217,12 +230,20 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
     });
   }
 
+  /// Every runtime page change funnels through here so the shell can
+  /// replay the fade-through (initState's direct assignments excluded:
+  /// the app starts settled).
+  void _setPage(final UbPage page) {
+    _pageController.forward(from: 0);
+    state.page = page;
+  }
+
   @override
   void goToPage(final UbPage page) {
     _mutate(() {
       state.modal = UbModal.none;
       state.sheet = UbSheet.none;
-      state.page = page;
+      _setPage(page);
     });
   }
 
@@ -237,7 +258,7 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
       state.readerSettings = false;
       state.modal = UbModal.none;
       state.sheet = UbSheet.none;
-      state.page = UbPage.reader;
+      _setPage(UbPage.reader);
     });
   }
 
@@ -311,7 +332,7 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
           state.selectedBook = _mapImportedBook();
           state.modal = UbModal.none;
           state.sheet = UbSheet.none;
-          state.page = UbPage.library;
+          _setPage(UbPage.library);
         });
         showToast('Livro adicionado à sua biblioteca.');
       case 'open-detail':
@@ -320,7 +341,7 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
           state.previousPage = state.page == UbPage.reader ? UbPage.library : state.page;
           state.modal = UbModal.none;
           state.sheet = UbSheet.none;
-          state.page = UbPage.detail;
+          _setPage(UbPage.detail);
         });
       case 'open-reader':
         _mutate(
@@ -336,7 +357,7 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
           state.libraryFilter = data ?? 'Todos';
           state.modal = UbModal.none;
           state.sheet = UbSheet.none;
-          state.page = UbPage.library;
+          _setPage(UbPage.library);
         });
       case 'sort-library':
         _mutate(() => state.sort = state.sort == 'Recentes' ? 'Título' : 'Recentes');
@@ -517,24 +538,29 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
         child: Stack(
           children: <Widget>[
             Positioned.fill(
-              child: ColoredBox(color: palette.bg, child: chrome),
+              child: FadeThroughTransition(
+                animation: _pageController,
+                // No route stack sits on top of the shell, so the
+                // secondary (pushed-on-top) animation stays settled.
+                secondaryAnimation: kAlwaysDismissedAnimation,
+                fillColor: palette.bg,
+                child: KeyedSubtree(key: ValueKey<UbPage>(state.page), child: chrome),
+              ),
             ),
-            if (state.modal != UbModal.none)
-              Positioned.fill(
-                child: UbModalHost(
-                  host: this,
-                  modal: state.modal,
-                  onDismiss: () => dispatch('close-modal'),
-                ),
+            Positioned.fill(
+              child: UbModalHost(
+                host: this,
+                modal: state.modal,
+                onDismiss: () => dispatch('close-modal'),
               ),
-            if (state.sheet != UbSheet.none)
-              Positioned.fill(
-                child: UbSheetHost(
-                  host: this,
-                  sheet: state.sheet,
-                  onDismiss: () => dispatch('close-sheet'),
-                ),
+            ),
+            Positioned.fill(
+              child: UbSheetHost(
+                host: this,
+                sheet: state.sheet,
+                onDismiss: () => dispatch('close-sheet'),
               ),
+            ),
             if (state.toast.isNotEmpty)
               Positioned(right: 20, bottom: 20, child: _UbToast(message: state.toast)),
           ],

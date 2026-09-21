@@ -77,6 +77,9 @@ void main() {
     // The viewer's start never completes under the fake clock, so its
     // loading spinner keeps animating: pump fixed frames, not settle.
     await tester.pump();
+    // Let the shell's page fade-through finish so the reader's tap
+    // surfaces sit at their final, unscaled geometry.
+    await tester.pump(const Duration(milliseconds: 400));
 
     // Shrink to a phone so the mobile chrome layout applies.
     tester.view.physicalSize = const Size(390, 844);
