@@ -6,15 +6,16 @@
 #
 #   tool/coverage_gate.sh [floor_percent]
 #
-# The floor defaults to 72.8, the repository baseline measured with this
-# script when the coverage gate was introduced. Generated code is excluded from
-# the sum (see $_exclude), and test/helper files are never counted
-# because lcov only records lib/ sources here.
+# The floor defaults to 93.8, the repository baseline measured with
+# this script after the 2026-09 coverage push (93.85%), rounded down
+# one notch to tolerate cross-machine noise. Generated code is
+# excluded from the sum (see $_exclude), and test/helper files are
+# never counted because lcov only records lib/ sources here.
 #
 # Requirements: flutter on PATH, python3 for the lcov sum.
 set -eu
 
-floor="${1:-72.8}"
+floor="${1:-93.8}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 

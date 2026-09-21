@@ -50,4 +50,46 @@ void main() {
       expect(dir.path, contains('pdfjs-${PdfJsComponent.version}'));
     },
   );
+
+  test(
+    'default fetch streams a 200 response and fails loudly otherwise',
+    skip: kIsWeb ? 'The filesystem-backed PDF.js cache is VM-only.' : false,
+    () async {
+      final payload = List<int>.generate(8 * 1024, (final i) => i % 251);
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((final request) async {
+        if (request.uri.path.startsWith('/fail/')) {
+          request.response.statusCode = 404;
+          await request.response.close();
+          return;
+        }
+        // Two chunks, so the body cannot be a single read.
+        request.response.bufferOutput = false;
+        final half = payload.length ~/ 2;
+        request.response.add(payload.sublist(0, half));
+        await request.response.flush();
+        request.response.add(payload.sublist(half));
+        await request.response.close();
+      });
+      final host = 'http://${server.address.address}:${server.port}';
+
+      final cache = Directory.systemTemp.createTempSync('grimoire_pdfjs_http');
+      addTearDown(() => cache.deleteSync(recursive: true));
+
+      final loader = PdfJsLoader(baseUrl: host);
+      final source = await loader.ensureAvailable(cachePath: cache.path);
+      expect(
+        File('${source.cachePath}/${PdfJsComponent.scriptPath}').readAsBytesSync(),
+        Uint8List.fromList(payload),
+      );
+
+      // A failing CDN surfaces as an exception naming the status.
+      final failing = PdfJsLoader(baseUrl: '$host/fail');
+      await expectLater(
+        failing.ensureAvailable(cachePath: '${cache.path}/missing'),
+        throwsA(isA<HttpException>().having((final e) => e.message, 'message', contains('404'))),
+      );
+    },
+  );
 }
