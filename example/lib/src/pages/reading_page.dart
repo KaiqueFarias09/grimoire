@@ -37,10 +37,21 @@ class ReadingPage extends StatelessWidget {
             UbPageHeading(
               title: 'Ler agora',
               subtitle: 'Continue de onde você parou e encontre um novo livro para começar.',
-              action: UbButton.outline(
-                'Adicionar livro',
-                () => host.dispatch('open-add'),
-                icon: UbIcons.plus,
+              action: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  UbIconButton(
+                    icon: UbIcons.search,
+                    tooltip: 'Buscar',
+                    onPressed: () => host.dispatch('open-global-search'),
+                  ),
+                  const SizedBox(width: 9),
+                  UbButton.outline(
+                    'Adicionar livro',
+                    () => host.dispatch('open-add'),
+                    icon: UbIcons.plus,
+                  ),
+                ],
               ),
             ),
             if (hero != null) _ContinueCard(host: host, book: hero),

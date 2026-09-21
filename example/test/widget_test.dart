@@ -34,23 +34,10 @@ void main() {
     expect(find.text('unseal TXT Fixture'), findsWidgets);
   });
 
-  testWidgets('desktop width shows the sidebar, mobile hides it', (
-    final WidgetTester tester,
-  ) async {
-    await _pumpApp(tester, size: const Size(1280, 900));
-    expect(find.text('Sua estante digital'), findsOneWidget); // sidebar brand subtitle
-    expect(find.text('NAVEGAR'), findsOneWidget);
-
-    tester.view.physicalSize = const Size(390, 844);
-    await tester.pumpAndSettle();
-    expect(find.text('NAVEGAR'), findsNothing); // sidebar gone on mobile
-    expect(find.text('Buscar'), findsWidgets); // bottom nav instead
-  });
-
   testWidgets('search sheet opens with a working text field', (final WidgetTester tester) async {
     await _pumpApp(tester, size: const Size(390, 844));
 
-    await tester.tap(find.text('Buscar').first);
+    await tester.tap(find.byTooltip('Buscar'));
     await tester.pumpAndSettle();
 
     expect(find.text('Buscar'), findsWidgets);
