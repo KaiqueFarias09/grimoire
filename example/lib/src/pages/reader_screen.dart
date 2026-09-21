@@ -228,33 +228,23 @@ class _ReaderScreenState extends State<ReaderScreen> {
       color: palette.bg,
       child: Stack(
         children: <Widget>[
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1050),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: horizontal),
-                  child: body,
-                ),
+          // The paper is full bleed: the webview owns the whole screen,
+          // chrome overlays included.
+          Positioned.fill(child: body),
+          // Side tap surfaces only while the viewer has no webview yet.
+          // Once the paper is up, the webview's center third owns the
+          // toggle (ChromeToggleEvent) and its edge thirds turn pages,
+          // so nothing may cover them.
+          if (controller == null && _loadError == null)
+            for (final side in <bool>[false, true])
+              Positioned(
+                top: 70,
+                bottom: 120,
+                left: side ? null : 0,
+                right: side ? 0 : null,
+                width: horizontal,
+                child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _toggleChrome),
               ),
-            ),
-          ),
-          // The webview owns taps on the page itself (its center third
-          // emits ChromeToggleEvent); the page gutters give the host a
-          // direct toggle surface, including while the viewer loads.
-          for (final side in <bool>[false, true])
-            Positioned(
-              top: 70,
-              bottom: 120,
-              left: side ? null : 0,
-              right: side ? 0 : null,
-              width: horizontal,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _toggleChrome,
-              ),
-            ),
           _ReaderAppBar(
             host: widget.host,
             visible: _chromeVisible,
@@ -288,29 +278,14 @@ class _RealPaper extends StatelessWidget {
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
-    final Color paperColor;
-    final Color paperBorder;
-    switch (theme) {
-      case ReaderThemeMode.day:
-        paperColor = palette.paper;
-        paperBorder = palette.lineSoft;
-      case ReaderThemeMode.sepia:
-        paperColor = const Color(0xFFF3ECDC);
-        paperBorder = palette.lineSoft;
-      case ReaderThemeMode.night:
-        paperColor = palette.nightPaper;
-        paperBorder = palette.lineSoft;
-    }
+    final Color paperColor = switch (theme) {
+      ReaderThemeMode.day => palette.paper,
+      ReaderThemeMode.sepia => const Color(0xFFF3ECDC),
+      ReaderThemeMode.night => palette.nightPaper,
+    };
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: paperColor,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: paperBorder),
-        boxShadow: palette.cardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
+    return ColoredBox(
+      color: paperColor,
       child: GrimoireView(book: controller.book, controller: controller, showShell: false),
     );
   }
