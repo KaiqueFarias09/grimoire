@@ -98,12 +98,89 @@ const demoFixtures = <DemoFixture>[
     source: 'Biblioteca',
     descriptionFallback: 'Uma coletânea simples para testar textos sem capa.',
   ),
+  DemoFixture(
+    id: 'frankenstein',
+    asset: 'assets/books/frankenstein.epub',
+    progress: 31,
+    status: 'Lendo',
+    chapter: 'Capítulo VII',
+    reader: 'reflow',
+    source: 'Standard Ebooks',
+    descriptionFallback:
+        'Victor Frankenstein desafia os limites da ciência e cria uma criatura que ele não pode controlar.',
+  ),
+  DemoFixture(
+    id: 'dracula',
+    asset: 'assets/books/dracula.epub',
+    progress: 54,
+    status: 'Lendo',
+    chapter: 'Capítulo XVII',
+    reader: 'reflow',
+    source: 'Standard Ebooks',
+    descriptionFallback:
+        'Cartas, diários e recortes revelam a chegada silenciosa do Conde Dracula à Inglaterra vitoriana.',
+  ),
+  DemoFixture(
+    id: 'sherlock-holmes',
+    asset: 'assets/books/the-adventures-of-sherlock-holmes.epub',
+    progress: 8,
+    status: 'Lendo',
+    chapter: 'Um escândalo na Boêmia',
+    reader: 'reflow',
+    source: 'Standard Ebooks',
+    descriptionFallback:
+        'Doze casos do detetive de Baker Street, do cheiro de charuto à lupa mais famosa da literatura.',
+  ),
+  DemoFixture(
+    id: 'wizard-of-oz',
+    asset: 'assets/books/the-wonderful-wizard-of-oz.epub',
+    progress: 0,
+    status: 'Novo',
+    chapter: 'Ainda não iniciado',
+    reader: 'reflow',
+    source: 'Standard Ebooks',
+    descriptionFallback:
+        'Um ciclone leva Dorothy e seu cão para uma terra mágica de bruxas, Munchkins e estradas amarelas.',
+  ),
+  DemoFixture(
+    id: 'a-christmas-carol',
+    asset: 'assets/books/a-christmas-carol.epub',
+    progress: 0,
+    status: 'Novo',
+    chapter: 'Ainda não iniciado',
+    reader: 'reflow',
+    source: 'Standard Ebooks',
+    descriptionFallback:
+        'Ebenezer Scrooge recebe a visita de três espíritos na noite de Natal e aprende a valorizar a vida.',
+  ),
+  DemoFixture(
+    id: 'pride-and-prejudice',
+    asset: 'assets/books/pride-and-prejudice.epub',
+    progress: 100,
+    status: 'Concluído',
+    chapter: 'Concluído',
+    reader: 'reflow',
+    source: 'Standard Ebooks',
+    descriptionFallback:
+        'Elizabeth Bennet e o Sr. Darcy disputam orgulho e preconceito na Inglaterra regencial.',
+  ),
+  DemoFixture(
+    id: 'dom-casmurro',
+    asset: 'assets/books/dom-casmurro.epub',
+    progress: 71,
+    status: 'Lendo',
+    chapter: 'Capítulo CIX',
+    reader: 'reflow',
+    source: 'Project Gutenberg',
+    descriptionFallback:
+        'Bento relata o amor de juventude com Capitu e a dúvida que atravessa toda a obra machadiana.',
+  ),
 ];
 
 const initialCollections = <DemoCollection>[
-  DemoCollection(name: 'Todos os livros', count: 6, kind: 'all'),
-  DemoCollection(name: 'Lendo agora', count: 4, kind: 'status', filter: 'Lendo'),
-  DemoCollection(name: 'Concluídos', count: 1, kind: 'status', filter: 'Concluído'),
+  DemoCollection(name: 'Todos os livros', count: 13, kind: 'all'),
+  DemoCollection(name: 'Lendo agora', count: 7, kind: 'status', filter: 'Lendo'),
+  DemoCollection(name: 'Concluídos', count: 2, kind: 'status', filter: 'Concluído'),
   DemoCollection(name: 'Favoritos', count: 0, kind: 'custom'),
 ];
 

@@ -25,13 +25,13 @@ void main() {
   ) async {
     await _pumpApp(tester);
 
-    await tester.tap(find.text('unseal TXT Fixture').first);
+    await tester.tap(find.textContaining('Frankenstein').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continuar lendo'));
     await tester.pump();
 
     expect(find.text('Sumário'), findsOneWidget);
-    expect(find.text('unseal TXT Fixture'), findsWidgets);
+    expect(find.textContaining('Frankenstein'), findsWidgets);
   });
 
   testWidgets('search sheet opens with a working text field', (final WidgetTester tester) async {
@@ -50,7 +50,7 @@ void main() {
   testWidgets('reader chrome hides and shows on a gutter tap', (final WidgetTester tester) async {
     await _pumpApp(tester);
 
-    await tester.tap(find.text('unseal TXT Fixture').first);
+    await tester.tap(find.textContaining('Frankenstein').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continuar lendo'));
     // The viewer's start never completes under the fake clock, so its
@@ -123,6 +123,13 @@ bool _chromeIgnoring(final WidgetTester tester) {
 }
 
 const Map<String, BookFormat> _newFormatFixtures = <String, BookFormat>{
+  'assets/books/frankenstein.epub': BookFormat.epub,
+  'assets/books/dracula.epub': BookFormat.epub,
+  'assets/books/pride-and-prejudice.epub': BookFormat.epub,
+  'assets/books/a-christmas-carol.epub': BookFormat.epub,
+  'assets/books/the-adventures-of-sherlock-holmes.epub': BookFormat.epub,
+  'assets/books/the-wonderful-wizard-of-oz.epub': BookFormat.epub,
+  'assets/books/dom-casmurro.epub': BookFormat.epub,
   'assets/books/synthetic.txt': BookFormat.txt,
   'assets/books/synthetic.txtz': BookFormat.txtz,
   'assets/books/synthetic.html': BookFormat.html,
