@@ -537,6 +537,11 @@ class _BooksAppShellState extends State<BooksAppShell>
         },
         child: Stack(
           children: <Widget>[
+            // The fade-through cross-fade is see-through at its
+            // midpoint and there is no previous page painted behind it
+            // (unlike a Navigator route stack), so an opaque backdrop
+            // keeps the window's black background from flashing.
+            Positioned.fill(child: ColoredBox(color: palette.bg)),
             Positioned.fill(
               child: FadeThroughTransition(
                 animation: _pageController,
