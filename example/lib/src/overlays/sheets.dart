@@ -110,7 +110,9 @@ class _UbSheetHostState extends State<UbSheetHost> with SingleTickerProviderStat
                     constraints: const BoxConstraints(maxWidth: 680),
                     padding: EdgeInsets.fromLTRB(
                       isMobile ? 16 : 22,
-                      10,
+                      // The header must clear the system status bar:
+                      // taps inside that band never reach the app.
+                      MediaQuery.paddingOf(context).top + 10,
                       isMobile ? 16 : 22,
                       isMobile ? 22 : 24,
                     ),
