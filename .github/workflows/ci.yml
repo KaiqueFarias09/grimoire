@@ -1,63 +1,16 @@
 name: CI
 
-# `grimoire` declares `unseal: ^1.0.0` (pubspec.yaml). The hosted
-# package must be published before the isolated lanes can resolve it, so a
-# checkout of this repository alone cannot resolve its dependencies.
-#
-# The workflow therefore has two families of lanes:
-#
-#   * `analyze` / `test` — the isolated lanes. They run this repository alone
-#     against the hosted package and are gated by the `resolution` probe:
-#     while `unseal` ^1.0.0 is unavailable the lanes are skipped with an
-#     explicit warning instead of hiding a guaranteed dependency-resolution
-#     failure. As soon as the version is published the probe enables the
-#     lanes and their failures are real.
-#   * `integration` — the multi-repo lane. It checks out the sibling Unseal
-#     repository next to this checkout (the same `<parent>/unseal +
-#     <parent>/grimoire` layout local development uses), generates the
-#     machine-local pubspec_overrides.yaml in-job via
-#     tool/generate_local_overrides.sh (that file is gitignored and never
-#     committed), then runs analyze + tests against the local stack.
+# Grimoire resolves Unseal from pub.dev. Local Unseal checkouts are used only
+# to refresh synchronized test fixtures, never as dependency overrides.
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      grimoire_ref:
-        description: 'grimoire ref the integration lane checks out (defaults to the dispatching SHA)'
-        required: false
-        type: string
-      unseal_ref:
-        description: 'Unseal sibling ref the integration lane checks out (never implicit; defaults to main only when unset)'
-        required: false
-        type: string
-        default: main
 
 jobs:
-  resolution:
-    runs-on: ubuntu-latest
-    outputs:
-      hosted: ${{ steps.probe.outputs.hosted }}
-    steps:
-      - id: probe
-        run: |
-          set -euo pipefail
-          latest="$(curl -fsSL https://pub.dev/api/packages/unseal 2>/dev/null | jq -r '.latest.version' || true)"
-          # `unseal: ^1.0.0` resolves iff some published version is >= 1.0.0
-          # (published versions only grow, so latest >= min implies resolution).
-          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" 1.0.0 | sort -V | tail -n1)" = "$latest" ]; then
-            echo "hosted=true" >> "$GITHUB_OUTPUT"
-            echo "unseal $latest satisfies ^1.0.0: isolated lanes enabled"
-          else
-            echo "hosted=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::unseal ^1.0.0 is not on pub.dev yet (latest: ${latest:-none}). Isolated analyze/test lanes are skipped until it is published; the integration lane validates the sibling checkouts instead."
-          fi
-
   analyze:
-    needs: resolution
-    if: needs.resolution.outputs.hosted == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,8 +21,6 @@ jobs:
       - run: dart analyze --fatal-infos
 
   test:
-    needs: resolution
-    if: needs.resolution.outputs.hosted == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,41 +29,3 @@ jobs:
           channel: stable
       - run: flutter pub get
       - run: ./tool/coverage_gate.sh
-
-  integration:
-    runs-on: ubuntu-latest
-    steps:
-      # Explicit candidate ref: the dispatching SHA for push/PR runs, or
-      # the grimoire_ref input for manual runs. Never an implicit default.
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.grimoire_ref || github.sha }}
-          path: grimoire
-
-      # Sibling checkout, mirroring the local development stack. The
-      # sibling ref is always explicit (unseal_ref input, default main).
-      - uses: actions/checkout@v4
-        with:
-          repository: KaiqueFarias09/unseal
-          ref: ${{ inputs.unseal_ref || 'main' }}
-          path: unseal
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      - name: Generate machine-local dependency overrides
-        run: ./tool/generate_local_overrides.sh
-        working-directory: grimoire
-
-      - name: Install dependencies
-        run: flutter pub get
-        working-directory: grimoire
-
-      - name: Analyze package source
-        run: dart analyze --fatal-infos
-        working-directory: grimoire
-
-      - name: Run tests and enforce the coverage floor against the sibling stack
-        run: ./tool/coverage_gate.sh
-        working-directory: grimoire
