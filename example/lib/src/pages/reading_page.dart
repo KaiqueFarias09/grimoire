@@ -130,7 +130,7 @@ class _ContinueCard extends StatelessWidget {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: Text(
-                    '${book.author} · ${book.fixture.chapter}',
+                    '${book.author} · ${host.state.chapterFor(book)}',
                     style: TextStyle(
                       fontSize: isMobile ? 12.0 : 15.0,
                       height: 1.5,
@@ -145,11 +145,11 @@ class _ContinueCard extends StatelessWidget {
                   child: Row(
                     children: <Widget>[
                       Text(
-                        '${book.fixture.progress}%',
+                        '${host.state.percentFor(book)}%',
                         style: TextStyle(fontSize: isMobile ? 10 : 12, color: palette.muted),
                       ),
                       SizedBox(width: isMobile ? 7.0 : 12.0),
-                      Expanded(child: UbProgressBar(fraction: book.fixture.progress / 100)),
+                      Expanded(child: UbProgressBar(fraction: host.state.percentFor(book) / 100)),
                       SizedBox(width: isMobile ? 7.0 : 12.0),
                       Text(
                         'Cap. 5 de 12',
@@ -259,12 +259,12 @@ class UbBookCard extends StatelessWidget {
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     final String statusLabel;
-    if (book.fixture.progress >= 100) {
+    if (host.state.percentFor(book) >= 100) {
       statusLabel = 'Concluído';
-    } else if (book.fixture.progress == 0) {
+    } else if (host.state.percentFor(book) == 0) {
       statusLabel = 'Novo';
     } else {
-      statusLabel = '${book.fixture.progress}% lido';
+      statusLabel = '${host.state.percentFor(book)}% lido';
     }
 
     return UbHover(
@@ -304,10 +304,11 @@ class UbBookCard extends StatelessWidget {
               Row(
                 children: <Widget>[
                   Text(statusLabel, style: TextStyle(fontSize: 11, color: palette.muted)),
-                  if (book.fixture.progress > 0 && book.fixture.progress < 100) ...<Widget>[
+                  if (host.state.percentFor(book) > 0 &&
+                      host.state.percentFor(book) < 100) ...<Widget>[
                     const SizedBox(width: 6),
                     Expanded(
-                      child: UbProgressBar(fraction: book.fixture.progress / 100, height: 3),
+                      child: UbProgressBar(fraction: host.state.percentFor(book) / 100, height: 3),
                     ),
                   ],
                 ],

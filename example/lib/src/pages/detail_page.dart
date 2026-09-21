@@ -111,7 +111,7 @@ class _DetailBody extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
         UbButton.dark(
-          book.fixture.progress > 0 ? 'Continuar lendo' : 'Começar a ler',
+          host.state.percentFor(book) > 0 ? 'Continuar lendo' : 'Começar a ler',
           () => host.dispatch('open-reader'),
           icon: UbIcons.bookOpen,
         ),
@@ -136,9 +136,9 @@ class _DetailBody extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _MetaCell(label: 'Progresso', value: '${book.fixture.progress}%'),
+          _MetaCell(label: 'Progresso', value: '${host.state.percentFor(book)}%'),
           const SizedBox(width: 12),
-          _MetaCell(label: 'Local', value: book.fixture.chapter),
+          _MetaCell(label: 'Local', value: host.state.chapterFor(book)),
           const SizedBox(width: 12),
           const _MetaCell(label: 'Disponibilidade', value: 'Offline'),
         ],

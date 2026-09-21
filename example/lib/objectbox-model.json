@@ -1,0 +1,173 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:1433451358012083444",
+      "lastPropertyId": "13:5393670688718550026",
+      "name": "DemoBook",
+      "properties": [
+        {
+          "id": "1:7471569470744877367",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4500211708113113808",
+          "name": "bookId",
+          "indexId": "1:974161908330261832",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:5158183747699292514",
+          "name": "sourcePath",
+          "type": 9
+        },
+        {
+          "id": "4:8111096635197885575",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "5:2450483975749898276",
+          "name": "author",
+          "type": 9
+        },
+        {
+          "id": "6:3852046924037320577",
+          "name": "formatLabel",
+          "type": 9
+        },
+        {
+          "id": "7:8815323944065679138",
+          "name": "lastSectionIndex",
+          "type": 6
+        },
+        {
+          "id": "8:7434771107163387122",
+          "name": "lastCharOffset",
+          "type": 6
+        },
+        {
+          "id": "9:5865091409564984894",
+          "name": "lastPercent",
+          "type": 6
+        },
+        {
+          "id": "10:2193242307105724839",
+          "name": "chapterLabel",
+          "type": 9
+        },
+        {
+          "id": "11:2646676931841094343",
+          "name": "annotationsJson",
+          "type": 9
+        },
+        {
+          "id": "12:1759740943656243292",
+          "name": "pdfPassword",
+          "type": 9
+        },
+        {
+          "id": "13:5393670688718550026",
+          "name": "addedAt",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:6646901565053876780",
+      "lastPropertyId": "3:708509709497149674",
+      "name": "DemoCollectionBook",
+      "properties": [
+        {
+          "id": "1:1918665326093610256",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:168463132921154460",
+          "name": "collectionName",
+          "type": 9
+        },
+        {
+          "id": "3:708509709497149674",
+          "name": "bookId",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:7677803067068067417",
+      "lastPropertyId": "3:7756125189889326270",
+      "name": "DemoCollectionEntry",
+      "properties": [
+        {
+          "id": "1:5480921041221699381",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7120574910638832477",
+          "name": "name",
+          "indexId": "2:204547669573205261",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:7756125189889326270",
+          "name": "createdAt",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:1676227001604084459",
+      "lastPropertyId": "4:13",
+      "name": "DemoSettings",
+      "properties": [
+        {
+          "id": "1:6337161961481137889",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:11",
+          "name": "themeName",
+          "type": 9
+        },
+        {
+          "id": "3:12",
+          "name": "modeName",
+          "type": 9
+        },
+        {
+          "id": "4:13",
+          "name": "fontSize",
+          "type": 6
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "4:1676227001604084459",
+  "lastIndexId": "2:204547669573205261",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

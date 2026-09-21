@@ -429,41 +429,23 @@ class _ReaderSearchSheet extends StatelessWidget {
     final book = state.bookById(state.selectedBook);
 
     final Widget results;
-    if (state.searchRan) {
-      results = Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(top: 14),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(color: palette.blueSoft, borderRadius: BorderRadius.circular(9)),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    '“${state.searchQuery.isEmpty ? 'livro' : state.searchQuery}”',
-                    style: TextStyle(fontSize: 13, color: palette.ink),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '2 resultados · Capítulo V · 38%',
-                    style: TextStyle(fontSize: 11, color: palette.muted),
-                  ),
-                ],
-              ),
-            ),
-            UbLinkButton(
-              label: 'Ir para lá',
-              chevron: false,
-              onPressed: () => host.dispatch('jump-to-result'),
-            ),
-          ],
-        ),
-      );
-    } else {
+    if (!state.searchRan) {
       results = const _SheetEmpty(
         'Busque uma palavra ou frase para encontrar uma passagem neste livro.',
+      );
+    } else if (state.readerSearchResults.isEmpty) {
+      results = _SheetEmpty('Nenhum resultado para “${state.searchQuery}”.');
+    } else {
+      results = _SheetList(
+        children: <Widget>[
+          for (final (index, result) in state.readerSearchResults.indexed)
+            _SheetListRow(
+              title: 'Resultado ${index + 1} de ${state.readerSearchResults.length}',
+              subtitle: result.excerpt,
+              onTap: () => host.dispatch('jump-to-result', data: '$index'),
+              trailing: UbIcon(UbIcons.chevronRight, size: 18, color: palette.muted),
+            ),
+        ],
       );
     }
 

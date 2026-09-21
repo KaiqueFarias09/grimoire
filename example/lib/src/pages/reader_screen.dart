@@ -24,9 +24,29 @@ abstract final class ReaderHooks {
   static Future<void> Function(ReaderThemeMode)? applyTheme;
   static Future<void> Function(ReaderMode)? applyMode;
   static Future<void> Function(String)? applyFontSize;
-  static void Function()? addBookmark;
+
+  /// Adds a bookmark at the current position or removes the newest
+  /// one; resolves to the bookmarked state after the change.
+  static Future<bool> Function()? toggleBookmark;
+
+  /// Highlights the active selection: true when created, false when
+  /// the selection was already highlighted, null without a selection.
+  static Future<bool?> Function()? highlightSelection;
+
+  /// The active selection's text, or the empty string.
+  static String? Function()? selectionText;
+
+  /// Attaches [note] to the active selection, creating a highlight
+  /// with the note when the passage is not highlighted yet.
+  static Future<void> Function(String note)? saveNote;
+
+  /// Real full-book search through the live controller.
+  static Future<List<ViewerSearchResult>> Function(String query)? runSearch;
+
+  /// Jumps to the search result at [index].
+  static void Function(int index)? jumpToSearchResult;
+
   static void Function(String? data)? selectedChapter;
-  static void Function()? jumpToSearch;
   static List<NavPoint> Function()? tocSource;
 }
 
@@ -50,6 +70,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
   // the cancel in the creating function, which is not possible here.
   // ignore: cancel_subscriptions
   StreamSubscription<ViewerEvent>? _chromeSub;
+  // Both streams die with the controller disposed right below; the
+  // lint cannot see that, so ignore it on the fields.
+  // ignore: cancel_subscriptions
+  StreamSubscription<void>? _annotationsSub;
+  // ignore: cancel_subscriptions
+  StreamSubscription<ViewerPageChange>? _pageSub;
 
   LoadedBook? get entry => widget.host.state.bookById(widget.host.state.selectedBook);
 
@@ -78,18 +104,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Future<void> _buildController(final Book book, final String cachePath) async {
     final state = widget.host.state;
+    final bookId = entry?.fixture.id ?? '';
     final controller =
         ViewerController(book, theme: _viewerTheme(state.readerTheme), fontFamily: UbType.serif)
           ..useHostChrome = true
           ..mathJaxCachePath = cachePath
           ..pdfJsCachePath = cachePath;
-    controller.pageChanges.listen((final change) {
+    _pageSub = controller.pageChanges.listen((final change) {
       if (mounted) {
         setState(() {
           _liveProgress = change.progress;
           _liveChapter = change.chapterTitle;
         });
       }
+      _persistProgress(bookId, change);
+    });
+    // Annotations changed in-session (bookmarks, highlights, notes)
+    // are persisted through the host's store immediately.
+    _annotationsSub = controller.annotationsChanged.listen((final _) {
+      final json = controller.exportAnnotations();
+      widget.host.store?.saveAnnotationsJson(bookId, json);
     });
     // With host chrome the center-third tap still emits ChromeToggleEvent;
     // the host owns the bars, so toggle ours.
@@ -109,6 +143,47 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (book is PdfBook) {
       await controller.setPdfReadingMode(PdfReadingMode.facsimile);
     }
+    // Persisted session restore: annotations blob, reading position
+    // and font size, all after the viewer is ready to navigate.
+    unawaited(
+      controller.ready.then((final _) async {
+        final store = widget.host.store;
+        final saved = store?.annotationsOf(bookId);
+        if (saved != null) {
+          await controller.importAnnotations(saved);
+        }
+        final row = store?.book(bookId);
+        final section = row?.lastSectionIndex;
+        final offset = row?.lastCharOffset;
+        if (section != null && offset != null) {
+          await controller.goToPosition(ViewerPosition(fileIndex: section, charOffset: offset));
+        }
+        await controller.setFontSize(state.fontSize);
+        if (mounted) {
+          setState(() => widget.host.state.bookmarked = controller.bookmarks.isNotEmpty);
+        }
+        _restoreDone = true;
+      }),
+    );
+  }
+
+  /// Set once the persisted position/annotations are restored; the
+  /// viewer's initial-display event must not clobber the stored
+  /// position before it is restored.
+  bool _restoreDone = false;
+
+  void _persistProgress(final String bookId, final ViewerPageChange change) {
+    final store = widget.host.store;
+    final controller = _controller;
+    if (store == null || controller == null || !_restoreDone) {
+      return;
+    }
+    final row = store.upsertBook(bookId)
+      ..lastSectionIndex = controller.position.fileIndex
+      ..lastCharOffset = controller.position.charOffset
+      ..lastPercent = (change.progress * 100).round()
+      ..chapterLabel = change.chapterTitle;
+    store.saveBook(row);
   }
 
   ViewerTheme _viewerTheme(final ReaderThemeMode mode) {
@@ -160,20 +235,77 @@ class _ReaderScreenState extends State<ReaderScreen> {
       }
       return Future<void>.value();
     };
-    ReaderHooks.addBookmark = () {
-      _controller?.addBookmark();
+    ReaderHooks.toggleBookmark = () async {
+      final controller = _controller;
+      if (controller == null) {
+        return false;
+      }
+      if (controller.bookmarks.isEmpty) {
+        controller.addBookmark();
+        return true;
+      }
+      controller.removeBookmark(controller.bookmarks.last.id);
+      return false;
+    };
+    ReaderHooks.highlightSelection = () async {
+      final controller = _controller;
+      if (controller == null) {
+        return null;
+      }
+      final selection = controller.lastSelection;
+      if (selection == null || selection.text.isEmpty) {
+        return null;
+      }
+      final alreadyHighlighted = controller.highlights.any(
+        (final highlight) =>
+            highlight.sectionIndex == selection.fileIndex &&
+            highlight.start <= selection.start &&
+            highlight.end >= selection.end,
+      );
+      if (alreadyHighlighted) {
+        return false;
+      }
+      await controller.addHighlightFromSelection();
+      return true;
+    };
+    ReaderHooks.selectionText = () => _controller?.lastSelection?.text ?? '';
+    ReaderHooks.saveNote = (final note) async {
+      final controller = _controller;
+      final selection = controller?.lastSelection;
+      if (controller == null || selection == null || selection.text.isEmpty) {
+        return;
+      }
+      final covering = controller.highlights.where(
+        (final highlight) =>
+            highlight.sectionIndex == selection.fileIndex &&
+            highlight.start <= selection.start &&
+            highlight.end >= selection.end,
+      );
+      if (covering.isNotEmpty) {
+        await controller.addNoteToHighlight(covering.last.id, note);
+        return;
+      }
+      await controller.addHighlightFromSelection(note: note);
+    };
+    ReaderHooks.runSearch = (final query) async {
+      final controller = _controller;
+      if (controller == null) {
+        return const <ViewerSearchResult>[];
+      }
+      return controller.search(query);
+    };
+    ReaderHooks.jumpToSearchResult = (final index) {
+      final controller = _controller;
+      final results = controller?.searchResults ?? const <ViewerSearchResult>[];
+      if (controller != null && index >= 0 && index < results.length) {
+        unawaited(controller.goToSearchResult(results[index]));
+      }
     };
     ReaderHooks.selectedChapter = (final data) {
       final points = ReaderHooks.tocSource?.call() ?? const <NavPoint>[];
       final index = int.tryParse(data ?? '');
       if (index != null && index >= 0 && index < points.length) {
         unawaited(_controller!.goToNavPoint(points[index]));
-      }
-    };
-    ReaderHooks.jumpToSearch = () {
-      final controller = _controller;
-      if (controller != null && controller.searchResults.isNotEmpty) {
-        unawaited(controller.goToSearchMatch(0));
       }
     };
     ReaderHooks.tocSource = () => _controller?.book.navigation.navPoints ?? const <NavPoint>[];
@@ -184,13 +316,25 @@ class _ReaderScreenState extends State<ReaderScreen> {
     ReaderHooks.applyTheme = null;
     ReaderHooks.applyMode = null;
     ReaderHooks.applyFontSize = null;
-    ReaderHooks.addBookmark = null;
+    ReaderHooks.toggleBookmark = null;
+    ReaderHooks.highlightSelection = null;
+    ReaderHooks.selectionText = null;
+    ReaderHooks.saveNote = null;
+    ReaderHooks.runSearch = null;
+    ReaderHooks.jumpToSearchResult = null;
     ReaderHooks.selectedChapter = null;
-    ReaderHooks.jumpToSearch = null;
     ReaderHooks.tocSource = null;
     final chromeSub = _chromeSub;
     if (chromeSub != null) {
       unawaited(chromeSub.cancel());
+    }
+    final annotationsSub = _annotationsSub;
+    if (annotationsSub != null) {
+      unawaited(annotationsSub.cancel());
+    }
+    final pageSub = _pageSub;
+    if (pageSub != null) {
+      unawaited(pageSub.cancel());
     }
     _controller?.dispose();
     super.dispose();
@@ -201,11 +345,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final palette = UbScope.of(context);
     final controller = _controller;
     final book = entry;
+    final state = widget.host.state;
     final width = MediaQuery.sizeOf(context).width;
     final horizontal = width < 720 ? 16.0 : (width < 900 ? 28.0 : ubPagePadding(width));
 
-    final progress = _liveProgress > 0 ? _liveProgress : (book?.fixture.progress ?? 0) / 100;
-    final chapterLabel = _liveChapter ?? book?.fixture.chapter ?? '';
+    final progress = _liveProgress > 0
+        ? _liveProgress
+        : (book == null ? 0 : state.percentFor(book)) / 100;
+    final chapterLabel = _liveChapter ?? (book == null ? '' : state.chapterFor(book));
 
     final Widget body;
     if (_loadError != null) {
@@ -454,7 +601,6 @@ class _ReaderBottomBarContent extends StatelessWidget {
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
-    final state = host.state;
 
     final Widget progressBar = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 470),
@@ -506,7 +652,6 @@ class _ReaderBottomBarContent extends StatelessWidget {
                   child: _ReaderBottomButton(
                     icon: UbIcons.highlighter,
                     label: 'Destacar',
-                    active: state.highlighted,
                     onPressed: () => host.dispatch('toggle-highlight'),
                   ),
                 ),
@@ -545,7 +690,6 @@ class _ReaderBottomBarContent extends StatelessWidget {
           _ReaderBottomButton(
             icon: UbIcons.highlighter,
             label: 'Destacar',
-            active: state.highlighted,
             onPressed: () => host.dispatch('toggle-highlight'),
           ),
           const SizedBox(width: 3),
@@ -561,25 +705,19 @@ class _ReaderBottomBarContent extends StatelessWidget {
 }
 
 class _ReaderBottomButton extends StatelessWidget {
-  const _ReaderBottomButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.active = false,
-  });
+  const _ReaderBottomButton({required this.icon, required this.label, required this.onPressed});
 
   final String icon;
   final String label;
   final VoidCallback onPressed;
-  final bool active;
 
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     return UbHover(
       builder: (final context, final hovered) {
-        final Color background = active || hovered ? palette.surface : Colors.transparent;
-        final Color foreground = active || hovered ? palette.ink : palette.muted;
+        final Color background = hovered ? palette.surface : Colors.transparent;
+        final Color foreground = hovered ? palette.ink : palette.muted;
         return GestureDetector(
           onTap: onPressed,
           child: AnimatedContainer(
@@ -650,7 +788,11 @@ class _ReaderSettingsPanel extends StatelessWidget {
               ('A normal', 'medium'),
               ('A maior', 'large'),
             ],
-            activeValue: 'medium',
+            activeValue: switch (state.fontSize) {
+              15 => 'small',
+              20 => 'large',
+              _ => 'medium',
+            },
             onSelect: (final value) => host.dispatch('font-size', data: value),
           ),
           if (!isComic)

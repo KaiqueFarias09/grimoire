@@ -3,13 +3,18 @@ import 'package:flutter/material.dart';
 
 import 'src/app_shell.dart';
 import 'src/demo_data.dart';
+import 'src/store/demo_store.dart';
 import 'src/ub_theme.dart';
 
 class GrimoireExampleApp extends StatelessWidget {
-  const GrimoireExampleApp({this.shelfLoader, super.key});
+  const GrimoireExampleApp({this.shelfLoader, this.store, super.key});
 
   /// Passed through to [BooksAppShell]; see there for why tests use it.
   final Future<List<LoadedBook>> Function()? shelfLoader;
+
+  /// Host-owned persistence. Null in widget tests: every persisted
+  /// feature degrades to session-only behavior.
+  final DemoStore? store;
 
   @override
   Widget build(final BuildContext context) {
@@ -19,7 +24,9 @@ class GrimoireExampleApp extends StatelessWidget {
       scrollBehavior: const _NoScrollbarBehavior(),
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      home: _PaletteBridge(child: BooksAppShell(shelfLoader: shelfLoader)),
+      home: _PaletteBridge(
+        child: BooksAppShell(shelfLoader: shelfLoader, store: store),
+      ),
       // `--dart-define=UB_FULLSCREEN=true` removes the safe-area insets
       // so screenshots line up 1:1 with the browser-rendered prototype.
       builder: (final context, final child) {

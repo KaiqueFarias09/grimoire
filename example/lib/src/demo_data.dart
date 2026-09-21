@@ -5,6 +5,7 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:unseal/unseal.dart';
 
@@ -268,13 +269,20 @@ class LoadedBook {
   }
 }
 
-/// Parses every bundled fixture, keeping [demoFixtures] order.
+/// Parses every bundled fixture in [demoFixtures] order. A fixture
+/// that fails to parse (an encrypted PDF opened without its password,
+/// for instance) is skipped so one locked book cannot take the whole
+/// shelf down.
 Future<List<LoadedBook>> loadDemoShelf() async {
   final books = <LoadedBook>[];
   for (final fixture in demoFixtures) {
-    final data = await rootBundle.load(fixture.asset);
-    final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
-    books.add(LoadedBook.fromFixture(fixture, await Unseal.read(bytes)));
+    try {
+      final data = await rootBundle.load(fixture.asset);
+      final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
+      books.add(LoadedBook.fromFixture(fixture, await Unseal.read(bytes)));
+    } on Exception catch (error) {
+      debugPrint('Fixture ${fixture.id} failed to load: $error');
+    }
   }
   return books;
 }

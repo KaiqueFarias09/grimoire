@@ -607,6 +607,7 @@ class _NoteModalState extends State<_NoteModal> {
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
+    final quote = widget.host.state.noteQuote;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -625,7 +626,7 @@ class _NoteModalState extends State<_NoteModal> {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  '“E para que serve um livro, sem figuras nem diálogos?”',
+                  quote.isEmpty ? 'Selecione um trecho no livro para anotar.' : '“$quote”',
                   style: TextStyle(fontSize: 12, height: 1.45, color: palette.muted),
                 ),
               ),

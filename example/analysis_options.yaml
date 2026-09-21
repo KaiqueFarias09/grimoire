@@ -5,6 +5,7 @@ analyzer:
     - ".dart_tool/**"
     - "build/**"
     - "lib/**/*.g.dart"
+    - "lib/objectbox.g.dart"
     - "lib/**/*.freezed.dart"
     - android/**
     - ios/**
