@@ -65,7 +65,8 @@ const demoFixtures = <DemoFixture>[
     chapter: 'Página 18',
     reader: 'comic',
     source: 'Importado recentemente',
-    descriptionFallback: 'Uma história em quadrinhos para testar navegação por páginas e leitura visual.',
+    descriptionFallback:
+        'Uma história em quadrinhos para testar navegação por páginas e leitura visual.',
   ),
   DemoFixture(
     id: 'office',
@@ -107,12 +108,7 @@ const initialCollections = <DemoCollection>[
 ];
 
 class DemoCollection {
-  const DemoCollection({
-    required this.name,
-    required this.count,
-    required this.kind,
-    this.filter,
-  });
+  const DemoCollection({required this.name, required this.count, required this.kind, this.filter});
 
   final String name;
   final int count;
@@ -142,6 +138,15 @@ class LoadedBook {
   final Uint8List? coverBytes;
 
   bool get hasCover => coverBytes != null;
+
+  LoadedBook copyWith({final Uint8List? coverBytes}) => LoadedBook(
+    fixture: fixture,
+    book: book,
+    title: title,
+    author: author,
+    formatLabel: formatLabel,
+    coverBytes: coverBytes ?? this.coverBytes,
+  );
 
   String get description => book.metadata.description ?? fixture.descriptionFallback;
 

@@ -154,6 +154,42 @@ await controller.setTheme(ViewerTheme.sepia);
 print(controller.progress); // 0.0..1.0
 ```
 
+## Rendering pages off-screen
+
+`GrimoirePageRenderer` paints a book page without mounting a reader,
+the way Apple Books and Calibre derive PDF covers:
+
+```dart
+final renderer = GrimoirePageRenderer();
+
+// First page at a 2:3 cover aspect, as PNG bytes:
+final cover = await renderer.renderCover(
+  book,
+  width: 480,
+  pdfJsCachePath: (await getTemporaryDirectory()).path,
+);
+
+// Any page, at any viewport (PDF facsimile pages are zero-based):
+final page = await renderer.renderPage(
+  book,
+  target: PageRenderTarget.pdfPage(3),
+  viewport: const Size(600, 800),
+);
+```
+
+Reflowable and comic pages rasterize the first reading-order item at
+the requested viewport. PDF pages are transferred straight from the
+pdf.js canvas, so the bytes are the fitted page itself at device-pixel
+sharpness (Android's native snapshot leaves `<canvas>` content blank,
+which is why the canvas is the primary source on every platform).
+Renders are serialized through one instance; reuse it instead of
+creating one per call. The renderer serves the book through the same
+loopback server as the reader, so the host requirements below apply
+unchanged. pdf.js is downloaded lazily for PDF books: pass a
+persistent `pdfJsCachePath` to avoid re-downloads. Web is not
+supported because iframes cannot be rasterized; the call throws
+`UnsupportedError` there.
+
 ## Host app requirements
 
 The reader serves book files from a loopback HTTP server:

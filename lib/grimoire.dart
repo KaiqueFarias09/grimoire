@@ -72,6 +72,10 @@ export 'src/features/navigation/viewer_position.dart' show ViewerPosition;
 export 'src/features/pdf/pdf_reading_mode.dart' show PdfReadingMode;
 export 'src/features/pdfjs/pdfjs_component.dart' show PdfJsSource;
 export 'src/features/pdfjs/pdfjs_loader.dart' show PdfJsLoader;
+export 'src/features/rendering/api/headless_page_capture.dart'
+    show HeadlessPageCapture, HeadlessPageCaptureFactory;
+export 'src/features/rendering/api/page_render.dart'
+    show GrimoirePageRenderer, PageRenderKind, PageRenderTarget;
 export 'src/features/rendering/api/viewer_engine.dart' show ViewerEngine, ViewerEngineFactory;
 export 'src/features/search/viewer_search.dart' show ViewerSearchResult, ViewerWordMark;
 export 'src/features/serving/book_content.dart' show BookJavaScriptPolicy;

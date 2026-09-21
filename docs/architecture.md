@@ -44,6 +44,7 @@ Do not import `lib/src/` from an application. A source-file move or an internal 
 | Reader widgets | `lib/src/widgets/grimoire_view.dart`, `lib/src/widgets/reader_shell.dart`, `lib/src/widgets/*_sheet.dart`, `lib/src/widgets/search_overlay.dart` | Connects controller state to Flutter UI and optional built-in chrome. |
 | Book serving | `lib/src/features/serving/book_server.dart`, `book_server_io.dart`, `book_server_web.dart`, `book_html_pipeline.dart`, `book_resource_resolution.dart` | Makes in-memory book files readable by the embedded page and injects viewer assets. |
 | Platform rendering | `lib/src/features/rendering/api/`, `adapters/`, `composition/` | Keeps the engine contract stable while selecting native WebViews or a web iframe. |
+| Page rendering | `lib/src/features/rendering/api/page_render.dart`, `lib/src/features/rendering/api/headless_page_capture.dart`, `lib/src/features/rendering/adapters/inapp_headless_page_capture.dart`, `lib/src/features/rendering/composition/page_capture_selector*.dart` | Paints single pages off-screen through an injectable headless webview for covers and thumbnails; web throws because iframes cannot be rasterized. |
 | Page bridge | `lib/src/features/bridge/viewer_bridge.dart`, `assets/viewer/viewer.js` | Exchanges typed page events and commands between Dart and the injected reader script. |
 | Reader features | `lib/src/features/annotations/`, `navigation/`, `search/`, `settings/`, `pdf/`, `pdfjs/`, `mathjax/`, `narration/` | Implements cohesive reader capabilities on top of the controller and Unseal contracts. |
 
@@ -63,6 +64,10 @@ The active page sends position and navigation events through `ViewerBridge`. `Na
 ### Select, search, and export
 
 The page bridge reports selections and search matches in the current document. `ViewerController` maps them to Unseal's canonical text space, updates `AnnotationController`, and emits typed events to the host. Export helpers under `lib/src/features/annotations/` serialize highlights and bookmarks through the public model; storage and synchronization remain host responsibilities.
+
+### Render a page off-screen
+
+`GrimoirePageRenderer` starts a private `BookServer`, loads the target item in a headless webview from the same composition selector that builds the reader engines, waits for the paint signal (the pdf.js canvas flag or the viewer ready message), and transfers the pixels. PDF pages are read from the pdf.js canvas itself via `toDataURL`, because Android's view rasterization leaves canvas content white; the viewport capture is the fallback.
 
 ## Platform boundaries
 

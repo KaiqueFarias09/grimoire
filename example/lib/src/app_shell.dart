@@ -5,8 +5,11 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show KeyDownEvent, LogicalKeyboardKey;
+import 'package:grimoire/grimoire.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'demo_data.dart';
 import 'overlays/modals.dart';
@@ -100,6 +103,7 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
   final UbAppState state = UbAppState();
   final FocusNode _keyboardFocusNode = FocusNode();
   Timer? _toastTimer;
+  final GrimoirePageRenderer _pageRenderer = GrimoirePageRenderer();
 
   @override
   void dispose() {
@@ -165,10 +169,39 @@ class _BooksAppShellState extends State<BooksAppShell> implements UbHost {
         state.books = books;
         state.shelfReady = true;
       });
+      unawaited(_renderPdfCovers());
     } on Exception catch (error) {
       if (mounted) {
         _mutate(() => state.shelfReady = true);
         debugPrint('Demo shelf failed to load: $error');
+      }
+    }
+  }
+
+  /// Grimoire's headless page render paints the first page of the
+  /// cover-less PDF fixture as its cover, the way Apple Books and
+  /// Calibre derive PDF covers.
+  Future<void> _renderPdfCovers() async {
+    for (var index = 0; index < state.books.length; index++) {
+      final entry = state.books[index];
+      if (entry.hasCover || entry.book is! PdfBook) {
+        continue;
+      }
+      try {
+        final cachePath = kIsWeb ? null : (await getTemporaryDirectory()).path;
+        final bytes = await _pageRenderer.renderCover(
+          entry.book,
+          width: 400,
+          pdfJsCachePath: cachePath,
+        );
+        if (!mounted) {
+          return;
+        }
+        final updated = <LoadedBook>[...state.books];
+        updated[index] = entry.copyWith(coverBytes: bytes);
+        _mutate(() => state.books = updated);
+      } catch (error) {
+        debugPrint('Page render failed for ${entry.fixture.id}: $error');
       }
     }
   }

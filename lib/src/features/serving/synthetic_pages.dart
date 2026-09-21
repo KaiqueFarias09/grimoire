@@ -81,6 +81,9 @@ const String _pdfFacsimileBootTemplate = '''
         rendered = true;
         return render(pdfPage);
       })
+      .then(function () {
+        canvas.setAttribute('data-elv-done', '1');
+      })
       .catch(function () {
         // Rendering failed; the text layer stays usable.
       });
