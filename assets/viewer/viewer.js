@@ -1647,6 +1647,14 @@
     if (isComic()) {
       return; // comics handle their own gestures
     }
+    var image = target && target.closest ? target.closest('img') : null;
+    if (image && image.src) {
+      // Parity: calibre image_popup.pyj — a tap on an image opens the
+      // fullscreen viewer, like the long tap on touch devices.
+      event.preventDefault();
+      post({ type: 'viewImage', src: image.currentSrc || image.src });
+      return;
+    }
     var link = target && target.closest ? target.closest('a') : null;
     if (link && link.dataset && link.dataset.elvFootnote) {
       event.preventDefault();
@@ -2569,13 +2577,6 @@
             event.preventDefault();
           }
           break;
-      }
-    });
-    document.addEventListener('dblclick', function (event) {
-      var hit = event.target;
-      var img = hit && hit.closest ? hit.closest('img') : null;
-      if (img && img.src) {
-        post({ type: 'viewImage', src: img.currentSrc || img.src });
       }
     });
     document.addEventListener('mousedown', function (event) {

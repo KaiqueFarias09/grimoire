@@ -66,6 +66,12 @@
 
 ### Fixed
 
+- **Single-tap image popup**: tapping an image in a reflowable book
+  now opens the fullscreen image viewer (previously only a long tap
+  on touch or a double click on desktop did; the double-click handler
+  is superseded — the popup opens on the first tap and a follow-up
+  tap closes it).
+
 - `setMargins`/`setColumnsPerScreen` refreshed the page-count layout
   signature before mutating their fields (stale cache key), and
   `setFontSize` did not refresh it at all.
