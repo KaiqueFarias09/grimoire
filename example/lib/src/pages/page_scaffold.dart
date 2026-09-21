@@ -65,14 +65,6 @@ class UbPageHeading extends StatelessWidget {
             color: palette.ink,
           ),
         ),
-        const SizedBox(height: 9),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Text(
-            subtitle,
-            style: TextStyle(fontSize: isMobile ? 13.0 : 15.0, height: 1.5, color: palette.muted),
-          ),
-        ),
       ],
     );
 
@@ -80,7 +72,7 @@ class UbPageHeading extends StatelessWidget {
       padding: EdgeInsets.only(bottom: isMobile ? 23.0 : 30.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: isMobile ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+        crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.end,
         children: <Widget>[
           // The prototype's flex row leaves the text column at 223px on
           // mobile once the action button takes its share (measured).
@@ -135,8 +127,6 @@ class UbSectionHeading extends StatelessWidget {
                     color: palette.ink,
                   ),
                 ),
-                const SizedBox(height: 5),
-                Text(subtitle, style: TextStyle(fontSize: 13, color: palette.muted)),
               ],
             ),
           ),
