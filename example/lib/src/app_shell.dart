@@ -16,14 +16,13 @@ import 'demo_data.dart';
 import 'overlays/modals.dart';
 import 'overlays/sheets.dart';
 import 'pages/detail_page.dart';
-import 'pages/library_page.dart';
 import 'pages/reader_screen.dart';
 import 'pages/reading_page.dart';
 import 'ub_icon.dart';
 import 'ub_theme.dart';
 import 'ub_widgets.dart';
 
-enum UbPage { reading, library, detail, reader }
+enum UbPage { reading, detail, reader }
 
 enum UbModal { none, add, formatHelp, note }
 
@@ -51,8 +50,6 @@ class UbAppState {
     return null;
   }
 
-  String libraryFilter = 'Todos';
-  String sort = 'Recentes';
   List<DemoCollection> collections = List<DemoCollection>.of(initialCollections);
   String newCollectionName = '';
   String collectionError = '';
@@ -126,7 +123,7 @@ class _BooksAppShellState extends State<BooksAppShell>
   void _mutate(final void Function() body) => setState(body);
 
   /// Screenshot automation for the side-by-side prototype checks:
-  /// `--dart-define=UB_START=library|detail:pdf|reader:txt` and
+  /// `--dart-define=UB_START=detail:pdf|reader:txt` and
   /// `--dart-define=UB_OVERLAY=add|search|collections|summary|settings`.
   @override
   void initState() {
@@ -138,8 +135,6 @@ class _BooksAppShellState extends State<BooksAppShell>
     if (start.isNotEmpty) {
       final parts = start.split(':');
       switch (parts.first) {
-        case 'library':
-          state.page = UbPage.library;
         case 'detail':
           state.selectedBook = parts.length > 1 ? parts[1] : 'alice';
           state.page = UbPage.detail;
@@ -332,13 +327,13 @@ class _BooksAppShellState extends State<BooksAppShell>
           state.selectedBook = _mapImportedBook();
           state.modal = UbModal.none;
           state.sheet = UbSheet.none;
-          _setPage(UbPage.library);
+          _setPage(UbPage.reading);
         });
         showToast('Livro adicionado à sua biblioteca.');
       case 'open-detail':
         _mutate(() {
           state.selectedBook = data ?? 'alice';
-          state.previousPage = state.page == UbPage.reader ? UbPage.library : state.page;
+          state.previousPage = state.page == UbPage.reader ? UbPage.reading : state.page;
           state.modal = UbModal.none;
           state.sheet = UbSheet.none;
           _setPage(UbPage.detail);
@@ -348,19 +343,8 @@ class _BooksAppShellState extends State<BooksAppShell>
           () => state.previousPage = state.page == UbPage.detail ? UbPage.detail : state.page,
         );
         _openReader();
-      case 'open-library':
-        goToPage(UbPage.library);
       case 'share-book':
         showToast('Link de compartilhamento copiado.');
-      case 'filter-library':
-        _mutate(() {
-          state.libraryFilter = data ?? 'Todos';
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.none;
-          _setPage(UbPage.library);
-        });
-      case 'sort-library':
-        _mutate(() => state.sort = state.sort == 'Recentes' ? 'Título' : 'Recentes');
       case 'close-sheet':
         _mutate(() {
           state.sheet = UbSheet.none;
@@ -385,7 +369,7 @@ class _BooksAppShellState extends State<BooksAppShell>
         _mutate(() => state.sheet = UbSheet.none);
         showToast('Posição encontrada.');
       case 'reader-back':
-        final previous = state.previousPage == UbPage.reader ? UbPage.library : state.previousPage;
+        final previous = state.previousPage == UbPage.reader ? UbPage.reading : state.previousPage;
         _mutate(() => state.sheet = UbSheet.none);
         goToPage(previous);
       case 'toggle-reader-settings':
@@ -452,9 +436,8 @@ class _BooksAppShellState extends State<BooksAppShell>
         showToast('Livro adicionado à coleção $collectionName.');
       case 'select-collection':
         _mutate(() {
-          state.libraryFilter = 'Todos';
           state.sheet = UbSheet.none;
-          state.page = UbPage.library;
+          state.page = UbPage.reading;
         });
         showToast('Coleção ${data ?? 'selecionada'}.');
       case 'create-collection':
@@ -481,8 +464,6 @@ class _BooksAppShellState extends State<BooksAppShell>
         }
       case 'page-reading':
         goToPage(UbPage.reading);
-      case 'page-library':
-        goToPage(UbPage.library);
     }
   }
 
@@ -498,7 +479,6 @@ class _BooksAppShellState extends State<BooksAppShell>
     } else {
       final pageBody = switch (state.page) {
         UbPage.reading => ReadingPage(host: this),
-        UbPage.library => LibraryPage(host: this),
         UbPage.detail => DetailPage(host: this),
         UbPage.reader => const SizedBox.shrink(),
       };
@@ -622,7 +602,7 @@ class _Sidebar extends StatelessWidget {
     final palette = UbScope.of(context);
     final state = host.state;
     final activePage = switch (state.page) {
-      UbPage.detail => UbPage.library,
+      UbPage.detail => UbPage.reading,
       UbPage.reader => null,
       final page => page,
     };
@@ -712,13 +692,6 @@ class _Sidebar extends StatelessWidget {
             ),
             const SizedBox(height: 3),
             _SidebarNavItem(
-              icon: UbIcons.library,
-              label: 'Biblioteca',
-              active: activePage == UbPage.library,
-              onTap: () => host.goToPage(UbPage.library),
-            ),
-            const SizedBox(height: 3),
-            _SidebarNavItem(
               icon: UbIcons.search,
               label: 'Buscar',
               active: false,
@@ -746,17 +719,17 @@ class _Sidebar extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
+                    // Only user-created collections are listed here:
+                    // the built-in library filters went away with the
+                    // library view.
                     for (final collection in state.collections)
-                      _SidebarCollectionLink(
-                        collection: collection,
-                        onTap: () {
-                          if (collection.kind == 'custom') {
+                      if (collection.kind == 'custom')
+                        _SidebarCollectionLink(
+                          collection: collection,
+                          onTap: () {
                             host.dispatch('select-collection', data: collection.name);
-                          } else {
-                            host.dispatch('filter-library', data: collection.filter ?? 'Todos');
-                          }
-                        },
-                      ),
+                          },
+                        ),
                   ],
                 ),
               ),
@@ -969,7 +942,7 @@ class _BottomNav extends StatelessWidget {
     final palette = UbScope.of(context);
     final state = host.state;
     final activePage = switch (state.page) {
-      UbPage.detail => UbPage.library,
+      UbPage.detail => UbPage.reading,
       UbPage.reader => null,
       final page => page,
     };
@@ -990,12 +963,6 @@ class _BottomNav extends StatelessWidget {
             label: 'Ler agora',
             active: activePage == UbPage.reading,
             onTap: () => host.goToPage(UbPage.reading),
-          ),
-          _BottomNavItem(
-            icon: UbIcons.library,
-            label: 'Biblioteca',
-            active: activePage == UbPage.library,
-            onTap: () => host.goToPage(UbPage.library),
           ),
           _BottomNavItem(
             icon: UbIcons.search,

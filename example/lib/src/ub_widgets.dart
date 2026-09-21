@@ -2,7 +2,6 @@
 /// covers, progress bars and small labels, matching the prototype.
 library;
 
-
 import 'package:flutter/material.dart';
 
 import 'demo_data.dart';
@@ -149,7 +148,7 @@ class UbButton extends StatelessWidget {
 }
 
 /// Blue inline link with an optional trailing chevron, used next to
-/// section headings ("Ver biblioteca >").
+/// section headings ("Ver mais >").
 class UbLinkButton extends StatelessWidget {
   const UbLinkButton({
     required this.label,
@@ -242,12 +241,7 @@ class UbIconButton extends StatelessWidget {
 /// otherwise a subtle card that names the file type clearly (and sits
 /// a bit shorter than covered books).
 class UbCover extends StatelessWidget {
-  const UbCover({
-    required this.entry,
-    this.width,
-    this.minHeight,
-    super.key,
-  });
+  const UbCover({required this.entry, this.width, this.minHeight, super.key});
 
   final LoadedBook entry;
   final double? width;
@@ -275,7 +269,9 @@ class UbCover extends StatelessWidget {
               right: Radius.circular(7),
             ),
             boxShadow: entry.hasCover
-                ? const <BoxShadow>[BoxShadow(color: Color(0x2B000000), blurRadius: 9, offset: Offset(1, 4))]
+                ? const <BoxShadow>[
+                    BoxShadow(color: Color(0x2B000000), blurRadius: 9, offset: Offset(1, 4)),
+                  ]
                 : null,
           ),
           child: ClipRRect(

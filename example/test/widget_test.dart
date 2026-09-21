@@ -20,16 +20,6 @@ void main() {
     expect(find.text('Adicionados recentemente'), findsOneWidget);
   });
 
-  testWidgets('library page lists the demo books', (final WidgetTester tester) async {
-    await _pumpApp(tester);
-    await tester.tap(find.text('Biblioteca').first);
-    await tester.pumpAndSettle();
-
-    for (final title in _realShelfTitles) {
-      expect(find.text(title), findsWidgets);
-    }
-  });
-
   testWidgets('reader screen opens the selected book from parsed metadata', (
     final WidgetTester tester,
   ) async {
@@ -44,7 +34,9 @@ void main() {
     expect(find.text('unseal TXT Fixture'), findsWidgets);
   });
 
-  testWidgets('desktop width shows the sidebar, mobile hides it', (final WidgetTester tester) async {
+  testWidgets('desktop width shows the sidebar, mobile hides it', (
+    final WidgetTester tester,
+  ) async {
     await _pumpApp(tester, size: const Size(1280, 900));
     expect(find.text('Sua estante digital'), findsOneWidget); // sidebar brand subtitle
     expect(find.text('NAVEGAR'), findsOneWidget);
@@ -126,10 +118,7 @@ void main() {
 /// Pumps the app with the shelf preloaded under real async: asset IO
 /// started by the widget in the fake clock zone never completes, so
 /// tests hand the parsed books in through [GrimoireExampleApp.shelfLoader].
-Future<void> _pumpApp(
-  final WidgetTester tester, {
-  final Size size = const Size(1600, 2800),
-}) async {
+Future<void> _pumpApp(final WidgetTester tester, {final Size size = const Size(1600, 2800)}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -145,15 +134,6 @@ bool _chromeIgnoring(final WidgetTester tester) {
       .where((final widget) => widget.ignoring);
   return bars.isNotEmpty;
 }
-
-const List<String> _realShelfTitles = <String>[
-  "Alice's Adventures in Wonderland",
-  'Dickens Sample',
-  'eLivre CB7 Fixture',
-  'eLivre DOCX Fixture',
-  'unseal HTML Fixture',
-  'unseal TXT Fixture',
-];
 
 const Map<String, BookFormat> _newFormatFixtures = <String, BookFormat>{
   'assets/books/synthetic.txt': BookFormat.txt,

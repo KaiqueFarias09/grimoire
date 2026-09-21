@@ -35,9 +35,9 @@ class DetailPage extends StatelessWidget {
                     UbIcon(UbIcons.arrowLeft, size: 18, color: palette.blue),
                     const SizedBox(width: 3),
                     UbLinkButton(
-                      label: 'Biblioteca',
+                      label: 'Início',
                       chevron: false,
-                      onPressed: () => host.goToPage(UbPage.library),
+                      onPressed: () => host.goToPage(UbPage.reading),
                     ),
                   ],
                 ),

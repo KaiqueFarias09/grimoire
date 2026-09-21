@@ -20,14 +20,13 @@ class ReadingPage extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final isMobile = width < 720;
     final state = host.state;
     if (!state.shelfReady) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
 
-    final hero = state.bookById(state.selectedBook) ?? (state.books.isEmpty ? null : state.books.first);
+    final hero =
+        state.bookById(state.selectedBook) ?? (state.books.isEmpty ? null : state.books.first);
 
     return SingleChildScrollView(
       key: const Key('ub-page-scroll'),
@@ -45,18 +44,14 @@ class ReadingPage extends StatelessWidget {
               ),
             ),
             if (hero != null) _ContinueCard(host: host, book: hero),
-            UbSectionHeading(
+            const UbSectionHeading(
               title: 'Na sua biblioteca',
               subtitle: 'Continue uma história ou escolha a próxima.',
-              actionLabel: isMobile ? 'Biblioteca' : 'Ver biblioteca',
-              onAction: () => host.goToPage(UbPage.library),
             ),
             _BookShelf(host: host, ids: const <String>['office', 'html', 'txt']),
-            UbSectionHeading(
+            const UbSectionHeading(
               title: 'Adicionados recentemente',
               subtitle: 'Livros que chegaram à sua biblioteca.',
-              actionLabel: 'Biblioteca',
-              onAction: () => host.goToPage(UbPage.library),
             ),
             _BookShelf(host: host, ids: const <String>['pdf', 'comic']),
           ],
@@ -183,9 +178,9 @@ class _BookShelf extends StatelessWidget {
   final List<String> ids;
 
   List<LoadedBook> get books => <LoadedBook>[
-        for (final id in ids)
-          if (host.state.bookById(id) != null) host.state.bookById(id)!,
-      ];
+    for (final id in ids)
+      if (host.state.bookById(id) != null) host.state.bookById(id)!,
+  ];
 
   @override
   Widget build(final BuildContext context) {
@@ -216,7 +211,7 @@ class _BookShelf extends StatelessWidget {
 /// shelf sizes itself to the covered height.
 double _cardHeight(final double coverMinHeight) => coverMinHeight + 67;
 
-/// Shared book card used by shelves and the library grid.
+/// Shared book card used by the home shelves.
 class UbBookCard extends StatelessWidget {
   const UbBookCard({
     required this.host,
@@ -280,7 +275,9 @@ class UbBookCard extends StatelessWidget {
                   Text(statusLabel, style: TextStyle(fontSize: 11, color: palette.muted)),
                   if (book.fixture.progress > 0 && book.fixture.progress < 100) ...<Widget>[
                     const SizedBox(width: 6),
-                    Expanded(child: UbProgressBar(fraction: book.fixture.progress / 100, height: 3)),
+                    Expanded(
+                      child: UbProgressBar(fraction: book.fixture.progress / 100, height: 3),
+                    ),
                   ],
                 ],
               ),
@@ -292,6 +289,6 @@ class UbBookCard extends StatelessWidget {
   }
 }
 
-// Referenced by the library page to compute grid row extents.
+// Shelf card height helper for callers that need the extent up front.
 double ubBookCardHeightFor(final double cellWidth, final double coverMinHeight) =>
     math.max(cellWidth / 0.68, coverMinHeight) + 67;
