@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:ui' show Rect;
 
 /// Events flowing from the viewer JS to Dart.
@@ -203,6 +204,16 @@ class PageTurnEvent extends ViewerEvent {
   final bool forward;
 }
 
+/// The PDF document the viewer is rendering is password-protected and
+/// pdf.js refused to open it with the password supplied so far.
+class PdfPasswordRequestEvent extends ViewerEvent {
+  /// Creates a password request.
+  PdfPasswordRequestEvent({required this.failedAttempts, super.source});
+
+  /// 1 on the first request, +1 per password pdf.js has rejected.
+  final int failedAttempts;
+}
+
 /// Codec + event stream for the viewer bridge.
 ///
 /// Keeps no webview reference: engines receive messages through
@@ -310,6 +321,11 @@ class ViewerBridge {
         return ChromeToggleEvent(source: source);
       case 'pageTurn':
         return PageTurnEvent(forward: map['forward'] == true, source: source);
+      case 'pdfPassword':
+        return PdfPasswordRequestEvent(
+          failedAttempts: math.max(_asInt(map['attempts']), 1),
+          source: source,
+        );
       case 'fontSizeBump':
         return FontSizeBumpEvent(delta: _asInt(map['delta']), source: source);
       case 'viewImage':

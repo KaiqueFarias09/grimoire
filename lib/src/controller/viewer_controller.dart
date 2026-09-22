@@ -240,6 +240,16 @@ class ViewerController extends ChangeNotifier
   /// reader passes the raw query (Calibre's "search dictionary").
   void Function(String query)? onSearchNet;
 
+  /// Host hook for password-protected PDFs: asked whenever pdf.js
+  /// needs a password to decrypt the document. Receives the number of
+  /// failed attempts so far — 1 on the first request, growing by one
+  /// per password pdf.js has already rejected. Return the password to
+  /// continue rendering, or null to leave the facsimile canvas
+  /// unrendered (the text layer parsed without the password stays
+  /// usable). Only consulted for PDF documents; passwords are never
+  /// cached by the viewer.
+  Future<String?> Function(int failedAttempts)? onPdfPassword;
+
   /// Calibre default template (session.pyj net_search_url).
   static const String defaultNetSearchUrl = 'https://google.com/search?q={q}';
 
@@ -1641,6 +1651,8 @@ class ViewerController extends ChangeNotifier
         if (event.source == _navigation.activeSlot) {
           toggleChrome();
         }
+      case final PdfPasswordRequestEvent passwordRequest:
+        await _requestPdfPassword(passwordRequest.failedAttempts);
       case final PageTurnEvent turn:
         // Fixed-layout pages are one reading-order item per page
         // (comics and PDFs), so a swipe is a cross-file turn, not a
@@ -1980,6 +1992,30 @@ class ViewerController extends ChangeNotifier
     if (_chromeVisible) {
       toggleChrome();
     }
+  }
+
+  /// Asks the host for the document password and hands it to the
+  /// waiting pdf.js password callback on the facsimile page. A null
+  /// host answer sends an empty password: the JS layer declines to
+  /// apply it, leaving pdf.js pending (blank canvas, usable text
+  /// layer) instead of looping password attempts.
+  Future<void> _requestPdfPassword(final int failedAttempts) async {
+    debugPrint(
+      '[pdf-password] request, failedAttempts=$failedAttempts, host=${onPdfPassword != null}',
+    );
+    final callback = onPdfPassword;
+    String? password;
+    if (callback != null) {
+      try {
+        password = await callback(failedAttempts);
+      } on Object {
+        password = null;
+      }
+    }
+    debugPrint(
+      '[pdf-password] applying ${password == null ? 'null' : 'a ${password.length}-char password'}',
+    );
+    await _send({'action': 'applyPdfPassword', 'password': password ?? ''});
   }
 
   /// Host-side actions for keyboard shortcuts the JS layer cannot do

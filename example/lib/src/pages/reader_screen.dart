@@ -141,6 +141,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
     setState(() => _controller = controller);
     _registerHooks();
     if (book is PdfBook) {
+      // Encrypted PDF: pdf.js asks through the controller; the host
+      // answers with the stored password or a user dialog.
+      controller.onPdfPassword = (final failedAttempts) =>
+          _pdfPasswordFor(bookId, failedAttempts);
       await controller.setPdfReadingMode(PdfReadingMode.facsimile);
     }
     // Persisted session restore: annotations blob, reading position
@@ -171,6 +175,59 @@ class _ReaderScreenState extends State<ReaderScreen> {
   /// viewer's initial-display event must not clobber the stored
   /// position before it is restored.
   bool _restoreDone = false;
+
+  /// Answers pdf.js password requests: the stored password is tried
+  /// transparently on the first ask; from the second rejection (or
+  /// with nothing stored) the user is prompted. A valid answer is
+  /// stored for the following launches.
+  Future<String?> _pdfPasswordFor(final String bookId, final int failedAttempts) async {
+    if (failedAttempts == 1) {
+      final stored = widget.host.store?.passwordOf(bookId) ?? '';
+      if (stored.isNotEmpty) {
+        return stored;
+      }
+    }
+    final entered = await _askPdfPassword(failedAttempts);
+    final trimmed = entered?.trim() ?? '';
+    if (trimmed.isNotEmpty) {
+      final store = widget.host.store;
+      if (store != null) {
+        final row = store.upsertBook(bookId)..pdfPassword = trimmed;
+        store.saveBook(row);
+      }
+      return trimmed;
+    }
+    return null;
+  }
+
+  /// Modal password prompt; null when the user cancels.
+  Future<String?> _askPdfPassword(final int failedAttempts) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (final context) => AlertDialog(
+        title: Text(failedAttempts > 1 ? 'Senha incorreta' : 'PDF protegido por senha'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          decoration: const InputDecoration(hintText: 'Senha do arquivo'),
+          onSubmitted: (final value) => Navigator.of(context).pop(value),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Abrir'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _persistProgress(final String bookId, final ViewerPageChange change) {
     final store = widget.host.store;

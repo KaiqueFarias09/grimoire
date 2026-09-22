@@ -77,6 +77,14 @@ void main() {
     expect(find.text('Sumário'), findsOneWidget);
   });
 
+  test('the bundled PDF fixture is password-protected', () async {
+    final data = await rootBundle.load('assets/books/dickens-sample.pdf');
+    final bytes = Uint8List.fromList(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+    final unlocked = await Unseal.read(bytes, password: 'grimoire');
+    expect(unlocked, isA<PdfBook>());
+    await expectLater(Unseal.read(bytes), throwsA(anything));
+  });
+
   for (final entry in _newFormatFixtures.entries) {
     test(
       'opens ${entry.key} through the example asset path',

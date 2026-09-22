@@ -59,6 +59,7 @@ export 'src/features/bridge/viewer_bridge.dart'
         HighlightTapEvent,
         ChromeToggleEvent,
         PageTurnEvent,
+        PdfPasswordRequestEvent,
         FontSizeBumpEvent,
         ShortcutEvent,
         ViewImageEvent,

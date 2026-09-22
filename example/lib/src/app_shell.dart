@@ -136,6 +136,11 @@ class _BooksAppShellState extends State<BooksAppShell>
 
   DemoStore? get _store => widget.store;
 
+  /// Completes when the bundled fixtures finish parsing. The
+  /// persisted merge waits for it: the slow shelf parse must never
+  /// overwrite store-driven books (unlocked fixtures, imports).
+  final Completer<void> _shelfParsed = Completer<void>();
+
   /// Drives the cross-page fade-through; forwarded from zero on every
   /// page change.
   late final AnimationController _pageController = AnimationController(
@@ -161,7 +166,7 @@ class _BooksAppShellState extends State<BooksAppShell>
     super.initState();
     // Start settled: the first page renders without a transition.
     _pageController.value = 1.0;
-    unawaited(_loadShelf());
+    unawaited(_loadShelf().whenComplete(_shelfParsed.complete));
     unawaited(_loadPersisted());
     final start = const String.fromEnvironment('UB_START');
     if (start.isNotEmpty) {
@@ -601,6 +606,11 @@ class _BooksAppShellState extends State<BooksAppShell>
       }
     }
 
+    // The shelf parse is slow (every fixture through Unseal): wait for
+    // it before merging, or its result would wipe the store-driven
+    // books this method just unlocked and imported.
+    await _shelfParsed.future;
+
     if (!mounted) {
       return;
     }
@@ -730,14 +740,17 @@ class _BooksAppShellState extends State<BooksAppShell>
       final fixture = demoFixtures.firstWhere((final f) => f.id == 'pdf');
       final data = await rootBundle.load(fixture.asset);
       final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
-      await Unseal.read(bytes, password: password);
+      final book = await Unseal.read(bytes, password: password);
       final store = _store;
       if (store != null) {
         final entry = store.upsertBook('pdf');
         entry.pdfPassword = password;
         store.saveBook(entry);
       }
+      final loaded = LoadedBook.fromFixture(fixture, book);
       _mutate(() {
+        // The freshly unlocked book joins the shelf right away.
+        state.books = [...state.books.where((final b) => b.fixture.id != 'pdf'), loaded];
         state.importError = '';
         state.importStep = 3;
         state.importType = 'pdf';

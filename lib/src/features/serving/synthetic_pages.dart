@@ -32,6 +32,20 @@ const String _pdfFacsimileBootTemplate = '''
   var pageHeight = __PAGE_HEIGHT__;
   var loadTries = 0;
   var rendered = false;
+  var passwordUpdate = null;
+  var passwordAsks = 0;
+
+  // The host answers through __grimoire('applyPdfPassword'); a
+  // missing/empty password is declined (never handed to pdf.js) so a
+  // cancelled prompt cannot loop password attempts.
+  window.__elvPdfPasswordApply = function (message) {
+    var update = passwordUpdate;
+    passwordUpdate = null;
+    if (!update || !message || !message.password) {
+      return;
+    }
+    update(String(message.password));
+  };
 
   function fit() {
     var w = parseFloat(stage.style.width) || pageWidth;
@@ -72,9 +86,27 @@ const String _pdfFacsimileBootTemplate = '''
     } catch (err) {
       // Cross-origin workers fall back to pdf.js's main-thread mode.
     }
-    window.pdfjsLib
-      .getDocument({ url: documentUrl, rangeChunkSize: 262144 })
-      .promise.then(function (doc) {
+    var loadingTask = window.pdfjsLib.getDocument({
+      url: documentUrl,
+      rangeChunkSize: 262144,
+    });
+    // onPassword is a loading-task event, not a getDocument param: it
+    // fires when the document is encrypted (reason 1) and again per
+    // rejected password (reason 2). The ask counter bounds a
+    // cancelled prompt so the page cannot loop attempts forever.
+    loadingTask.onPassword = function (update, reason) {
+      if (passwordAsks++ > 4) {
+        return;
+      }
+      passwordUpdate = update;
+      if (window.__grimoirePost) {
+        window.__grimoirePost({ type: 'pdfPassword', attempts: passwordAsks });
+      } else {
+        console.log('Grimoire PDF: NO __grimoirePost');
+      }
+    };
+    loadingTask.promise
+      .then(function (doc) {
         return doc.getPage(pageIndex);
       })
       .then(function (pdfPage) {
@@ -84,8 +116,8 @@ const String _pdfFacsimileBootTemplate = '''
       .then(function () {
         canvas.setAttribute('data-elv-done', '1');
       })
-      .catch(function () {
-        // Rendering failed; the text layer stays usable.
+      .catch(function (error) {
+        console.log('Grimoire PDF: load failed:', error && (error.name || error));
       });
     window.addEventListener('resize', function () {
       fit();

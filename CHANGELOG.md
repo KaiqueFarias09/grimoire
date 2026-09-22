@@ -2,6 +2,14 @@
 
 ### Added
 
+- **Password-protected PDFs**: facsimile rendering now supports
+  encrypted PDFs. When pdf.js needs a password (first open or a
+  rejected attempt) the viewer reports a `PdfPasswordRequestEvent`
+  and `ViewerController.onPdfPassword` asks the host — return the
+  password and rendering continues, return null to leave the canvas
+  unrendered (the parsed text layer stays usable). Passwords are
+  never cached by the viewer; the failed-attempt count grows with
+  each rejected answer.
 - **One-way annotation migration**: `importAnnotations` accepts the previous
   unversioned viewer persistence envelope and converts its highlights and
   bookmarks to Unseal's canonical versioned records without data loss.
