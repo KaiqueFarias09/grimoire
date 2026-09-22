@@ -60,6 +60,10 @@
     }
   }
 
+  // Facsimile pages (pdf.js boots outside this closure) reuse the
+  // host channel for their own messages, e.g. password requests.
+  window.__grimoirePost = post;
+
   function scrollElement() {
     return document.scrollingElement || document.documentElement;
   }
@@ -1966,6 +1970,12 @@
         break;
       case 'setSearchMatches':
         applySearchMatches(message.matches || []);
+        break;
+      case 'applyPdfPassword':
+        // Handled by the facsimile boot script when present.
+        if (window.__elvPdfPasswordApply) {
+          window.__elvPdfPasswordApply(message);
+        }
         break;
       case 'setFontFamily':
         applyFontFamily(message.font || '');
