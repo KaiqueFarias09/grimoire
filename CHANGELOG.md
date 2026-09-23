@@ -1,4 +1,4 @@
-## Unreleased
+## 1.0.0 - September 23, 2026
 
 ### Added
 
@@ -159,9 +159,9 @@
 
 ### Changed
 
-- Unseal is consumed through the release-target `^1.0.0` hosted contract. CI validates
-  package analysis/tests and enforces the repository coverage floor while the
-  cross-package lane verifies the current Unseal + Viewer stack together.
+- Unseal is consumed through the release-target `^1.1.0` hosted contract. CI
+  validates package analysis, tests, and the repository coverage floor against
+  the hosted dependency.
 - **Breaking**: highlight appearance uses Unseal's canonical
   `HighlightColor` and `HighlightDecoration` types. The viewer maps
   palette tokens to Flutter light/dark colors while persistence stays
@@ -178,9 +178,7 @@
   existing highlights recolor live on light/dark switches
   (Calibre `highlight_style_as_css` parity).
 
-## 0.2.0 - August 30, 2026
-
-### Added
+### Reader capabilities
 
 - **Instant chapter transitions**: dual-webview architecture with
   adjacent-file preloading — the spare webview loads the next file
@@ -210,9 +208,9 @@
 - **Engine abstraction**: `ViewerEngine` / `ViewerEngineFactory` for
   plugging alternative webview backends; `FakeViewerEngine` for tests.
 
-## 0.1.0 - August 29, 2026
+### Core reader
 
-Initial release.
+The first public release includes:
 
 - `GrimoireView`: Calibre-style paginated reader for Unseal books
   (EPUB, MOBI, AZW3, FB2, CBZ/CBR).

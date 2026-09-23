@@ -361,6 +361,7 @@ BookmarkRecord? _legacyBookmark(final Map<String, dynamic> json) {
   }
   final parts = position.split(':');
   if (parts.length != 3 || parts.first != 'eLv1') return null;
+
   final sectionIndex = int.tryParse(parts[1]);
   final charOffset = int.tryParse(parts[2]);
   if (sectionIndex == null || sectionIndex < 0 || charOffset == null || charOffset < 0) {
@@ -385,6 +386,7 @@ HighlightColor? _legacyColor(final Object? value) {
   if (light is! String || dark is! String || !pattern.hasMatch(light) || !pattern.hasMatch(dark)) {
     return null;
   }
+
   return CustomHighlightColor(lightHex: light.toLowerCase(), darkHex: dark.toLowerCase());
 }
 
@@ -393,5 +395,6 @@ HighlightDecoration? _legacyDecoration(final Object? value) {
   for (final decoration in HighlightDecoration.values) {
     if (decoration.name == value) return decoration;
   }
+
   return null;
 }

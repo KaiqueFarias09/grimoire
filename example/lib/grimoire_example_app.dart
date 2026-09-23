@@ -6,6 +6,9 @@ import 'src/demo_data.dart';
 import 'src/store/demo_store.dart';
 import 'src/ub_theme.dart';
 
+part 'src/palette_bridge.dart';
+part 'src/no_scrollbar_behavior.dart';
+
 class GrimoireExampleApp extends StatelessWidget {
   const GrimoireExampleApp({this.shelfLoader, this.store, super.key});
 
@@ -34,6 +37,7 @@ class GrimoireExampleApp extends StatelessWidget {
           return child ?? const SizedBox.shrink();
         }
         final data = MediaQuery.of(context);
+
         return MediaQuery(
           data: data.copyWith(padding: EdgeInsets.zero, viewPadding: EdgeInsets.zero),
           child: child,
@@ -44,6 +48,7 @@ class GrimoireExampleApp extends StatelessWidget {
 
   static ThemeData _theme(final Brightness brightness) {
     final palette = brightness == Brightness.light ? UbPalette.light() : UbPalette.dark();
+
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
@@ -53,39 +58,4 @@ class GrimoireExampleApp extends StatelessWidget {
       highlightColor: Colors.transparent,
     );
   }
-}
-
-/// Rebuilds the [UbScope] palette when the platform brightness flips.
-class _PaletteBridge extends StatelessWidget {
-  const _PaletteBridge({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(final BuildContext context) {
-    final brightness = MediaQuery.platformBrightnessOf(context);
-    final palette = brightness == Brightness.light ? UbPalette.light() : UbPalette.dark();
-    return UbScope(palette: palette, child: child);
-  }
-}
-
-/// Hides scrollbars and lets pointer devices drag lists, matching the
-/// prototype's thin/hidden scrollbars.
-class _NoScrollbarBehavior extends MaterialScrollBehavior {
-  const _NoScrollbarBehavior();
-
-  @override
-  Widget buildScrollbar(
-    final BuildContext context,
-    final Widget child,
-    final ScrollableDetails details,
-  ) => child;
-
-  @override
-  Set<PointerDeviceKind> get dragDevices => <PointerDeviceKind>{
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-    PointerDeviceKind.stylus,
-  };
 }

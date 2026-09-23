@@ -31,16 +31,13 @@ class IframeEngine extends ViewerEngine {
   void _onWindowMessage(final web.MessageEvent event) {
     final source = event.source;
     final frame = _iframe;
-    if (source == null || frame == null || frame.contentWindow == null) {
-      return;
-    }
+    if (source == null || frame == null || frame.contentWindow == null) return;
     if (!source.equals(frame.contentWindow).toDart) {
       return; // another engine's frame or an unrelated message
     }
+
     final decoded = event.data.dartify();
-    if (decoded is Map) {
-      onMessage(decoded, slot);
-    }
+    if (decoded is Map) onMessage(decoded, slot);
   }
 
   void _onElementCreated(final Object element) {
@@ -71,17 +68,18 @@ class IframeEngine extends ViewerEngine {
     if (frame == null) {
       // The widget has not mounted yet; apply on creation.
       _pendingUrl = url.toString();
+
       return;
     }
+
     frame.src = url.toString();
   }
 
   @override
   Future<void> evaluateJavaScript(final String code) async {
     final frame = _iframe?.contentWindow;
-    if (frame == null) {
-      return;
-    }
+    if (frame == null) return;
+
     frame.callMethod('eval'.toJS, code.toJS);
   }
 

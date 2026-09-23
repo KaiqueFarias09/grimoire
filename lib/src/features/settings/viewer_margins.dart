@@ -56,6 +56,7 @@ class ViewerMargins {
       t += extra;
       b += extra;
     }
+
     return (left: l, top: t, right: r, bottom: b);
   }
 
@@ -80,9 +81,7 @@ class ViewerMargins {
 
   /// Restores from JSON ([toJson]).
   static ViewerMargins? fromJson(final Object? json) {
-    if (json is! Map<String, dynamic>) {
-      return null;
-    }
+    if (json is! Map<String, dynamic>) return null;
     bool isInt(final Object? value) => value is int && value >= 0;
     if (!isInt(json['left']) ||
         !isInt(json['top']) ||
@@ -92,6 +91,7 @@ class ViewerMargins {
         !isInt(json['maxTextHeight'])) {
       return null;
     }
+
     return ViewerMargins(
       left: json['left'] as int,
       top: json['top'] as int,
@@ -103,30 +103,34 @@ class ViewerMargins {
   }
 
   /// JSON for host persistence.
-  Map<String, int> toJson() => <String, int>{
-    'left': left,
-    'top': top,
-    'right': right,
-    'bottom': bottom,
-    'maxTextWidth': maxTextWidth,
-    'maxTextHeight': maxTextHeight,
-  };
+  Map<String, int> toJson() {
+    return <String, int>{
+      'left': left,
+      'top': top,
+      'right': right,
+      'bottom': bottom,
+      'maxTextWidth': maxTextWidth,
+      'maxTextHeight': maxTextHeight,
+    };
+  }
 
   @override
-  bool operator ==(final Object other) =>
-      other is ViewerMargins &&
-      other.left == left &&
-      other.top == top &&
-      other.right == right &&
-      other.bottom == bottom &&
-      other.maxTextWidth == maxTextWidth &&
-      other.maxTextHeight == maxTextHeight;
+  bool operator ==(final Object other) {
+    return other is ViewerMargins &&
+        other.left == left &&
+        other.top == top &&
+        other.right == right &&
+        other.bottom == bottom &&
+        other.maxTextWidth == maxTextWidth &&
+        other.maxTextHeight == maxTextHeight;
+  }
 
   @override
   int get hashCode => Object.hash(left, top, right, bottom, maxTextWidth, maxTextHeight);
 
   @override
-  String toString() =>
-      'ViewerMargins(l: $left, t: $top, r: $right, b: $bottom, '
-      'maxW: $maxTextWidth, maxH: $maxTextHeight)';
+  String toString() {
+    return 'ViewerMargins(l: $left, t: $top, r: $right, b: $bottom, '
+        'maxW: $maxTextWidth, maxH: $maxTextHeight)';
+  }
 }

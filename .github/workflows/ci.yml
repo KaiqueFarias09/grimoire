@@ -1,31 +1,52 @@
 name: CI
 
-# Grimoire resolves Unseal from pub.dev. Local Unseal checkouts are used only
-# to refresh synchronized test fixtures, never as dependency overrides.
-
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  analyze:
+  library:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read pinned Flutter version
+        id: flutter-sdk
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
-      - run: flutter pub get
-      - run: dart analyze --fatal-infos
+          flutter-version: ${{ steps.flutter-sdk.outputs.version }}
+      - name: Install package dependencies
+        run: flutter pub get --no-example
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed benchmark lib test example/lib/src example/lib/grimoire_example_app.dart example/lib/main.dart example/test
+      - name: Analyze library
+        run: dart analyze --fatal-infos
+      - name: Validate API documentation
+        run: dart doc --dry-run
+      - name: Run tests and coverage gate
+        run: ./tool/coverage_gate.sh
 
-  test:
+  example:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read pinned Flutter version
+        id: flutter-sdk
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
-      - run: flutter pub get
-      - run: ./tool/coverage_gate.sh
+          flutter-version: ${{ steps.flutter-sdk.outputs.version }}
+      - name: Install example dependencies
+        working-directory: example
+        run: flutter pub get
+      - name: Analyze example
+        working-directory: example
+        run: flutter analyze
+      - name: Run example tests
+        working-directory: example
+        run: flutter test

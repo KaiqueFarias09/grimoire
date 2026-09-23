@@ -20,36 +20,40 @@ Map<String, dynamic> _highlightJson(
   final int index,
   final int start,
   final int end,
-) => <String, dynamic>{
-  'id': '$prefix-hl-$index',
-  'sectionIndex': 0,
-  'start': start,
-  'end': end,
-  'text': 'highlighted passage $index',
-  'before': 'before context ',
-  'after': ' after context',
-  'decoration': 'background',
-  'color': 'yellow',
-  'createdAt': '2026-09-05T10:${(index % 60).toString().padLeft(2, '0')}:00Z',
-};
+) {
+  return <String, dynamic>{
+    'id': '$prefix-hl-$index',
+    'sectionIndex': 0,
+    'start': start,
+    'end': end,
+    'text': 'highlighted passage $index',
+    'before': 'before context ',
+    'after': ' after context',
+    'decoration': 'background',
+    'color': 'yellow',
+    'createdAt': '2026-09-05T10:${(index % 60).toString().padLeft(2, '0')}:00Z',
+  };
+}
 
-String _importJson(final int count, {final String prefix = 'ext'}) => jsonEncode(<String, dynamic>{
-  'formatVersion': 1,
-  'highlights': [
-    for (var i = 0; i < count; i++)
-      _highlightJson(prefix, i, (i * 512) % 1000000 + 10, (i * 512) % 1000000 + 50),
-  ],
-  'bookmarks': [
-    for (var i = 0; i < count ~/ 10; i++)
-      <String, dynamic>{
-        'id': '$prefix-bm-$i',
-        'title': 'Bookmark $i',
-        'sectionIndex': 0,
-        'charOffset': i * 2048,
-        'createdAt': '2026-09-05T09:00:00Z',
-      },
-  ],
-});
+String _importJson(final int count, {final String prefix = 'ext'}) {
+  return jsonEncode(<String, dynamic>{
+    'formatVersion': 1,
+    'highlights': [
+      for (var i = 0; i < count; i++)
+        _highlightJson(prefix, i, (i * 512) % 1000000 + 10, (i * 512) % 1000000 + 50),
+    ],
+    'bookmarks': [
+      for (var i = 0; i < count ~/ 10; i++)
+        <String, dynamic>{
+          'id': '$prefix-bm-$i',
+          'title': 'Bookmark $i',
+          'sectionIndex': 0,
+          'charOffset': i * 2048,
+          'createdAt': '2026-09-05T09:00:00Z',
+        },
+    ],
+  });
+}
 
 HighlightRecord _highlight(final int index) => HighlightRecord(
   id: 'seed-hl-$index',
@@ -95,20 +99,22 @@ Future<void> runAnnotationBenchmarks() async {
   await exporter.importAnnotations(_importJson(20000, prefix: 'seed'));
   group.add('exportAnnotations (20k highlights)', exporter.exportAnnotations, note: big.label);
 
-  List<HighlightRecord> annotationList(final String prefix, final int count) => [
-    for (var i = 0; i < count; i++)
-      HighlightRecord(
-        id: '$prefix-$i',
-        sectionIndex: 0,
-        start: (i * 97) % count,
-        end: (i * 97) % count + 4,
-        text: 'text',
-        before: '',
-        after: '',
-        color: PaletteHighlightColor.yellow,
-        createdAt: DateTime.utc(2026, 9, 5, 8, i % 60, i % 60),
-      ),
-  ];
+  List<HighlightRecord> annotationList(final String prefix, final int count) {
+    return [
+      for (var i = 0; i < count; i++)
+        HighlightRecord(
+          id: '$prefix-$i',
+          sectionIndex: 0,
+          start: (i * 97) % count,
+          end: (i * 97) % count + 4,
+          text: 'text',
+          before: '',
+          after: '',
+          color: PaletteHighlightColor.yellow,
+          createdAt: DateTime.utc(2026, 9, 5, 8, i % 60, i % 60),
+        ),
+    ];
+  }
 
   group.add(
     'mergeHighlights 10k+10k',

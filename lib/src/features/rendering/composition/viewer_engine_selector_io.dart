@@ -17,8 +17,7 @@ ViewerEngineFactory selectViewerEngineFactory({
   final ViewerEngineFactory? desktopFactory,
 }) {
   final desktop = (isWindows ?? Platform.isWindows) || (isLinux ?? Platform.isLinux);
-  if (desktop) {
-    return desktopFactory ?? InAppWebViewEngineFactory();
-  }
+  if (desktop) return desktopFactory ?? InAppWebViewEngineFactory();
+
   return WebviewFlutterEngineFactory();
 }

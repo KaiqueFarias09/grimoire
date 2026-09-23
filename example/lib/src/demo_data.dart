@@ -231,14 +231,12 @@ class LoadedBook {
   /// A 1x1 "cover" (or anything smaller than 16px on a side) counts as
   /// no cover at all.
   static bool hasUsableCover(final BookCover? cover) {
-    if (cover == null) {
-      return false;
-    }
+    if (cover == null) return false;
+
     final width = cover.width;
     final height = cover.height;
-    if (width == null || height == null) {
-      return true;
-    }
+    if (width == null || height == null) return true;
+
     return width >= 16 && height >= 16;
   }
 
@@ -248,6 +246,7 @@ class LoadedBook {
         ? titleFromAsset(fixture.asset)
         : metadata.title!.trim();
     final authors = metadata.authors.where((final author) => author.trim().isNotEmpty).toList();
+
     return LoadedBook(
       fixture: fixture,
       book: book,
@@ -262,6 +261,7 @@ class LoadedBook {
   static String titleFromAsset(final String asset) {
     final base = asset.split('/').last.split('.').first;
     final words = base.replaceAll(RegExp('[-_]+'), ' ').split(' ');
+
     return words
         .where((final word) => word.isNotEmpty)
         .map((final word) => word[0].toUpperCase() + word.substring(1))
@@ -284,5 +284,6 @@ Future<List<LoadedBook>> loadDemoShelf() async {
       debugPrint('Fixture ${fixture.id} failed to load: $error');
     }
   }
+
   return books;
 }

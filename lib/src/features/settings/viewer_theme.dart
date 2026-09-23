@@ -108,6 +108,7 @@ class ViewerTheme {
         return null;
       }
       final rgb = int.tryParse(value.substring(1), radix: 16);
+
       return rgb == null ? null : Color(0xFF000000 | rgb);
     }
 
@@ -117,6 +118,7 @@ class ViewerTheme {
     if (background == null || foreground == null || link == null) {
       return null;
     }
+
     return ViewerTheme(
       background: background,
       foreground: foreground,
@@ -133,6 +135,7 @@ class ViewerTheme {
   static String _hexA(final Color color) {
     final argb = color.toARGB32();
     final alpha = ((argb >> 24) & 0xFF) / 255.0;
+
     return 'rgba(${(argb >> 16) & 0xFF}, ${(argb >> 8) & 0xFF}, '
         '${argb & 0xFF}, ${alpha.toStringAsFixed(2)})';
   }

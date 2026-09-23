@@ -110,6 +110,7 @@ class DemoStore {
   static Future<DemoStore> open() async {
     final dir = await getApplicationDocumentsDirectory();
     final store = await openStore(directory: p.join(dir.path, 'grimoire-demo'));
+
     return DemoStore(store);
   }
 
@@ -122,6 +123,7 @@ class DemoStore {
 
   DemoSettings loadSettings() {
     final all = _settings.getAll();
+
     return all.isEmpty ? DemoSettings() : all.first;
   }
 
@@ -151,11 +153,11 @@ class DemoStore {
 
   DemoBook upsertBook(final String bookId) {
     final existing = book(bookId);
-    if (existing != null) {
-      return existing;
-    }
+    if (existing != null) return existing;
+
     final fresh = DemoBook(bookId: bookId);
     fresh.id = _books.put(fresh);
+
     return fresh;
   }
 
@@ -167,6 +169,7 @@ class DemoStore {
 
   String? annotationsOf(final String bookId) {
     final json = book(bookId)?.annotationsJson ?? '';
+
     return json.isEmpty ? null : json;
   }
 
@@ -192,14 +195,17 @@ class DemoStore {
 
   // --- collections ---
 
-  List<DemoCollectionEntry> collections() =>
-      _collections.getAll()..sort((final a, final b) => a.createdAt.compareTo(b.createdAt));
+  List<DemoCollectionEntry> collections() {
+    return _collections.getAll()..sort((final a, final b) => a.createdAt.compareTo(b.createdAt));
+  }
 
   bool createCollection(final String name) {
     if (_collections.query(DemoCollectionEntry_.name.equals(name)).build().count() > 0) {
       return false;
     }
+
     _collections.put(DemoCollectionEntry(name: name));
+
     return true;
   }
 
@@ -216,8 +222,9 @@ class DemoStore {
     }
   }
 
-  int countBooksIn(final String name) =>
-      _memberships.query(DemoCollectionBook_.collectionName.equals(name)).build().count();
+  int countBooksIn(final String name) {
+    return _memberships.query(DemoCollectionBook_.collectionName.equals(name)).build().count();
+  }
 
   void close() => _store.close();
 }

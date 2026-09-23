@@ -8,6 +8,8 @@ import 'demo_data.dart';
 import 'ub_icon.dart';
 import 'ub_theme.dart';
 
+enum UbButtonVariant { dark, outline, blue, text, plain }
+
 /// Rebuilds [builder] with the hovered state (desktop pointer).
 class UbHover extends StatefulWidget {
   const UbHover({required this.builder, super.key});
@@ -31,8 +33,6 @@ class _UbHoverState extends State<UbHover> {
     );
   }
 }
-
-enum UbButtonVariant { dark, outline, blue, text, plain }
 
 /// The prototype's button family: 38px tall, radius 8, 13px/600 labels,
 /// 18px icons, 7px gap.
@@ -106,39 +106,45 @@ class UbButton extends StatelessWidget {
     return UbHover(
       builder: (final context, final hovered) {
         final underline = variant == UbButtonVariant.text && hovered;
-        return GestureDetector(
+        return Semantics(
+          button: true,
+          label: label,
           onTap: onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.ease,
-            height: 38,
-            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-            decoration: BoxDecoration(
-              color: hovered ? hoverBackground : background,
-              borderRadius: BorderRadius.circular(8),
-              border: variant == UbButtonVariant.outline ? Border.all(color: palette.line) : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (icon != null) ...<Widget>[
-                  UbIcon(icon!, size: 18, color: foreground),
-                  const SizedBox(width: 7),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: foreground,
-                      decoration: underline ? TextDecoration.underline : null,
-                      decorationColor: foreground,
+          child: GestureDetector(
+            excludeFromSemantics: true,
+            onTap: onPressed,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.ease,
+              height: 38,
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              decoration: BoxDecoration(
+                color: hovered ? hoverBackground : background,
+                borderRadius: BorderRadius.circular(8),
+                border: variant == UbButtonVariant.outline ? Border.all(color: palette.line) : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (icon != null) ...<Widget>[
+                    UbIcon(icon!, size: 18, color: foreground),
+                    const SizedBox(width: 7),
+                  ],
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: foreground,
+                        decoration: underline ? TextDecoration.underline : null,
+                        decorationColor: foreground,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -166,27 +172,33 @@ class UbLinkButton extends StatelessWidget {
     final palette = UbScope.of(context);
     return UbHover(
       builder: (final context, final hovered) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        return Semantics(
+          button: true,
+          label: label,
           onTap: onPressed,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: palette.blue,
-                  decoration: hovered ? TextDecoration.underline : null,
-                  decorationColor: palette.blue,
+          child: GestureDetector(
+            excludeFromSemantics: true,
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: palette.blue,
+                    decoration: hovered ? TextDecoration.underline : null,
+                    decorationColor: palette.blue,
+                  ),
                 ),
-              ),
-              if (chevron) ...<Widget>[
-                const SizedBox(width: 3),
-                UbIcon(UbIcons.chevronRight, size: 18, color: palette.blue),
+                if (chevron) ...<Widget>[
+                  const SizedBox(width: 3),
+                  UbIcon(UbIcons.chevronRight, size: 18, color: palette.blue),
+                ],
               ],
-            ],
+            ),
           ),
         );
       },
@@ -200,7 +212,7 @@ class UbIconButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.active = false,
-    this.tooltip,
+    required this.tooltip,
     this.size = 38,
     super.key,
   });
@@ -208,7 +220,7 @@ class UbIconButton extends StatelessWidget {
   final String icon;
   final VoidCallback onPressed;
   final bool active;
-  final String? tooltip;
+  final String tooltip;
   final double size;
 
   @override
@@ -218,20 +230,23 @@ class UbIconButton extends StatelessWidget {
       builder: (final context, final hovered) {
         final Color background = active || hovered ? palette.surface : Colors.transparent;
         final Color foreground = active || hovered ? palette.ink : palette.muted;
-        Widget button = GestureDetector(
+        final button = Semantics(
+          button: true,
+          label: tooltip,
           onTap: onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: size,
-            height: size,
-            decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
-            child: Center(child: UbIcon(icon, size: 18, color: foreground)),
+          child: GestureDetector(
+            excludeFromSemantics: true,
+            onTap: onPressed,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: size,
+              height: size,
+              decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
+              child: Center(child: UbIcon(icon, size: 18, color: foreground)),
+            ),
           ),
         );
-        if (tooltip case final tooltip?) {
-          button = Tooltip(message: tooltip, child: button);
-        }
-        return button;
+        return Tooltip(message: tooltip, excludeFromSemantics: true, child: button);
       },
     );
   }
@@ -251,6 +266,7 @@ class UbCover extends StatelessWidget {
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     final coverFloor = minHeight;
+
     return LayoutBuilder(
       builder: (final context, final constraints) {
         final resolvedWidth = width ?? constraints.maxWidth;

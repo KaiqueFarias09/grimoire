@@ -25,8 +25,9 @@ class TextSegment {
   String slice(final String text) => text.substring(start, end);
 
   @override
-  bool operator ==(final Object other) =>
-      other is TextSegment && other.start == start && other.end == end;
+  bool operator ==(final Object other) {
+    return other is TextSegment && other.start == start && other.end == end;
+  }
 
   @override
   int get hashCode => Object.hash(start, end);
@@ -41,11 +42,13 @@ const String _closingChars = '\'"")]»’”›';
 
 /// Terminators that end a sentence. CJK terminators need no trailing
 /// space to count.
-bool _isTerminator(final String ch) => switch (ch) {
-  '.' || '!' || '?' || '…' => true,
-  '。' || '！' || '？' || '；' => true,
-  _ => false,
-};
+bool _isTerminator(final String ch) {
+  return switch (ch) {
+    '.' || '!' || '?' || '…' => true,
+    '。' || '！' || '？' || '；' => true,
+    _ => false,
+  };
+}
 
 bool _isWhitespace(final String ch) => ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
 
@@ -53,6 +56,7 @@ bool _isDigit(final String ch) => ch.codeUnitAt(0) >= 0x30 && ch.codeUnitAt(0) <
 
 bool _isUpperLetter(final String ch) {
   final c = ch.codeUnitAt(0);
+
   return (c >= 0x41 && c <= 0x5A) || (c >= 0xC0 && c <= 0xDE && c != 0xD7);
 }
 
@@ -103,9 +107,8 @@ const int _maxSegmentLength = 1200;
 /// Whitespace-only segments are never emitted.
 List<TextSegment> segmentText(final String text) {
   final segments = <TextSegment>[];
-  if (text.isEmpty) {
-    return segments;
-  }
+  if (text.isEmpty) return segments;
+
   var start = 0;
   var i = 0;
   while (i < text.length) {
@@ -123,6 +126,7 @@ List<TextSegment> segmentText(final String text) {
 
     if (!_isTerminator(text[i])) {
       i++;
+
       continue;
     }
 
@@ -147,6 +151,7 @@ List<TextSegment> segmentText(final String text) {
   if (start < text.length && _hasContent(text, start, text.length)) {
     segments.add(TextSegment(start, text.length));
   }
+
   return segments;
 }
 
@@ -164,24 +169,20 @@ bool _looksLikeContinuation(
       _isDigit(text[afterTerminator])) {
     return true;
   }
+
   final word = _wordBefore(text, dot);
   // Known abbreviation (mr., etc.).
-  if (_abbreviations.contains(word.toLowerCase())) {
-    return true;
-  }
+  if (_abbreviations.contains(word.toLowerCase())) return true;
   // Single-letter initial (J. K. Rowling).
-  if (word.length == 1 && _isUpperLetter(word)) {
-    return true;
-  }
+  if (word.length == 1 && _isUpperLetter(word)) return true;
   // Lowercase continuation after the dot ("e.g. something" is already
   // covered; this catches unknown tokens followed by lowercase).
   if (afterTerminator < text.length) {
     final next = text[afterTerminator];
     final nextIsLower = next.codeUnitAt(0) >= 0x61 && next.codeUnitAt(0) <= 0x7A;
-    if (nextIsLower) {
-      return true;
-    }
+    if (nextIsLower) return true;
   }
+
   return false;
 }
 
@@ -194,20 +195,18 @@ String _wordBefore(final String text, final int dot) {
         (ch.codeUnitAt(0) >= 0x41 && ch.codeUnitAt(0) <= 0x5A) ||
         (ch.codeUnitAt(0) >= 0x61 && ch.codeUnitAt(0) <= 0x7A) ||
         _isDigit(ch);
-    if (!isLetter) {
-      break;
-    }
+    if (!isLetter) break;
     from--;
   }
+
   return text.substring(from, dot);
 }
 
 bool _hasContent(final String text, final int start, final int end) {
   for (var i = start; i < end; i++) {
-    if (!_isWhitespace(text[i])) {
-      return true;
-    }
+    if (!_isWhitespace(text[i])) return true;
   }
+
   return false;
 }
 
@@ -223,8 +222,10 @@ void _addCapped(
     if (_hasContent(text, start, end)) {
       segments.add(TextSegment(start, end));
     }
+
     return;
   }
+
   var from = start;
   while (from < end) {
     var hard = from + _maxSegmentLength;

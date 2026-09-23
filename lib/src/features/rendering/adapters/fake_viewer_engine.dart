@@ -71,6 +71,7 @@ class FakeViewerEngineFactory extends ViewerEngineFactory {
       FakeViewerEngine(slot: 1, onMessage: onMessage),
     ];
     engines.addAll(pair);
+
     return pair;
   }
 }

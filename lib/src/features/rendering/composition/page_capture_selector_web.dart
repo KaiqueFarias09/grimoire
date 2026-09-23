@@ -19,8 +19,9 @@ class _UnsupportedHeadlessPageCaptureFactory implements HeadlessPageCaptureFacto
 class _UnsupportedHeadlessPageCapture implements HeadlessPageCapture {
   const _UnsupportedHeadlessPageCapture();
 
-  static Never _unsupported() =>
-      throw UnsupportedError('headless page rendering requires a native WebView platform');
+  static Never _unsupported() {
+    return throw UnsupportedError('headless page rendering requires a native WebView platform');
+  }
 
   @override
   Future<void> load(

@@ -56,6 +56,7 @@ Future<void> runLibraryCorpusBenchmarks() async {
   final group = BenchmarkGroup('Real library corpus');
   if (libraryRoot == null || libraryBooks.isEmpty) {
     skipLibraryGroup('Real library corpus');
+
     return;
   }
 
@@ -112,9 +113,8 @@ Future<void> _runPick(
   final _Pick pick,
   final HttpClient client,
 ) async {
-  if (book.files.html.isEmpty) {
-    return;
-  }
+  if (book.files.html.isEmpty) return;
+
   final label = libraryBook.shortLabel;
   var biggest = book.files.html.first;
   for (final file in book.files.html) {
@@ -122,6 +122,7 @@ Future<void> _runPick(
       biggest = file;
     }
   }
+
   final biggestIndex = _indexOfBiggest(book, biggest);
 
   final controller = ViewerController(book, engineFactory: FakeViewerEngineFactory());
@@ -130,6 +131,7 @@ Future<void> _runPick(
     () async {
       final results = await controller.search(pick.query);
       await controller.clearSearch();
+
       return results.length;
     },
     inputBytes: biggest.content.length,
@@ -155,6 +157,7 @@ Future<void> _runPick(
         final request = await client.getUrl(url);
         final response = await request.close();
         await response.drain<void>();
+
         return response.statusCode;
       },
       inputBytes: biggest.content.length,
@@ -174,6 +177,7 @@ Future<void> _runPick(
     } on Object catch (error) {
       stdout.writeln('[Real library corpus] $label CFI document unparsable — skipped ($error).');
       controller.dispose();
+
       return;
     }
     final coldRuns = 3; // Books here are big; keep the sample small.
@@ -186,6 +190,7 @@ Future<void> _runPick(
       'goToCfi cold scan (last file)',
       () {
         final cold = freshControllers[coldIndex++];
+
         return cold.goToCfi(cfi);
       },
       iterations: coldRuns,
@@ -200,9 +205,8 @@ Future<void> _runPick(
 
 int _indexOfBiggest(final Book book, final TextFile biggest) {
   for (var i = 0; i < book.readingOrder.length; i++) {
-    if (book.readingOrder[i].name == biggest.path) {
-      return i;
-    }
+    if (book.readingOrder[i].name == biggest.path) return i;
   }
+
   return 0;
 }

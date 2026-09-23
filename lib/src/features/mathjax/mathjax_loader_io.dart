@@ -47,20 +47,19 @@ class MathJaxLoader {
   Future<MathJaxSource> ensureAvailable({required final String? cachePath}) async {
     final dir = directoryFor(cachePath);
     final marker = File('${dir.path}/.complete');
-    if (marker.existsSync()) {
-      return MathJaxSource(cachePath: dir.path, scriptBase: '/__mathjax__');
-    }
+    if (marker.existsSync()) return MathJaxSource(cachePath: dir.path, scriptBase: '/__mathjax__');
+
     await dir.create(recursive: true);
     for (final relative in MathJaxComponent.files) {
       final file = File('${dir.path}/$relative');
-      if (file.existsSync() && file.lengthSync() > 0) {
-        continue;
-      }
+      if (file.existsSync() && file.lengthSync() > 0) continue;
+
       await file.parent.create(recursive: true);
       final bytes = await (_fetch ?? _defaultFetch)(Uri.parse('$baseUrl/$relative'));
       await file.writeAsBytes(bytes, flush: true);
     }
     marker.writeAsStringSync(MathJaxComponent.version, flush: true);
+
     return MathJaxSource(cachePath: dir.path, scriptBase: '/__mathjax__');
   }
 
@@ -72,10 +71,12 @@ class MathJaxLoader {
       if (response.statusCode != 200) {
         throw HttpException('MathJax download failed: ${response.statusCode} $url');
       }
+
       final builder = BytesBuilder(copy: false);
       await for (final chunk in response) {
         builder.add(chunk);
       }
+
       return builder.takeBytes();
     } finally {
       client.close(force: true);

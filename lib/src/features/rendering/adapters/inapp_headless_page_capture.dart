@@ -38,15 +38,12 @@ class InAppHeadlessPageCapture implements HeadlessPageCapture {
           handlerName: 'GrimoireBridge',
           callback: (final args) {
             final message = onBridgeMessage;
-            if (message != null && args.isNotEmpty) {
-              message(args.first as Object);
-            }
+            if (message != null && args.isNotEmpty) message(args.first as Object);
+
             return null;
           },
         );
-        if (!_created.isCompleted) {
-          _created.complete();
-        }
+        if (!_created.isCompleted) _created.complete();
       },
     );
     _headless = headless;
@@ -57,12 +54,14 @@ class InAppHeadlessPageCapture implements HeadlessPageCapture {
   @override
   Future<Object?> evaluate(final String javaScript) async {
     await _created.future;
+
     return _controller?.evaluateJavascript(source: javaScript);
   }
 
   @override
   Future<Uint8List?> capture() async {
     await _created.future;
+
     return _controller?.takeScreenshot();
   }
 

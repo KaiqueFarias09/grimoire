@@ -7,6 +7,9 @@ A Calibre-style ebook reader widget for Flutter, built on
 themes, highlights, bookmarks, in-book search and a text-selection hook
 for dictionary lookups.
 
+For a feature-by-feature map of the public API, source files, and tests, see
+the [codebase guide](https://github.com/KaiqueFarias09/grimoire/blob/main/docs/grimoire-codebase-guide.md).
+
 Platforms: **Android, iOS, macOS** (webview_flutter), **Windows,
 Linux** (flutter_inappwebview, auto-selected) and **Web** (a native
 same-origin iframe through the SDK, no webview plugin).
@@ -154,6 +157,49 @@ await controller.setTheme(ViewerTheme.sepia);
 print(controller.progress); // 0.0..1.0
 ```
 
+### PDF modes and passwords
+
+PDFs can use reflowed text or original-page facsimile. Both modes share page
+indexes and canonical text offsets. The host may provide passwords when pdf.js
+requests one; the reader does not retain them.
+
+```dart
+controller.onPdfPassword = (failedAttempts) async {
+  return askReaderForPdfPassword(failedAttempts);
+};
+await controller.setPdfReadingMode(PdfReadingMode.facsimile);
+await controller.goToPdfPage(3); // zero-based
+```
+
+pdf.js and MathJax are loaded only when needed. Native hosts can supply
+`pdfJsCachePath` and `mathJaxCachePath` on the controller to retain downloads,
+or inject loaders configured for their own mirror. A PDF text layer can remain
+usable when a facsimile script or password is unavailable.
+
+### Exporting annotations
+
+`exportAnnotations()` writes the versioned Unseal storage format for later
+import. For a document the user can share, snapshot the current highlights and
+bookmarks and render Markdown, HTML, or plain text:
+
+```dart
+final document = buildViewerExportModel(controller);
+final markdown = document.toMarkdown();
+final html = document.toHtml();
+final plainText = document.toPlainText();
+```
+
+The host saves or shares these strings. It also owns any synchronization of
+the stored annotation records.
+
+### Narration hooks
+
+`segmentText` splits Unseal's canonical document text into sentence ranges.
+The downstream player can call `markNarrationRange(start, end)` while speaking
+and `clearNarrationMarks()` when playback stops. `bookServerUrlFor(path)` gives
+native players a URL for book audio after the controller starts. Grimoire does
+not synthesize speech or play audio.
+
 ## Rendering pages off-screen
 
 `GrimoirePageRenderer` paints a book page without mounting a reader,
@@ -191,6 +237,9 @@ supported because iframes cannot be rasterized; the call throws
 `UnsupportedError` there.
 
 ## Host app requirements
+
+Use Flutter 3.41 or newer (Dart 3.11 or newer). The package release gate uses
+the version pinned in `.flutter-version`.
 
 The reader serves book files from a loopback HTTP server:
 

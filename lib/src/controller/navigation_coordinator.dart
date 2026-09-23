@@ -45,8 +45,9 @@ final class NavigationCoordinator {
   bool get canGoForward => _historyIndex < _history.length - 1;
 
   /// Returns the reading-order item loaded in [slot], if any.
-  int? loadedFileAt(final int slot) =>
-      slot >= 0 && slot < _loadedFiles.length ? _loadedFiles[slot] : null;
+  int? loadedFileAt(final int slot) {
+    return slot >= 0 && slot < _loadedFiles.length ? _loadedFiles[slot] : null;
+  }
 
   /// Records the initial item before the facade starts its first engine load.
   void prepareInitial(final int fileIndex) {
@@ -56,12 +57,12 @@ final class NavigationCoordinator {
 
   /// Captures pending work when [slot] reports that its item is ready.
   NavigationReadyState beginEngineReady(final int slot) {
-    if (slot < 0 || slot >= _engineReady.length) {
-      return NavigationReadyState(slot: slot);
-    }
+    if (slot < 0 || slot >= _engineReady.length) return NavigationReadyState(slot: slot);
+
     _engineReady[slot] = true;
     final intent = _pending[slot];
     _pending[slot] = null;
+
     return NavigationReadyState(slot: slot, fileIndex: _loadedFiles[slot], intent: intent);
   }
 
@@ -69,11 +70,11 @@ final class NavigationCoordinator {
   ///
   /// Returns true when the ready engine was activated.
   bool finishEngineReady(final int slot) {
-    if (_swapOnReadySlot != slot) {
-      return false;
-    }
+    if (_swapOnReadySlot != slot) return false;
+
     _swapOnReadySlot = null;
     _activate(slot);
+
     return true;
   }
 
@@ -114,16 +115,17 @@ final class NavigationCoordinator {
   /// Navigates through the preloaded engine when possible, otherwise loading
   /// the target into the spare engine and activating it when ready.
   Future<void> navigate(final int target, final NavigationIntent intent) async {
-    if (!host.navigationIsReady || itemCount == 0) {
-      return;
-    }
+    if (!host.navigationIsReady || itemCount == 0) return;
+
     final index = target.clamp(0, itemCount - 1);
     final other = 1 - _activeSlot;
     if (_loadedFiles[other] == index && _engineReady[other]) {
       await applyIntent(other, intent);
       _activate(other);
+
       return;
     }
+
     _pending[other] = intent;
     _loadedFiles[other] = index;
     _engineReady[other] = false;
@@ -134,17 +136,14 @@ final class NavigationCoordinator {
   /// Prepares and loads the next reading-order item into the spare engine.
   Future<void> preloadNext() async {
     final current = activeFileIndex;
-    if (current == null) {
-      return;
-    }
+    if (current == null) return;
+
     final next = current + 1;
-    if (next >= itemCount) {
-      return;
-    }
+    if (next >= itemCount) return;
+
     final other = 1 - _activeSlot;
-    if (_loadedFiles[other] == next) {
-      return;
-    }
+    if (_loadedFiles[other] == next) return;
+
     _pending[other] = const NavigationIntent();
     _loadedFiles[other] = next;
     _engineReady[other] = false;
@@ -164,9 +163,8 @@ final class NavigationCoordinator {
     required final int columnsPerScreen,
   }) async {
     final target = fromFile + direction;
-    if (target < 0 || target >= itemCount) {
-      return;
-    }
+    if (target < 0 || target >= itemCount) return;
+
     final NavigationIntent intent;
     if (direction < 0) {
       final exit = _exitStateByFile[target];
@@ -189,6 +187,7 @@ final class NavigationCoordinator {
   }) {
     _recordJumpOrigin(currentFileIndex, currentOffset);
     _recordJumpDestination(fileIndex, intent);
+
     return navigate(fileIndex, intent);
   }
 
@@ -201,14 +200,14 @@ final class NavigationCoordinator {
     required final int currentOffset,
   }) async {
     final target = resolveTarget(content, currentFileIndex);
-    if (target == null) {
-      return false;
-    }
+    if (target == null) return false;
+
     final (fileIndex, anchor) = target;
     final intent = NavigationIntent(anchor: anchor.isEmpty ? null : anchor);
     _recordJumpOrigin(currentFileIndex, currentOffset);
     await navigate(fileIndex, intent);
     _recordJumpDestination(fileIndex, intent);
+
     return true;
   }
 
@@ -231,12 +230,13 @@ final class NavigationCoordinator {
           'id': fragment,
         });
       }
+
       return;
     }
+
     final target = resolveRelativePath(path);
-    if (target == null) {
-      return;
-    }
+    if (target == null) return;
+
     final intent = NavigationIntent(anchor: fragment.isEmpty ? null : fragment);
     _recordJumpOrigin(currentFileIndex, currentOffset);
     await navigate(target, intent);
@@ -245,9 +245,8 @@ final class NavigationCoordinator {
 
   /// Returns to the previous explicit jump destination.
   Future<void> goBack() async {
-    if (!canGoBack) {
-      return;
-    }
+    if (!canGoBack) return;
+
     _historyIndex--;
     host.navigationStateDidChange();
     final entry = _history[_historyIndex];
@@ -256,9 +255,8 @@ final class NavigationCoordinator {
 
   /// Reapplies the next explicit jump destination.
   Future<void> goForward() async {
-    if (!canGoForward) {
-      return;
-    }
+    if (!canGoForward) return;
+
     _historyIndex++;
     host.navigationStateDidChange();
     final entry = _history[_historyIndex];
@@ -267,16 +265,15 @@ final class NavigationCoordinator {
 
   /// Resolves a navigation document target to `(fileIndex, fragment)`.
   (int, String)? resolveTarget(final String content, final int currentFileIndex) {
-    if (content.isEmpty) {
-      return null;
-    }
+    if (content.isEmpty) return null;
+
     final parts = content.split('#');
     final path = parts[0];
     final fragment = parts.length > 1 ? parts[1] : '';
-    if (path.isEmpty) {
-      return (currentFileIndex, fragment);
-    }
+    if (path.isEmpty) return (currentFileIndex, fragment);
+
     final fileIndex = resolveRelativePath(path);
+
     return fileIndex == null ? null : (fileIndex, fragment);
   }
 
@@ -285,19 +282,16 @@ final class NavigationCoordinator {
     final normalized = path.replaceAll('\\', '/').replaceAll('./', '').toLowerCase();
     for (var index = 0; index < readingOrderPaths.length; index++) {
       final name = readingOrderPaths[index].toLowerCase();
-      if (name == normalized || name.endsWith('/$normalized')) {
-        return index;
-      }
+      if (name == normalized || name.endsWith('/$normalized')) return index;
     }
+
     final base = normalized.split('/').last;
-    if (base.isEmpty) {
-      return null;
-    }
+    if (base.isEmpty) return null;
+
     for (var index = 0; index < readingOrderPaths.length; index++) {
-      if (readingOrderPaths[index].toLowerCase().endsWith('/$base')) {
-        return index;
-      }
+      if (readingOrderPaths[index].toLowerCase().endsWith('/$base')) return index;
     }
+
     return null;
   }
 
@@ -310,10 +304,12 @@ final class NavigationCoordinator {
     while (_history.length > _historyIndex + 1) {
       _history.removeLast();
     }
+
     if (_historyIndex >= 0 &&
         _historyEntryMatches(_history[_historyIndex], currentFileIndex, currentOffset)) {
       return;
     }
+
     _history.add((fileIndex: currentFileIndex, intent: NavigationIntent(offset: currentOffset)));
     _historyIndex = _history.length - 1;
   }
@@ -328,8 +324,9 @@ final class NavigationCoordinator {
     final ({int fileIndex, NavigationIntent intent}) entry,
     final int currentFileIndex,
     final int currentOffset,
-  ) =>
-      entry.fileIndex == currentFileIndex &&
-      entry.intent.offset != null &&
-      entry.intent.offset == currentOffset;
+  ) {
+    return entry.fileIndex == currentFileIndex &&
+        entry.intent.offset != null &&
+        entry.intent.offset == currentOffset;
+  }
 }

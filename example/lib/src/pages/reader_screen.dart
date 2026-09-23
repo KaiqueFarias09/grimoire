@@ -18,37 +18,16 @@ import '../ub_icon.dart';
 import '../ub_theme.dart';
 import '../ub_widgets.dart';
 
-/// Hooks the shell dispatch uses to reach the live reader instance.
-/// Registered while a reader is mounted; cleared on dispose.
-abstract final class ReaderHooks {
-  static Future<void> Function(ReaderThemeMode)? applyTheme;
-  static Future<void> Function(ReaderMode)? applyMode;
-  static Future<void> Function(String)? applyFontSize;
-
-  /// Adds a bookmark at the current position or removes the newest
-  /// one; resolves to the bookmarked state after the change.
-  static Future<bool> Function()? toggleBookmark;
-
-  /// Highlights the active selection: true when created, false when
-  /// the selection was already highlighted, null without a selection.
-  static Future<bool?> Function()? highlightSelection;
-
-  /// The active selection's text, or the empty string.
-  static String? Function()? selectionText;
-
-  /// Attaches [note] to the active selection, creating a highlight
-  /// with the note when the passage is not highlighted yet.
-  static Future<void> Function(String note)? saveNote;
-
-  /// Real full-book search through the live controller.
-  static Future<List<ViewerSearchResult>> Function(String query)? runSearch;
-
-  /// Jumps to the search result at [index].
-  static void Function(int index)? jumpToSearchResult;
-
-  static void Function(String? data)? selectedChapter;
-  static List<NavPoint> Function()? tocSource;
-}
+part 'reader_screen/reader_hooks.dart';
+part 'reader_screen/real_paper.dart';
+part 'reader_screen/reader_app_bar.dart';
+part 'reader_screen/reader_bottom_chrome.dart';
+part 'reader_screen/reader_bottom_bar_content.dart';
+part 'reader_screen/reader_bottom_button.dart';
+part 'reader_screen/reader_settings_panel.dart';
+part 'reader_screen/setting_row.dart';
+part 'reader_screen/setting_option.dart';
+part 'reader_screen/host_note.dart';
 
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({required this.host, super.key});
@@ -66,15 +45,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   String? _liveChapter;
   bool _chromeVisible = true;
 
-  // Cancelled in dispose via a local copy (see dispose); the lint wants
-  // the cancel in the creating function, which is not possible here.
-  // ignore: cancel_subscriptions
   StreamSubscription<ViewerEvent>? _chromeSub;
-  // Both streams die with the controller disposed right below; the
-  // lint cannot see that, so ignore it on the fields.
-  // ignore: cancel_subscriptions
   StreamSubscription<void>? _annotationsSub;
-  // ignore: cancel_subscriptions
   StreamSubscription<ViewerPageChange>? _pageSub;
 
   LoadedBook? get entry => widget.host.state.bookById(widget.host.state.selectedBook);
@@ -143,8 +115,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (book is PdfBook) {
       // Encrypted PDF: pdf.js asks through the controller; the host
       // answers with the stored password or a user dialog.
-      controller.onPdfPassword = (final failedAttempts) =>
-          _pdfPasswordFor(bookId, failedAttempts);
+      controller.onPdfPassword = (final failedAttempts) => _pdfPasswordFor(bookId, failedAttempts);
       await controller.setPdfReadingMode(PdfReadingMode.facsimile);
     }
     // Persisted session restore: annotations blob, reading position
@@ -195,8 +166,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
         final row = store.upsertBook(bookId)..pdfPassword = trimmed;
         store.saveBook(row);
       }
+
       return trimmed;
     }
+
     return null;
   }
 
@@ -216,10 +189,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           onSubmitted: (final value) => Navigator.of(context).pop(value),
         ),
         actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
           TextButton(
             onPressed: () => Navigator.of(context).pop(controller.text),
             child: const Text('Abrir'),
@@ -270,6 +240,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (controller != null) {
         return controller.setTheme(_viewerTheme(mode));
       }
+
       return Future<void>.value();
     };
     ReaderHooks.applyMode = (final mode) {
@@ -279,6 +250,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           mode == ReaderMode.pages ? PdfReadingMode.facsimile : PdfReadingMode.reflow,
         );
       }
+
       return Future<void>.value();
     };
     ReaderHooks.applyFontSize = (final size) {
@@ -290,6 +262,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           _ => 17,
         });
       }
+
       return Future<void>.value();
     };
     ReaderHooks.toggleBookmark = () async {
@@ -302,6 +275,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         return true;
       }
       controller.removeBookmark(controller.bookmarks.last.id);
+
       return false;
     };
     ReaderHooks.highlightSelection = () async {
@@ -323,6 +297,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         return false;
       }
       await controller.addHighlightFromSelection();
+
       return true;
     };
     ReaderHooks.selectionText = () => _controller?.lastSelection?.text ?? '';
@@ -349,6 +324,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (controller == null) {
         return const <ViewerSearchResult>[];
       }
+
       return controller.search(query);
     };
     ReaderHooks.jumpToSearchResult = (final index) {
@@ -381,18 +357,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
     ReaderHooks.jumpToSearchResult = null;
     ReaderHooks.selectedChapter = null;
     ReaderHooks.tocSource = null;
-    final chromeSub = _chromeSub;
-    if (chromeSub != null) {
-      unawaited(chromeSub.cancel());
-    }
-    final annotationsSub = _annotationsSub;
-    if (annotationsSub != null) {
-      unawaited(annotationsSub.cancel());
-    }
-    final pageSub = _pageSub;
-    if (pageSub != null) {
-      unawaited(pageSub.cancel());
-    }
+    unawaited(_chromeSub?.cancel());
+    unawaited(_annotationsSub?.cancel());
+    unawaited(_pageSub?.cancel());
     _controller?.dispose();
     super.dispose();
   }
@@ -428,6 +395,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       body = const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
 
+    final chromeActionLabel = _chromeVisible ? 'Ocultar controles' : 'Mostrar controles';
+
     return ColoredBox(
       color: palette.bg,
       child: Stack(
@@ -447,7 +416,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 left: side ? null : 0,
                 right: side ? 0 : null,
                 width: horizontal,
-                child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _toggleChrome),
+                child: Semantics(
+                  button: true,
+                  label: chromeActionLabel,
+                  onTap: _toggleChrome,
+                  child: GestureDetector(
+                    excludeFromSemantics: true,
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _toggleChrome,
+                  ),
+                ),
               ),
           _ReaderAppBar(
             host: widget.host,
@@ -470,498 +448,5 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   void _toggleChrome() {
     setState(() => _chromeVisible = !_chromeVisible);
-  }
-}
-
-class _RealPaper extends StatelessWidget {
-  const _RealPaper({required this.controller, required this.theme});
-
-  final ViewerController controller;
-  final ReaderThemeMode theme;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final Color paperColor = switch (theme) {
-      ReaderThemeMode.day => palette.paper,
-      ReaderThemeMode.sepia => const Color(0xFFF3ECDC),
-      ReaderThemeMode.night => palette.nightPaper,
-    };
-
-    return ColoredBox(
-      color: paperColor,
-      child: GrimoireView(book: controller.book, controller: controller, showShell: false),
-    );
-  }
-}
-
-/// Pinned reader app bar: back, book title, author and the bookmark
-/// and settings actions. Slides away with the rest of the chrome.
-class _ReaderAppBar extends StatelessWidget {
-  const _ReaderAppBar({required this.host, required this.visible, required this.onBack});
-
-  final UbHost host;
-  final bool visible;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final state = host.state;
-    final book = state.bookById(state.selectedBook);
-
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: AnimatedSlide(
-        offset: visible ? Offset.zero : const Offset(0, -1),
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: Container(
-            decoration: BoxDecoration(
-              color: palette.bg,
-              border: Border(bottom: BorderSide(color: palette.lineSoft)),
-            ),
-            padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-            child: SizedBox(
-              height: 56,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: <Widget>[
-                    UbIconButton(icon: UbIcons.arrowLeft, tooltip: 'Voltar', onPressed: onBack),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            book?.title ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 14, color: palette.ink),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            book == null ? '' : '${book.author} · ${book.fixture.chapter}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: palette.muted),
-                          ),
-                        ],
-                      ),
-                    ),
-                    UbIconButton(
-                      icon: UbIcons.bookmark,
-                      tooltip: 'Marcar posição',
-                      active: state.bookmarked,
-                      onPressed: () => host.dispatch('toggle-bookmark'),
-                    ),
-                    const SizedBox(width: 4),
-                    UbIconButton(
-                      icon: UbIcons.type,
-                      tooltip: 'Temas e ajustes',
-                      active: state.readerSettings,
-                      onPressed: () => host.dispatch('toggle-reader-settings'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Pinned reader bottom chrome: the settings panel and host note when
-/// open, plus the navigation/progress bar. Slides away with the rest
-/// of the chrome on a center tap.
-class _ReaderBottomChrome extends StatelessWidget {
-  const _ReaderBottomChrome({
-    required this.host,
-    required this.visible,
-    required this.progress,
-    required this.chapterLabel,
-  });
-
-  final UbHost host;
-  final bool visible;
-  final double progress;
-  final String chapterLabel;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final state = host.state;
-    final isMobile = MediaQuery.sizeOf(context).width < 720;
-
-    return AnimatedSlide(
-      offset: visible ? Offset.zero : const Offset(0, 1),
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-      child: IgnorePointer(
-        ignoring: !visible,
-        child: Container(
-          decoration: BoxDecoration(
-            color: palette.bg,
-            border: Border(top: BorderSide(color: palette.lineSoft)),
-          ),
-          padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              if (state.readerSettings) ...<Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _ReaderSettingsPanel(host: host, isPdf: false, isComic: false),
-                ),
-                const Padding(padding: EdgeInsets.fromLTRB(16, 10, 16, 0), child: _HostNote()),
-                const SizedBox(height: 10),
-              ],
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: _ReaderBottomBarContent(
-                  host: host,
-                  progress: progress,
-                  chapterLabel: chapterLabel,
-                  isMobile: isMobile,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReaderBottomBarContent extends StatelessWidget {
-  const _ReaderBottomBarContent({
-    required this.host,
-    required this.progress,
-    required this.chapterLabel,
-    required this.isMobile,
-  });
-
-  final UbHost host;
-  final double progress;
-  final String chapterLabel;
-  final bool isMobile;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-
-    final Widget progressBar = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 470),
-      child: Row(
-        children: <Widget>[
-          Text(
-            '${(progress * 100).round()}%',
-            style: TextStyle(fontSize: 11, color: palette.muted),
-          ),
-          const SizedBox(width: 9),
-          Expanded(child: UbProgressBar(fraction: progress, height: 3)),
-          const SizedBox(width: 9),
-          Flexible(
-            child: Text(
-              chapterLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: palette.muted),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (isMobile) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Column(
-          children: <Widget>[
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: progressBar),
-            const SizedBox(height: 4),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _ReaderBottomButton(
-                    icon: UbIcons.list,
-                    label: 'Sumário',
-                    onPressed: () => host.dispatch('open-summary-sheet'),
-                  ),
-                ),
-                Expanded(
-                  child: _ReaderBottomButton(
-                    icon: UbIcons.search,
-                    label: 'Buscar',
-                    onPressed: () => host.dispatch('open-reader-search-sheet'),
-                  ),
-                ),
-                Expanded(
-                  child: _ReaderBottomButton(
-                    icon: UbIcons.highlighter,
-                    label: 'Destacar',
-                    onPressed: () => host.dispatch('toggle-highlight'),
-                  ),
-                ),
-                Expanded(
-                  child: _ReaderBottomButton(
-                    icon: UbIcons.note,
-                    label: 'Nota',
-                    onPressed: () => host.dispatch('open-note'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: <Widget>[
-          _ReaderBottomButton(
-            icon: UbIcons.list,
-            label: 'Sumário',
-            onPressed: () => host.dispatch('open-summary-sheet'),
-          ),
-          const SizedBox(width: 3),
-          _ReaderBottomButton(
-            icon: UbIcons.search,
-            label: 'Buscar',
-            onPressed: () => host.dispatch('open-reader-search-sheet'),
-          ),
-          const SizedBox(width: 16),
-          Expanded(child: progressBar),
-          const SizedBox(width: 16),
-          _ReaderBottomButton(
-            icon: UbIcons.highlighter,
-            label: 'Destacar',
-            onPressed: () => host.dispatch('toggle-highlight'),
-          ),
-          const SizedBox(width: 3),
-          _ReaderBottomButton(
-            icon: UbIcons.note,
-            label: 'Nota',
-            onPressed: () => host.dispatch('open-note'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReaderBottomButton extends StatelessWidget {
-  const _ReaderBottomButton({required this.icon, required this.label, required this.onPressed});
-
-  final String icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return UbHover(
-      builder: (final context, final hovered) {
-        final Color background = hovered ? palette.surface : Colors.transparent;
-        final Color foreground = hovered ? palette.ink : palette.muted;
-        return GestureDetector(
-          onTap: onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 9),
-            decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(7)),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                UbIcon(icon, size: 18, color: foreground),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: foreground),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ReaderSettingsPanel extends StatelessWidget {
-  const _ReaderSettingsPanel({required this.host, required this.isPdf, required this.isComic});
-
-  final UbHost host;
-  final bool isPdf;
-  final bool isComic;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final state = host.state;
-
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: palette.surface2,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: palette.lineSoft),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text('Temas e ajustes', style: TextStyle(fontSize: 14, color: palette.ink)),
-          const SizedBox(height: 15),
-          _SettingRow(
-            label: 'Tema',
-            options: const <(String, String)>[
-              ('Claro', 'day'),
-              ('Papel', 'sepia'),
-              ('Escuro', 'night'),
-            ],
-            activeValue: state.readerTheme.name,
-            onSelect: (final value) => host.dispatch('reader-theme', data: value),
-          ),
-          _SettingRow(
-            label: 'Texto',
-            options: const <(String, String)>[
-              ('A menor', 'small'),
-              ('A normal', 'medium'),
-              ('A maior', 'large'),
-            ],
-            activeValue: switch (state.fontSize) {
-              15 => 'small',
-              20 => 'large',
-              _ => 'medium',
-            },
-            onSelect: (final value) => host.dispatch('font-size', data: value),
-          ),
-          if (!isComic)
-            _SettingRow(
-              label: 'Layout',
-              options: <(String, String)>[('Texto', 'reflow'), if (isPdf) ('Páginas', 'pages')],
-              activeValue: state.readerMode.name,
-              onSelect: (final value) => host.dispatch('reader-mode', data: value),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingRow extends StatelessWidget {
-  const _SettingRow({
-    required this.label,
-    required this.options,
-    required this.activeValue,
-    required this.onSelect,
-  });
-
-  final String label;
-  final List<(String, String)> options;
-  final String activeValue;
-  final void Function(String value) onSelect;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 11),
-      child: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 8,
-        runSpacing: 8,
-        children: <Widget>[
-          SizedBox(
-            width: 110,
-            child: Text(label, style: TextStyle(fontSize: 12, color: palette.muted)),
-          ),
-          for (final (label, value) in options)
-            _SettingOption(
-              label: label,
-              active: activeValue == value,
-              onTap: () => onSelect(value),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingOption extends StatelessWidget {
-  const _SettingOption({required this.label, required this.active, required this.onTap});
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: palette.bg,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: active ? palette.ink : palette.line),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-              color: active ? palette.ink : palette.muted,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HostNote extends StatelessWidget {
-  const _HostNote();
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return Container(
-      margin: const EdgeInsets.only(top: 17),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: palette.surface, borderRadius: BorderRadius.circular(8)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          UbIcon(UbIcons.info, size: 18, color: palette.muted),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              'Você pode retomar, buscar, destacar e anotar este livro. O arquivo original permanece na sua biblioteca.',
-              style: TextStyle(fontSize: 12, height: 1.45, color: palette.muted),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

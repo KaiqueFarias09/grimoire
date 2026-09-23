@@ -16,9 +16,7 @@ String sanitizeBookHtml(
   final String html, {
   final BookJavaScriptPolicy policy = BookJavaScriptPolicy.disabled,
 }) {
-  if (policy == BookJavaScriptPolicy.allowBookScripts) {
-    return html;
-  }
+  if (policy == BookJavaScriptPolicy.allowBookScripts) return html;
 
   final output = StringBuffer();
   var cursor = 0;
@@ -28,6 +26,7 @@ String sanitizeBookHtml(
       output.write(html.substring(cursor));
       break;
     }
+
     output.write(html.substring(cursor, tagStart));
 
     if (html.startsWith('<!--', tagStart)) {
@@ -36,6 +35,7 @@ String sanitizeBookHtml(
         output.write(html.substring(tagStart));
         break;
       }
+
       output.write(html.substring(tagStart, commentEnd + 3));
       cursor = commentEnd + 3;
       continue;
@@ -49,6 +49,7 @@ String sanitizeBookHtml(
         // a browser, so dropping the tail is the safe interpretation.
         break;
       }
+
       output.write(_sanitizeHtmlTag(tail));
       break;
     }
@@ -60,16 +61,14 @@ String sanitizeBookHtml(
       // elements. An opening tag without a closing tag consumes the
       // remaining source, just like the HTML parser does.
       cursor = tagEnd + 1;
-      if (_isClosingHtmlTag(tag)) {
-        continue;
-      }
+      if (_isClosingHtmlTag(tag)) continue;
+
       final closing = RegExp(
         r'</\s*script\b[^>]*>',
         caseSensitive: false,
       ).firstMatch(html.substring(cursor));
-      if (closing == null) {
-        break;
-      }
+      if (closing == null) break;
+
       cursor += closing.end;
       continue;
     }
@@ -77,6 +76,7 @@ String sanitizeBookHtml(
     output.write(_isClosingHtmlTag(tag) ? tag : _sanitizeHtmlTag(tag));
     cursor = tagEnd + 1;
   }
+
   return output.toString();
 }
 
@@ -90,17 +90,20 @@ int _findHtmlTagEnd(final String html, final int tagStart) {
       }
       continue;
     }
+
     if (character == '"' || character == "'") {
       quote = character;
     } else if (character == '>') {
       return index;
     }
   }
+
   return -1;
 }
 
 String? _htmlTagName(final String tag) {
   final match = RegExp(r'^<\s*/?\s*([A-Za-z][A-Za-z0-9:-]*)').firstMatch(tag);
+
   return match?.group(1)?.toLowerCase();
 }
 
@@ -108,9 +111,7 @@ bool _isClosingHtmlTag(final String tag) => RegExp(r'^<\s*/').hasMatch(tag);
 
 String _sanitizeHtmlTag(final String tag) {
   final nameMatch = RegExp(r'^<\s*/?\s*([A-Za-z][A-Za-z0-9:-]*)').firstMatch(tag);
-  if (nameMatch == null || _isClosingHtmlTag(tag)) {
-    return tag;
-  }
+  if (nameMatch == null || _isClosingHtmlTag(tag)) return tag;
 
   final output = StringBuffer(tag.substring(0, nameMatch.end));
   var cursor = nameMatch.end;
@@ -119,9 +120,8 @@ String _sanitizeHtmlTag(final String tag) {
     while (cursor < tag.length && _isHtmlWhitespace(tag.codeUnitAt(cursor))) {
       cursor++;
     }
-    if (cursor >= tag.length) {
-      break;
-    }
+
+    if (cursor >= tag.length) break;
     if (tag[cursor] == '>' || tag[cursor] == '/') {
       output.write(tag.substring(attributeStart));
       break;
@@ -135,9 +135,11 @@ String _sanitizeHtmlTag(final String tag) {
         tag[cursor] != '/') {
       cursor++;
     }
+
     if (cursor == nameStart) {
       output.write(tag[cursor]);
       cursor++;
+
       continue;
     }
 
@@ -169,11 +171,10 @@ String _sanitizeHtmlTag(final String tag) {
     }
 
     final attribute = tag.substring(attributeStart, attributeEnd);
-    if (!_isUnsafeBookAttribute(attributeName, value)) {
-      output.write(attribute);
-    }
+    if (!_isUnsafeBookAttribute(attributeName, value)) output.write(attribute);
     cursor = attributeEnd;
   }
+
   return output.toString();
 }
 
@@ -181,6 +182,7 @@ int _skipHtmlWhitespace(final String value, int cursor) {
   while (cursor < value.length && _isHtmlWhitespace(value.codeUnitAt(cursor))) {
     cursor++;
   }
+
   return cursor;
 }
 
@@ -208,28 +210,26 @@ const Set<String> _javascriptUrlAttributes = <String>{
 };
 
 bool _isUnsafeBookAttribute(final String name, final String? value) {
-  if (name.startsWith('on') || name == 'srcdoc') {
-    return true;
-  }
-  if (value == null) {
-    return false;
-  }
+  if (name.startsWith('on') || name == 'srcdoc') return true;
+  if (value == null) return false;
   if (_javascriptUrlAttributes.contains(name)) {
-    if (name == 'srcset') {
-      return value.split(',').any(_isJavascriptUrl);
-    }
+    if (name == 'srcset') return value.split(',').any(_isJavascriptUrl);
+
     return _isJavascriptUrl(value);
   }
   if (name == 'style') {
     final normalized = _normalizePotentialUrl(value);
+
     return normalized.contains('javascript:') ||
         RegExp(r'expression\s*\(', caseSensitive: false).hasMatch(value);
   }
+
   return false;
 }
 
-bool _isJavascriptUrl(final String value) =>
-    _normalizePotentialUrl(value).startsWith('javascript:');
+bool _isJavascriptUrl(final String value) {
+  return _normalizePotentialUrl(value).startsWith('javascript:');
+}
 
 String _normalizePotentialUrl(final String value) {
   final decoded = value.replaceAllMapped(
@@ -237,6 +237,7 @@ String _normalizePotentialUrl(final String value) {
     (final match) {
       final hex = match.group(1);
       final decimal = match.group(2);
+
       if (hex != null) {
         final codeUnit = int.tryParse(hex, radix: 16);
         if (codeUnit != null && codeUnit <= 0x10ffff) {
@@ -250,16 +251,17 @@ String _normalizePotentialUrl(final String value) {
       } else {
         return ':';
       }
+
       return match.group(0)!;
     },
   );
   final output = StringBuffer();
   for (final codeUnit in decoded.codeUnits) {
-    if (codeUnit <= 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) {
-      continue;
-    }
+    if (codeUnit <= 0x20 || (codeUnit >= 0x7f && codeUnit <= 0x9f)) continue;
+
     output.writeCharCode(codeUnit);
   }
+
   return output.toString().toLowerCase();
 }
 
@@ -297,10 +299,12 @@ String rewriteHtmlResources(
     RegExp(r'(<style\b[^>]*>)([\s\S]*?)(</style\s*>)', caseSensitive: false),
     (final match) {
       final inner = rewriteCssResources(match.group(2)!, cssPath: pagePath, resolve: resolve);
+
       return '${match.group(1)}$inner${match.group(3)}';
     },
   );
   result = _rewriteStyleAttributes(result, pagePath: pagePath, resolve: resolve);
+
   return result;
 }
 
@@ -312,16 +316,17 @@ String _rewriteStyleAttributes(
   required final String? Function(String bookPath) resolve,
 }) {
   const single = "\u0027";
+
   return html.replaceAllMapped(
     RegExp('\\bstyle\\s*=\\s*("([^"]*)"|[$single]([^$single]*)[$single])', caseSensitive: false),
     (final match) {
       final doubleQuoted = match.group(2) != null;
       final value = match.group(2) ?? match.group(3)!;
       final rewritten = rewriteCssResources(value, cssPath: pagePath, resolve: resolve);
-      if (rewritten == value) {
-        return match.group(0)!;
-      }
+      if (rewritten == value) return match.group(0)!;
+
       final q = doubleQuoted ? '"' : single;
+
       return 'style=$q${_escapeAttr(rewritten)}$q';
     },
   );
@@ -343,12 +348,11 @@ String rewriteCssResources(
       ref = ref.substring(1, ref.length - 1);
     }
     final rewritten = _rewriteRef(ref, fromPath: cssPath, resolve: resolve);
-    if (rewritten == null) {
-      return match.group(0)!;
-    }
+    if (rewritten == null) return match.group(0)!;
     // Bare form is only valid CSS without spaces or parens; a
     // rewritten URL always goes out quoted to be safe.
     final q = quote ?? '"';
+
     return 'url($q$rewritten$q)';
   });
   // Quote characters built without escapes so the pattern stays
@@ -359,8 +363,10 @@ String rewriteCssResources(
   ) {
     final quote = match.group(1)!;
     final rewritten = _rewriteRef(match.group(2)!, fromPath: cssPath, resolve: resolve);
+
     return rewritten == null ? match.group(0)! : '@import $quote$rewritten$quote';
   });
+
   return result;
 }
 
@@ -375,25 +381,25 @@ String _rewriteTagAttributes(
     '\\b(${attributes.join('|')})\\s*=\\s*("([^"]*)"|\'([^\']*)\')',
     caseSensitive: false,
   );
-  String rewriteAttrs(final String input) => input.replaceAllMapped(attrPattern, (final match) {
-    final attr = match.group(1)!.toLowerCase();
-    final ref = match.group(3) ?? match.group(4)!;
-    if (attr == 'srcset') {
-      final rewritten = _rewriteSrcset(ref, fromPath: pagePath, resolve: resolve);
-      if (rewritten == null) {
-        return match.group(0)!;
+  String rewriteAttrs(final String input) {
+    return input.replaceAllMapped(attrPattern, (final match) {
+      final attr = match.group(1)!.toLowerCase();
+      final ref = match.group(3) ?? match.group(4)!;
+      if (attr == 'srcset') {
+        final rewritten = _rewriteSrcset(ref, fromPath: pagePath, resolve: resolve);
+        if (rewritten == null) return match.group(0)!;
+
+        return '${match.group(1)}="${_escapeAttr(rewritten)}"';
       }
+      final rewritten = _rewriteRef(ref, fromPath: pagePath, resolve: resolve);
+      if (rewritten == null || rewritten == ref) return match.group(0)!;
+
       return '${match.group(1)}="${_escapeAttr(rewritten)}"';
-    }
-    final rewritten = _rewriteRef(ref, fromPath: pagePath, resolve: resolve);
-    if (rewritten == null || rewritten == ref) {
-      return match.group(0)!;
-    }
-    return '${match.group(1)}="${_escapeAttr(rewritten)}"';
-  });
-  if (tagPattern == null) {
-    return rewriteAttrs(html);
+    });
   }
+
+  if (tagPattern == null) return rewriteAttrs(html);
+
   return html.replaceAllMapped(tagPattern, (final match) => rewriteAttrs(match.group(0)!));
 }
 
@@ -405,23 +411,20 @@ String? _rewriteRef(
   required final String? Function(String bookPath) resolve,
 }) {
   final ref = rawRef.trim();
-  if (ref.isEmpty || ref.startsWith('#')) {
-    return null;
-  }
+  if (ref.isEmpty || ref.startsWith('#')) return null;
+
   final lower = ref.toLowerCase();
   for (final prefix in const ['http://', 'https://', 'data:', 'blob:', 'mailto:', 'javascript:']) {
-    if (lower.startsWith(prefix)) {
-      return null;
-    }
+    if (lower.startsWith(prefix)) return null;
   }
+
   var path = ref;
   final hash = path.indexOf('#');
   if (hash >= 0) {
     path = path.substring(0, hash);
   }
-  if (path.isEmpty) {
-    return null;
-  }
+  if (path.isEmpty) return null;
+
   return resolve(resolveBookPath(path, fromPath: fromPath));
 }
 
@@ -437,19 +440,19 @@ String? _rewriteSrcset(
       .split(',')
       .map((final candidate) {
         final trimmed = candidate.trim();
-        if (trimmed.isEmpty) {
-          return candidate;
-        }
+        if (trimmed.isEmpty) return candidate;
+
         final parts = trimmed.split(RegExp(r'\s+'));
         final rewritten = _rewriteRef(parts.first, fromPath: fromPath, resolve: resolve);
-        if (rewritten == null) {
-          return candidate;
-        }
+        if (rewritten == null) return candidate;
+
         changed = true;
         parts[0] = rewritten;
+
         return parts.join(' ');
       })
       .join(', ');
+
   return changed ? out : null;
 }
 
@@ -467,6 +470,7 @@ String injectViewerAssets(
       'initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
       '<link rel="stylesheet" href="$cssUrl"/>'
       '<script defer src="$jsUrl"></script>';
+
   return injectIntoHead(html, injection);
 }
 
@@ -500,6 +504,7 @@ String injectMathJax(final String html, {required final String scriptBase}) {
       'document.head.appendChild(s);}'
       '},2500);'
       '</script>';
+
   return injectIntoHead(html, injection);
 }
 
@@ -508,14 +513,18 @@ String injectIntoHead(final String html, final String injection) {
   final headOpen = RegExp(r'<head[^>]*>', caseSensitive: false).firstMatch(html);
   if (headOpen != null) {
     final at = headOpen.end;
+
     return html.substring(0, at) + injection + html.substring(at);
   }
+
   final htmlOpen = RegExp(r'<html[^>]*>', caseSensitive: false).firstMatch(html);
   if (htmlOpen != null) {
     final at = htmlOpen.end;
+
     return '${html.substring(0, at)}<head>$injection</head>'
         '${html.substring(at)}';
   }
+
   return '<!DOCTYPE html><html><head>$injection</head>'
       '<body>$html</body></html>';
 }

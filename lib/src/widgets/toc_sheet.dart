@@ -52,6 +52,7 @@ class TocSheet extends StatelessWidget {
         child: Center(child: Text('This book has no table of contents.')),
       );
     }
+
     return Column(
       children: [
         Padding(
@@ -95,6 +96,7 @@ class TocSheet extends StatelessWidget {
       entries.add(_TocEntry(point, depth));
       entries.addAll(_flatten(point.subNavPoints, depth: depth + 1));
     }
+
     return entries;
   }
 }

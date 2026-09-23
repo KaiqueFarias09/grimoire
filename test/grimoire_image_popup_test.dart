@@ -26,10 +26,10 @@ void main() {
   }
 
   void postViewImage(final ViewerController controller) {
-    controller.bridge.accept(
-      const {'type': 'viewImage', 'src': 'http://localhost:9/book/images/cover.png'},
-      source: 0,
-    );
+    controller.bridge.accept(const {
+      'type': 'viewImage',
+      'src': 'http://localhost:9/book/images/cover.png',
+    }, source: 0);
   }
 
   /// Runs the fake clock past the reader's deferred timers (the 500 ms
@@ -40,19 +40,13 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('a viewImage event opens the built-in fullscreen image popup', (
-    final tester,
-  ) async {
+  testWidgets('a viewImage event opens the built-in fullscreen image popup', (final tester) async {
     final controller = newController();
     addTearDown(controller.dispose);
     await started(tester, controller);
     await tester.pumpWidget(
       MaterialApp(
-        home: GrimoireView(
-          book: controller.book,
-          controller: controller,
-          showShell: false,
-        ),
+        home: GrimoireView(book: controller.book, controller: controller, showShell: false),
       ),
     );
     await tester.pump();
@@ -62,10 +56,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     final popupImage = tester.widget<Image>(find.byType(Image));
-    expect(
-      popupImage.image,
-      const NetworkImage('http://localhost:9/book/images/cover.png'),
-    );
+    expect(popupImage.image, const NetworkImage('http://localhost:9/book/images/cover.png'));
     expect(find.byType(InteractiveViewer), findsOneWidget);
 
     await drainTimers(tester);

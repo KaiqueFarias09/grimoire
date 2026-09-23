@@ -81,6 +81,7 @@ Future<void> _searchGroup() async {
   await group.addAsync('search contains "the" (500 cap, 1 file)', () async {
     final results = await bigController.search('the');
     await bigController.clearSearch();
+
     return results.length;
   }, note: '${big.label} · viewer wrapper cost');
 
@@ -89,12 +90,14 @@ Future<void> _searchGroup() async {
   await group.addAsync('search contains "the" (500 cap, 150 files)', () async {
     final results = await manyController.search('the');
     await manyController.clearSearch();
+
     return results.length;
   }, note: many.label);
 
   await group.addAsync('search whole-words "keeper" (150 files)', () async {
     final results = await manyController.search('keeper', mode: SearchMode.wholeWords);
     await manyController.clearSearch();
+
     return results.length;
   }, note: many.label);
 }
@@ -121,6 +124,7 @@ Future<void> _pagesAndCfiGroup() async {
       // Primes the measured-columns list; the layout refresh runs in
       // the synchronous prefix of setFontSize.
       unawaited(controller.setFontSize(18));
+
       return controller;
     },
     (final controller) => controller.bookPageState,
@@ -142,6 +146,7 @@ Future<void> _pagesAndCfiGroup() async {
     () async {
       final controller = freshControllers[coldIndex++];
       final resolved = await controller.goToCfi(lastCfi);
+
       return resolved;
     },
     iterations: coldRuns,
@@ -164,8 +169,9 @@ Future<void> _pagesAndCfiGroup() async {
 /// Spy helpers: the fake engine records every evaluated script, so a
 /// benchmark can prove its declared bridge path actually ran. The
 /// counters are read outside the timed closures.
-int _scriptsContaining(final FakeViewerEngine engine, final String action) =>
-    engine.scripts.where((final script) => script.contains('"$action"')).length;
+int _scriptsContaining(final FakeViewerEngine engine, final String action) {
+  return engine.scripts.where((final script) => script.contains('"$action"')).length;
+}
 
 Future<void> _navigationGroup() async {
   final group = BenchmarkGroup('Controller — page navigation');
@@ -182,6 +188,7 @@ Future<void> _navigationGroup() async {
   var useLargeFont = false;
   await group.addAsync('font-size update (bridge to engine)', () {
     useLargeFont = !useLargeFont;
+
     return boot.setFontSize(useLargeFont ? 19 : 18);
   }, note: '${many.label} · bridge encode + fake engine eval');
   // Spy: the timed call must have produced engine evaluations.
@@ -189,6 +196,7 @@ Future<void> _navigationGroup() async {
       _scriptsContaining(bootEngine, 'setFontSize') == setFontSizeBefore) {
     throw StateError('font-size benchmark did not reach the engine (no setFontSize script)');
   }
+
   boot.dispose();
 
   // Steady-state page turns: the Dart-side cost of every next/previous
@@ -213,5 +221,6 @@ Future<void> _navigationGroup() async {
       _scriptsContaining(pagerEngine, 'previousColumn') == previousColumnsBefore) {
     throw StateError('previousPage benchmark did not reach the engine');
   }
+
   pager.dispose();
 }

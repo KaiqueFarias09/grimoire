@@ -2,8 +2,6 @@
 /// shelves, mirroring the prototype's `renderReading`.
 library;
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
@@ -12,6 +10,11 @@ import '../ub_icon.dart';
 import '../ub_theme.dart';
 import '../ub_widgets.dart';
 import 'page_scaffold.dart';
+import 'reading_page/ub_book_card.dart';
+
+export 'reading_page/ub_book_card.dart' show UbBookCard, ubBookCardHeightFor;
+
+part 'reading_page/book_shelf.dart';
 
 class ReadingPage extends StatelessWidget {
   const ReadingPage({required this.host, super.key});
@@ -200,127 +203,3 @@ class _ContinueCard extends StatelessWidget {
     );
   }
 }
-
-/// Horizontally scrollable shelf of fixed-width book cards.
-class _BookShelf extends StatelessWidget {
-  const _BookShelf({required this.host, required this.ids});
-
-  final UbHost host;
-  final List<String> ids;
-
-  List<LoadedBook> get books => <LoadedBook>[
-    for (final id in ids)
-      if (host.state.bookById(id) != null) host.state.bookById(id)!,
-  ];
-
-  @override
-  Widget build(final BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 720;
-    final cardWidth = isMobile ? 116.0 : 148.0;
-    final gap = isMobile ? 17.0 : 24.0;
-    final coverMinHeight = 220.0;
-
-    return SizedBox(
-      height: _cardHeight(coverMinHeight) + 22,
-      child: ListView.separated(
-        clipBehavior: Clip.none,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(2, 4, 2, 12),
-        itemCount: books.length,
-        separatorBuilder: (final _, final _) => SizedBox(width: gap),
-        itemBuilder: (final context, final index) => SizedBox(
-          width: cardWidth,
-          child: UbBookCard(host: host, book: books[index], coverMinHeight: coverMinHeight),
-        ),
-      ),
-    );
-  }
-}
-
-/// Card height for a [coverMinHeight] cover: cover + 11 + title 16 +
-/// 3 + author 15 + 9 + status 13. Cover-less books sit shorter, so the
-/// shelf sizes itself to the covered height.
-double _cardHeight(final double coverMinHeight) => coverMinHeight + 67;
-
-/// Shared book card used by the home shelves.
-class UbBookCard extends StatelessWidget {
-  const UbBookCard({
-    required this.host,
-    required this.book,
-    required this.coverMinHeight,
-    super.key,
-  });
-
-  final UbHost host;
-  final LoadedBook book;
-  final double coverMinHeight;
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final String statusLabel;
-    if (host.state.percentFor(book) >= 100) {
-      statusLabel = 'Concluído';
-    } else if (host.state.percentFor(book) == 0) {
-      statusLabel = 'Novo';
-    } else {
-      statusLabel = '${host.state.percentFor(book)}% lido';
-    }
-
-    return UbHover(
-      builder: (final context, final hovered) {
-        return GestureDetector(
-          onTap: () => host.dispatch('open-detail', data: book.fixture.id),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                transform: Matrix4.translationValues(0, hovered ? -2 : 0, 0),
-                margin: const EdgeInsets.only(bottom: 11),
-                child: UbCover(entry: book, minHeight: coverMinHeight),
-              ),
-              Text(
-                book.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.13,
-                  height: 1.25,
-                  leadingDistribution: TextLeadingDistribution.proportional,
-                  color: palette.ink,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                book.author,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: palette.muted),
-              ),
-              const SizedBox(height: 9),
-              Row(
-                children: <Widget>[
-                  Text(statusLabel, style: TextStyle(fontSize: 11, color: palette.muted)),
-                  if (host.state.percentFor(book) > 0 &&
-                      host.state.percentFor(book) < 100) ...<Widget>[
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: UbProgressBar(fraction: host.state.percentFor(book) / 100, height: 3),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// Shelf card height helper for callers that need the extent up front.
-double ubBookCardHeightFor(final double cellWidth, final double coverMinHeight) =>
-    math.max(cellWidth / 0.68, coverMinHeight) + 67;

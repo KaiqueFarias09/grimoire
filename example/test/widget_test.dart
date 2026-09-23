@@ -79,7 +79,9 @@ void main() {
 
   test('the bundled PDF fixture is password-protected', () async {
     final data = await rootBundle.load('assets/books/dickens-sample.pdf');
-    final bytes = Uint8List.fromList(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+    final bytes = Uint8List.fromList(
+      data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+    );
     final unlocked = await Unseal.read(bytes, password: 'grimoire');
     expect(unlocked, isA<PdfBook>());
     await expectLater(Unseal.read(bytes), throwsA(anything));

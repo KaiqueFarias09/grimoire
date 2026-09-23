@@ -86,9 +86,7 @@ String renderMarkdown(final ViewerExportModel model, final ViewerMarkdownExportO
     for (final bookmark in model.bookmarks) {
       final line =
           options.bookmark?.call(bookmark, _bookmarkChapter(model)) ?? '- ${bookmark.text}';
-      if (line.isNotEmpty) {
-        buffer.writeln(line);
-      }
+      if (line.isNotEmpty) buffer.writeln(line);
     }
     buffer.writeln();
   }
@@ -98,6 +96,7 @@ String renderMarkdown(final ViewerExportModel model, final ViewerMarkdownExportO
 
 String _defaultChapterHeading(final ViewerExportChapter chapter, final int headingLevel) {
   final title = chapter.title ?? 'Section ${chapter.fileIndex + 1}';
+
   return '${'#' * headingLevel} $title';
 }
 
@@ -116,8 +115,10 @@ void _writeHighlightMarkdown(
         ..writeln();
     }
     _writeNoteAndLocation(buffer, item, chapter, options, locationLinks);
+
     return;
   }
+
   for (final line in item.text.split('\n')) {
     buffer.writeln('> ${line.trimRight()}');
   }
@@ -168,6 +169,7 @@ String? _defaultLocationLink(
     final locator = item.locator!;
     links.add('Section ${locator.sectionIndex + 1}, characters ${locator.start}-${locator.end}');
   }
+
   return links.isEmpty ? null : links.join(' · ');
 }
 

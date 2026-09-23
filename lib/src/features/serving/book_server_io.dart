@@ -30,6 +30,7 @@ class BookServer {
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
+
     return data.buffer.asUint8List();
   }
 
@@ -68,9 +69,8 @@ class BookServer {
   /// Base URL of the server (e.g. `http://localhost:41234`).
   Uri get baseUrl {
     final server = _httpServer;
-    if (server == null) {
-      throw StateError('BookServer.start() must be called first.');
-    }
+    if (server == null) throw StateError('BookServer.start() must be called first.');
+
     return Uri.parse('http://localhost:${server.port}');
   }
 
@@ -85,9 +85,8 @@ class BookServer {
 
   /// Starts the server for [book] on an ephemeral loopback port.
   Future<void> start(final Book book) async {
-    if (_httpServer != null) {
-      throw StateError('BookServer already started.');
-    }
+    if (_httpServer != null) throw StateError('BookServer already started.');
+
     _order = book.readingOrder;
     _pdfBook = book is PdfBook ? book : null;
     _files
@@ -115,16 +114,14 @@ class BookServer {
 
   /// URL of the reading-order item at [index].
   Uri urlForItem(final int index) {
-    if (index < 0 || index >= _order.length) {
-      throw RangeError.index(index, _order);
-    }
+    if (index < 0 || index >= _order.length) throw RangeError.index(index, _order);
+
     final item = _order[index];
     if (_pdfBook != null && pdfReadingMode == PdfReadingMode.facsimile) {
       return baseUrl.replace(path: '/__pdfpage__/$index');
     }
-    if (item.isHtml) {
-      return baseUrl.replace(path: '/book/${_encodePath(item.name)}');
-    }
+    if (item.isHtml) return baseUrl.replace(path: '/book/${_encodePath(item.name)}');
+
     return baseUrl.replace(path: '/__page__/$index');
   }
 
@@ -142,12 +139,11 @@ class BookServer {
   Future<shelf.Response> _handle(final shelf.Request request) async {
     final path = request.url.path;
     try {
-      if (path.isEmpty) {
-        return shelf.Response.found(urlForItem(0).toString());
-      }
+      if (path.isEmpty) return shelf.Response.found(urlForItem(0).toString());
       if (path == '__viewer__/viewer.js' || path == '__viewer__/viewer.css') {
         final name = path.split('/').last;
         final bytes = _assets[name] ??= await _assetLoader(name);
+
         return shelf.Response.ok(bytes, headers: {'Content-Type': mimeOf(name)});
       }
       if (path.startsWith('__page__/')) {
@@ -159,15 +155,12 @@ class BookServer {
       if (path.startsWith('__pdfpage__/')) {
         return _syntheticPdfPage(int.tryParse(path.substring('__pdfpage__/'.length)));
       }
-      if (path == '__pdfdoc__') {
-        return _servePdfDocument(request);
-      }
-      if (path.startsWith('__pdfjs__/')) {
-        return _servePdfJs(path.substring('__pdfjs__/'.length));
-      }
+      if (path == '__pdfdoc__') return _servePdfDocument(request);
+      if (path.startsWith('__pdfjs__/')) return _servePdfJs(path.substring('__pdfjs__/'.length));
       if (path.startsWith('book/')) {
         return _serveBookFile(request, Uri.decodeComponent(path.substring('book/'.length)));
       }
+
       return shelf.Response.notFound('Unknown route: /$path');
     } catch (error) {
       return shelf.Response.internalServerError(body: '$error');
@@ -178,12 +171,14 @@ class BookServer {
     if (index == null || index < 0 || index >= _order.length) {
       return shelf.Response.notFound('No such page');
     }
+
     final item = _order[index];
     final html = syntheticComicPageHtml(
       imageUrl: urlForPath(item.name).toString(),
       cssUrl: '/__viewer__/viewer.css',
       jsUrl: '/__viewer__/viewer.js',
     );
+
     return shelf.Response.ok(html, headers: _htmlHeaders);
   }
 
@@ -192,6 +187,7 @@ class BookServer {
     if (pdf == null || index == null || index < 0 || index >= _order.length) {
       return shelf.Response.notFound('No such PDF page');
     }
+
     final pageText = index < pdf.pageTexts.length
         ? pdf.pageTexts[index]
         : const PdfPageText(lines: <PdfTextLine>[]);
@@ -209,9 +205,7 @@ class BookServer {
 
   shelf.Response _servePdfDocument(final shelf.Request request) {
     final pdf = _pdfBook;
-    if (pdf == null) {
-      return shelf.Response.notFound('Not a PDF book');
-    }
+    if (pdf == null) return shelf.Response.notFound('Not a PDF book');
     // pdf.js reads the document in range chunks; reuse the binary
     // range machinery the audio/image assets already have.
     return _serveBinary(request, 'document.pdf', pdf.bytes);
@@ -225,10 +219,9 @@ class BookServer {
     if (cachePath == null || cachePath.isEmpty || !_pdfJsWhitelist.contains(relative)) {
       return shelf.Response.notFound('No pdf.js file: $relative');
     }
+
     final file = File('$cachePath/$relative');
-    if (!file.existsSync()) {
-      return shelf.Response.notFound('No pdf.js file: $relative');
-    }
+    if (!file.existsSync()) return shelf.Response.notFound('No pdf.js file: $relative');
 
     return shelf.Response.ok(
       file.readAsBytesSync(),
@@ -238,14 +231,14 @@ class BookServer {
 
   shelf.Response _serveBookFile(final shelf.Request request, final String rawPath) {
     final entry = _lookup(rawPath);
-    if (entry == null) {
-      return shelf.Response.notFound('No book file: $rawPath');
-    }
+    if (entry == null) return shelf.Response.notFound('No book file: $rawPath');
+
     final content = entry.value;
     if (content is String) {
       if (isHtmlName(rawPath)) {
         return shelf.Response.ok(_rewrittenPage(entry.key, content), headers: _htmlHeaders);
       }
+
       return shelf.Response.ok(
         content,
         headers: {'Content-Type': '${mimeOf(rawPath)}; charset=utf-8'},
@@ -271,6 +264,7 @@ class BookServer {
         if (containsMath(content)) {
           html = injectMathJax(html, scriptBase: '/__mathjax__');
         }
+
         return html;
       });
 
@@ -288,6 +282,7 @@ class BookServer {
         headers: {'Content-Type': contentType, 'Accept-Ranges': 'bytes'},
       );
     }
+
     final rangeHeader = request.headers[HttpHeaders.rangeHeader];
     if (rangeHeader == null) {
       return shelf.Response.ok(
@@ -295,6 +290,7 @@ class BookServer {
         headers: {'Content-Type': contentType, 'Accept-Ranges': 'bytes'},
       );
     }
+
     final range = _parseByteRange(rangeHeader, content.length);
     if (range == null) {
       return shelf.Response(
@@ -302,6 +298,7 @@ class BookServer {
         headers: {'Content-Range': 'bytes */${content.length}', 'Accept-Ranges': 'bytes'},
       );
     }
+
     return shelf.Response(
       HttpStatus.partialContent,
       body: content.sublist(range.start, range.end + 1),
@@ -318,28 +315,27 @@ class BookServer {
   /// bounds.
   static ({int start, int end})? _parseByteRange(final String header, final int total) {
     final match = _rangePattern.firstMatch(header.trim());
-    if (match == null || total == 0) {
-      return null;
-    }
+    if (match == null || total == 0) return null;
+
     final startText = match.group(1);
     final endText = match.group(2);
+
     if (startText == null || startText.isEmpty) {
       // Suffix form (bytes=-N): last N bytes.
       final suffix = int.tryParse(endText ?? '') ?? 0;
-      if (suffix <= 0) {
-        return null;
-      }
+      if (suffix <= 0) return null;
+
       final length = suffix.clamp(1, total);
+
       return (start: total - length, end: total - 1);
     }
+
     final start = int.tryParse(startText);
-    if (start == null || start >= total) {
-      return null;
-    }
+    if (start == null || start >= total) return null;
+
     final parsedEnd = endText == null || endText.isEmpty ? total - 1 : int.tryParse(endText);
-    if (parsedEnd == null || parsedEnd < start) {
-      return null;
-    }
+    if (parsedEnd == null || parsedEnd < start) return null;
+
     return (start: start, end: parsedEnd.clamp(start, total - 1));
   }
 
@@ -361,10 +357,9 @@ class BookServer {
     if (cached != null) {
       return shelf.Response.ok(cached, headers: {'Content-Type': 'application/javascript'});
     }
+
     final file = File('$cachePath/$relative');
-    if (!file.existsSync()) {
-      return shelf.Response.notFound('No MathJax file: $relative');
-    }
+    if (!file.existsSync()) return shelf.Response.notFound('No MathJax file: $relative');
     // A failed read throws into the request handler (500) and stays
     // uncached, so the next request retries from disk.
     return shelf.Response.ok(
@@ -377,11 +372,13 @@ class BookServer {
   /// [html] at their loopback URLs.
   ///
   /// Visible for testing.
-  String injectViewer(final String html) => injectViewerAssets(
-    sanitizeBookHtml(html, policy: bookJavaScriptPolicy),
-    cssUrl: '/__viewer__/viewer.css',
-    jsUrl: '/__viewer__/viewer.js',
-  );
+  String injectViewer(final String html) {
+    return injectViewerAssets(
+      sanitizeBookHtml(html, policy: bookJavaScriptPolicy),
+      cssUrl: '/__viewer__/viewer.css',
+      jsUrl: '/__viewer__/viewer.js',
+    );
+  }
 
   static const Map<String, String> _htmlHeaders = <String, String>{
     'Content-Type': 'text/html; charset=utf-8',

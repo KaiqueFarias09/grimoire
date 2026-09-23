@@ -35,33 +35,32 @@ class AnnotationQuery {
   List<HighlightRecord> apply(final Iterable<HighlightRecord> source) {
     final normalizedText = text?.trim().toLowerCase();
     final result = source.where((final highlight) {
-      if (colors != null && !colors!.contains(highlight.color)) {
-        return false;
-      }
-      if (decorations != null && !decorations!.contains(highlight.decoration)) {
-        return false;
-      }
+      if (colors != null && !colors!.contains(highlight.color)) return false;
+      if (decorations != null && !decorations!.contains(highlight.decoration)) return false;
+
       if (normalizedText != null && normalizedText.isNotEmpty) {
         final haystack = '${highlight.text}\n${highlight.note ?? ''}'.toLowerCase();
-        if (!haystack.contains(normalizedText)) {
-          return false;
-        }
+        if (!haystack.contains(normalizedText)) return false;
       }
+
       return true;
     }).toList();
     switch (sort) {
       case AnnotationSort.documentOrder:
         result.sort((final a, final b) {
           final byFile = a.sectionIndex.compareTo(b.sectionIndex);
+
           return byFile != 0 ? byFile : a.start.compareTo(b.start);
         });
       case AnnotationSort.recentlyCreated:
         result.sort((final a, final b) {
           final aAt = a.createdAt;
           final bAt = b.createdAt;
+
           return bAt.compareTo(aAt);
         });
     }
+
     return result;
   }
 
@@ -75,6 +74,7 @@ class AnnotationQuery {
       final title = sectionTitle(highlight.sectionIndex);
       (groups[title] ??= <HighlightRecord>[]).add(highlight);
     }
+
     return groups;
   }
 }

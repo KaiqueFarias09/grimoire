@@ -241,19 +241,17 @@ class ViewerBridge {
     } else if (payload is Map) {
       decoded = payload.cast<String, dynamic>();
     }
-    if (decoded == null) {
-      return;
-    }
+    if (decoded == null) return;
+
     final event = _decode(decoded, source);
-    if (event != null) {
-      _events.add(event);
-    }
+    if (event != null) _events.add(event);
   }
 
   /// Builds the JavaScript expression delivering [message] to the
   /// page controller.
   static String javaScriptFor(final Map<String, Object?> message) {
     final payload = jsonEncode(message);
+
     return 'window.__grimoire && window.__grimoire($payload)';
   }
 
@@ -282,6 +280,7 @@ class ViewerBridge {
         );
       case 'fileBoundary':
         final direction = _asInt(map['direction']);
+
         return BoundaryEvent(
           direction: direction >= 0 ? 1 : -1,
           exitColumn: _asInt(map['exitColumn']),
@@ -299,6 +298,7 @@ class ViewerBridge {
             _asDouble(rawExtents['bottom']),
           );
         }
+
         return SelectionEvent(
           text: map['text'] is String ? map['text'] as String : '',
           start: _asInt(map['start']),
@@ -360,6 +360,7 @@ class ViewerBridge {
     if (value is int) return value;
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
+
     return 0;
   }
 
@@ -367,6 +368,7 @@ class ViewerBridge {
     if (value is double) return value;
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value) ?? 0;
+
     return 0;
   }
 }

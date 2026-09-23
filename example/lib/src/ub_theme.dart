@@ -101,14 +101,16 @@ class UbPalette {
   final Color barrier;
   final Color sheetBarrier;
 
-  List<BoxShadow> get cardShadow => <BoxShadow>[
-    const BoxShadow(
-      color: Color(0x0F000000),
-      blurRadius: 34,
-      spreadRadius: -12,
-      offset: Offset(0, 12),
-    ),
-  ];
+  List<BoxShadow> get cardShadow {
+    return <BoxShadow>[
+      const BoxShadow(
+        color: Color(0x0F000000),
+        blurRadius: 34,
+        spreadRadius: -12,
+        offset: Offset(0, 12),
+      ),
+    ];
+  }
 }
 
 /// Text styles ported from the prototype. Sizes are logical px, equal
@@ -145,6 +147,7 @@ class UbScope extends InheritedWidget {
 
   static UbPalette of(final BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<UbScope>();
+
     return scope!.palette;
   }
 

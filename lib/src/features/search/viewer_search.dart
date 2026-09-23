@@ -46,8 +46,12 @@ class ViewerWordMark {
   Map<String, Object?> toJson() => <String, Object?>{'start': start, 'end': end, 'state': state};
 
   @override
-  bool operator ==(final Object other) =>
-      other is ViewerWordMark && other.start == start && other.end == end && other.state == state;
+  bool operator ==(final Object other) {
+    return other is ViewerWordMark &&
+        other.start == start &&
+        other.end == end &&
+        other.state == state;
+  }
 
   @override
   int get hashCode => Object.hash(start, end, state);

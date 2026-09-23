@@ -73,9 +73,7 @@ String renderHtml(final ViewerExportModel model, final ViewerHtmlExportOptions o
             ? '<h2 class="elv-chapter-title">${_e(chapter.title!)}</h2>'
             : '<h2 class="elv-chapter-title">Section ${chapter.fileIndex + 1}</h2>');
     body.writeln('<section class="elv-chapter">');
-    if (heading.isNotEmpty) {
-      body.writeln(heading);
-    }
+    if (heading.isNotEmpty) body.writeln(heading);
     for (final item in chapter.items) {
       _writeHighlightHtml(body, item, chapter, options, model.options.locationLinks);
     }
@@ -90,19 +88,15 @@ String renderHtml(final ViewerExportModel model, final ViewerHtmlExportOptions o
       final line =
           options.bookmark?.call(bookmark, _bookmarkChapter(model)) ??
           '<li>${_e(bookmark.text)}</li>';
-      if (line.isNotEmpty) {
-        body.writeln(line);
-      }
+      if (line.isNotEmpty) body.writeln(line);
     }
     body.writeln('</ul>');
   }
 
   body.writeln('</article>');
   final article = body.toString();
+  if (!options.includeDocumentShell) return article;
 
-  if (!options.includeDocumentShell) {
-    return article;
-  }
   return '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
       '<meta charset="utf-8">\n'
       '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
@@ -120,11 +114,11 @@ void _writeHighlightHtml(
 ) {
   final custom = options.highlight?.call(item, chapter);
   if (custom != null) {
-    if (custom.isNotEmpty) {
-      buffer.writeln(custom);
-    }
+    if (custom.isNotEmpty) buffer.writeln(custom);
+
     return;
   }
+
   buffer
     ..writeln('<blockquote class="elv-highlight">')
     ..writeln('<p>${_e(item.text)}</p>');
@@ -133,15 +127,11 @@ void _writeHighlightHtml(
       (item.note == null || item.note!.isEmpty
           ? null
           : '<aside class="elv-note">${_e(item.note!)}</aside>');
-  if (note != null && note.isNotEmpty) {
-    buffer.writeln(note);
-  }
+  if (note != null && note.isNotEmpty) buffer.writeln(note);
   final location =
       options.locationLink?.call(item, chapter) ??
       _defaultLocationLink(item, chapter, locationLinks);
-  if (location != null && location.isNotEmpty) {
-    buffer.writeln(location);
-  }
+  if (location != null && location.isNotEmpty) buffer.writeln(location);
   buffer.writeln('</blockquote>');
 }
 

@@ -10,6 +10,7 @@ class _BottomBar extends StatelessWidget {
     final theme = Theme.of(context);
     final position = controller.position;
     final percent = (controller.progress * 100).round();
+
     return Material(
       color: theme.colorScheme.surface,
       child: SafeArea(

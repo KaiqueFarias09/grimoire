@@ -47,7 +47,8 @@ class ViewerPosition {
   }
 
   @override
-  String toString() =>
-      'ViewerPosition(file: $fileIndex, offset: $charOffset, '
-      'page: ${column + 1}/$columns)';
+  String toString() {
+    return 'ViewerPosition(file: $fileIndex, offset: $charOffset, '
+        'page: ${column + 1}/$columns)';
+  }
 }

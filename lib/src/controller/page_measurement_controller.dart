@@ -72,18 +72,21 @@ final class PageMeasurementController {
   /// Number of measured items and total reading-order items.
   (int, int) get progress {
     final measured = _measuredColumns.where((final count) => count != null).length;
+
     return (measured, _measuredColumns.length);
   }
 
   /// Whether [fileIndex] has a real measured column count.
-  bool isMeasured(final int fileIndex) =>
-      fileIndex >= 0 && fileIndex < _measuredColumns.length && _measuredColumns[fileIndex] != null;
+  bool isMeasured(final int fileIndex) {
+    return fileIndex >= 0 &&
+        fileIndex < _measuredColumns.length &&
+        _measuredColumns[fileIndex] != null;
+  }
 
   /// Resets or restores counts when the layout fingerprint changes.
   void refreshLayout({required final int signature, required final String bookFingerprint}) {
-    if (_disposed || signature == _layoutSignature) {
-      return;
-    }
+    if (_disposed || signature == _layoutSignature) return;
+
     _layoutSignature = signature;
     _pageCacheKey = '$bookFingerprint/$signature';
     final cached = _pageCacheByKey[_pageCacheKey];
@@ -94,9 +97,8 @@ final class PageMeasurementController {
     // The host can refresh during layout. Preserve the original
     // microtask boundary before notifications and queue work.
     scheduleMicrotask(() {
-      if (_disposed || !host.pageMeasurementIsActive) {
-        return;
-      }
+      if (_disposed || !host.pageMeasurementIsActive) return;
+
       host.pageMeasurementDidChange();
       schedule();
     });
@@ -110,6 +112,7 @@ final class PageMeasurementController {
         _measureCursor >= 0) {
       return;
     }
+
     unawaited(_loadCacheThenMeasure());
   }
 
@@ -145,18 +148,23 @@ final class PageMeasurementController {
         _measureCursor >= 0) {
       return;
     }
+
     var next = _nextUnmeasured();
     if (next == null) {
       _reportProgress();
       unawaited(_persistCache());
+
       return;
     }
+
     if (pageCountMode == BookPageCountMode.measureAhead) {
       final currentFileIndex = host.pageMeasurementCurrentFileIndex;
       if (next < currentFileIndex) {
         next = _nextUnmeasured(from: currentFileIndex);
+
         if (next == null) {
           _reportProgress();
+
           return;
         }
       }
@@ -171,19 +179,17 @@ final class PageMeasurementController {
 
   int? _nextUnmeasured({final int from = 0}) {
     for (var index = from; index < _measuredColumns.length; index++) {
-      if (_measuredColumns[index] == null) {
-        return index;
-      }
+      if (_measuredColumns[index] == null) return index;
     }
+
     return null;
   }
 
   Future<void> _persistCache() async {
     _pageCacheByKey[_pageCacheKey] = [..._measuredColumns];
     final saver = saveCache;
-    if (saver == null) {
-      return;
-    }
+    if (saver == null) return;
+
     try {
       await saver(_cacheKey, jsonEncode([for (final count in _measuredColumns) count]));
     } on Object {
@@ -196,15 +202,16 @@ final class PageMeasurementController {
     final fileIndex = _measureCursor;
     if (_disposed || fileIndex < 0 || fileIndex >= _measuredColumns.length) {
       _measureCursor = -1;
+
       return;
     }
+
     _measuredColumns[fileIndex] = math.max(1, columns);
     _measureCursor = -1;
     _reportProgress();
     await _persistCache();
-    if (_disposed || !host.pageMeasurementIsActive) {
-      return;
-    }
+    if (_disposed || !host.pageMeasurementIsActive) return;
+
     host.pageMeasurementDidChange();
     _measureTimer?.cancel();
     _measureTimer = Timer(batchDelay, _measureNext);

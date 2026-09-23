@@ -59,17 +59,19 @@ String? runError;
 bool parseJsonArgument(final String argument) {
   if (argument == '--json') {
     jsonMode = JsonMode.stdout;
+
     return true;
   }
   if (argument.startsWith('--json=')) {
     final path = argument.substring('--json='.length);
-    if (path.isEmpty) {
-      return false;
-    }
+    if (path.isEmpty) return false;
+
     jsonMode = JsonMode.file;
     jsonOutputPath = path;
+
     return true;
   }
+
   return false;
 }
 
@@ -130,6 +132,7 @@ void recordResult({
 /// Builds the run envelope; key order is stable.
 Map<String, Object?> _envelope() {
   final ok = !_anyScenarioFailed && runError == null;
+
   return <String, Object?>{
     'schemaVersion': 1,
     'suite': suiteName,
@@ -149,9 +152,8 @@ Map<String, Object?> _envelope() {
 /// Call exactly once, at the end of the run (including crash paths via
 /// `try`/`finally`), and only when [jsonMode] is enabled.
 void writeJsonReport() {
-  if (jsonMode == JsonMode.off) {
-    return;
-  }
+  if (jsonMode == JsonMode.off) return;
+
   final payload = const JsonEncoder.withIndent('  ').convert(_envelope());
   switch (jsonMode) {
     case JsonMode.off:
@@ -160,9 +162,8 @@ void writeJsonReport() {
       stdout.writeln(payload);
     case JsonMode.file:
       final path = jsonOutputPath;
-      if (path == null) {
-        return;
-      }
+      if (path == null) return;
+
       final file = File(path);
       file.parent.createSync(recursive: true);
       file.writeAsStringSync('$payload\n', flush: true);
@@ -196,13 +197,10 @@ bool quickModeEnabled = false;
 String? _readPubspecName() {
   try {
     final file = File('pubspec.yaml');
-    if (!file.existsSync()) {
-      return null;
-    }
+    if (!file.existsSync()) return null;
+
     for (final line in file.readAsLinesSync()) {
-      if (line.startsWith('name:')) {
-        return line.substring('name:'.length).trim();
-      }
+      if (line.startsWith('name:')) return line.substring('name:'.length).trim();
     }
   } on Object {
     // Fall through to `unknown`.
@@ -220,6 +218,7 @@ String _computePlatform() {
       : abi.contains('x64')
       ? 'x64'
       : abi.replaceAll('_', '-');
+
   return arch.isEmpty ? operatingSystem : '$operatingSystem-$arch';
 }
 
@@ -227,6 +226,7 @@ String _computeSdk() {
   final dart = 'Dart ${Platform.version.split(' ').first}';
   // `flutter test` drives the suite through the flutter_tester VM.
   final flutterTester = Platform.executable.contains('flutter_tester');
+
   return flutterTester ? '$dart (flutter test runner)' : dart;
 }
 
@@ -236,9 +236,7 @@ String _computeCommit() {
       'rev-parse',
       'HEAD',
     ], workingDirectory: Directory.current.path);
-    if (result.exitCode == 0) {
-      return (result.stdout as String).trim();
-    }
+    if (result.exitCode == 0) return (result.stdout as String).trim();
   } on Object {
     // Fall through to `unknown`.
   }

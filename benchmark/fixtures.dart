@@ -29,6 +29,7 @@ final class ViewerFixture {
     for (final file in book.files.html) {
       total += documentTextOf(file).length;
     }
+
     return total;
   }();
 
@@ -50,6 +51,7 @@ EpubBook _buildBook({required final String title, required final List<String> ch
       ),
     );
   }
+
   final metadata = Epub2Metadata(
     rights: const [],
     contributor: null,
@@ -63,6 +65,7 @@ EpubBook _buildBook({required final String title, required final List<String> ch
     identifiers: const ['bench-id'],
     uniqueIdentifierValue: 'bench-id',
   );
+
   return EpubBook(
     navigation: Navigation(
       title: 'Contents',
@@ -115,11 +118,12 @@ EpubBook _buildBook({required final String title, required final List<String> ch
 
 // One ~200-character paragraph of plain English prose; the word 'the'
 // recurs enough that a contains-search saturates the 500-match cap.
-String _paragraph(final int seed) =>
-    'Paragraph $seed tells of the quick brown fox and the lazy dog, the '
-    'old lighthouse and the sea beyond the bay. The keeper of the light '
-    'counted the waves while the fog rolled over the pier, and the town '
-    'slept under the bell of the chapel until the morning came. ';
+String _paragraph(final int seed) {
+  return 'Paragraph $seed tells of the quick brown fox and the lazy dog, the '
+      'old lighthouse and the sea beyond the bay. The keeper of the light '
+      'counted the waves while the fog rolled over the pier, and the town '
+      'slept under the bell of the chapel until the morning came. ';
+}
 
 String _chapterHtml(final int index, final int paragraphs, {final int footnotes = 0}) {
   final body = StringBuffer();
@@ -142,6 +146,7 @@ String _chapterHtml(final int index, final int paragraphs, {final int footnotes 
     }
     body.write('</section>');
   }
+
   return '<!DOCTYPE html><html><head><title>Chapter $index</title></head>'
       '<body>$body</body></html>';
 }
@@ -153,35 +158,40 @@ ViewerFixture? _mathChapter;
 
 /// One chapter of ~2 MB of text: the worst case for the position
 /// model, search extraction and page rewriting.
-ViewerFixture get bigSingleFile => _bigSingleFile ??= ViewerFixture._(
-  'big-single-file (${formatBytes(_bigChapter.length)})',
-  _buildBook(title: 'Big Single File', chapters: [_bigChapter]),
-);
+ViewerFixture get bigSingleFile {
+  return _bigSingleFile ??= ViewerFixture._(
+    'big-single-file (${formatBytes(_bigChapter.length)})',
+    _buildBook(title: 'Big Single File', chapters: [_bigChapter]),
+  );
+}
 
 final String _bigChapter = _chapterHtml(1, 10000);
 
 /// 150 chapters of ~13 KB each: exercises per-file caches, the
 /// reading-order walk and the serving lookup.
-ViewerFixture get manyChapters => _manyChapters ??= ViewerFixture._(
-  'many-chapters (150 x ~13 KB)',
-  _buildBook(
-    title: 'Many Chapters',
-    chapters: [for (var i = 1; i <= 150; i++) _chapterHtml(i, 65)],
-  ),
-);
+ViewerFixture get manyChapters {
+  return _manyChapters ??= ViewerFixture._(
+    'many-chapters (150 x ~13 KB)',
+    _buildBook(
+      title: 'Many Chapters',
+      chapters: [for (var i = 1; i <= 150; i++) _chapterHtml(i, 65)],
+    ),
+  );
+}
 
 /// A chapter dense with footnote references and targets.
-ViewerFixture get footnoteChapter => _footnoteChapter ??= ViewerFixture._(
-  'footnote-chapter',
-  _buildBook(title: 'Footnotes', chapters: [_chapterHtml(1, 40, footnotes: 40)]),
-);
+ViewerFixture get footnoteChapter {
+  return _footnoteChapter ??= ViewerFixture._(
+    'footnote-chapter',
+    _buildBook(title: 'Footnotes', chapters: [_chapterHtml(1, 40, footnotes: 40)]),
+  );
+}
 
 /// A chapter carrying MathML so the MathJax injection path runs.
 ViewerFixture get mathChapter {
   final fixture = _mathChapter;
-  if (fixture != null) {
-    return fixture;
-  }
+  if (fixture != null) return fixture;
+
   final mathBody =
       '<p>The quadratic formula is '
       '<math><mi>x</mi><mo>=</mo>'
@@ -191,6 +201,7 @@ ViewerFixture get mathChapter {
       '<mo>-</mo><mn>4</mn><mi>a</mi><mi>c</mi></msqrt></mrow>'
       '<mrow><mn>2</mn><mi>a</mi></mrow></mfrac></math>.'
       ' ${_paragraph(1)}</p>';
+
   return _mathChapter = ViewerFixture._(
     'math-chapter',
     _buildBook(

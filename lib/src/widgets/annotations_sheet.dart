@@ -88,6 +88,7 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
       builder: (final context, _) {
         final highlightCount = _filteredHighlights.length;
         final bookmarkCount = widget.controller.bookmarks.length;
+
         return Column(
           children: [
             _header(theme, highlightCount, bookmarkCount),
@@ -207,6 +208,7 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
         ),
       );
     }
+
     return ListView(
       controller: widget.scrollController,
       children: [
@@ -255,6 +257,7 @@ class _AnnotationsSheetState extends State<AnnotationsSheet> {
         ),
       );
     }
+
     return ListView(
       controller: widget.scrollController,
       children: [

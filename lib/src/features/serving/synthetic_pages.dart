@@ -169,9 +169,7 @@ String syntheticPdfPageHtml({
   buffer.write('<div id="elv-pdf-text">');
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i];
-    if (i > 0) {
-      buffer.write('\n');
-    }
+    if (i > 0) buffer.write('\n');
     buffer.write(
       '<span class="elv-pdf-line" style="left:${_cssNumber(line.x)}px;'
       'top:${_cssNumber(line.y)}px;width:${_cssNumber(line.width)}px;'
@@ -186,6 +184,7 @@ String syntheticPdfPageHtml({
       .replaceFirst('__SCRIPT_BASE__', scriptBase)
       .replaceFirst('__PAGE_WIDTH__', '612')
       .replaceFirst('__PAGE_HEIGHT__', '792');
+
   return injectViewerAssets(
     '<!DOCTYPE html><html><head><title></title></head>'
     '<body class="elv-pdf elv-facsimile">${buffer.toString()}'
@@ -195,8 +194,10 @@ String syntheticPdfPageHtml({
   );
 }
 
-String _cssNumber(final double value) =>
-    value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(2);
+String _cssNumber(final double value) {
+  return value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(2);
+}
 
-String _escapeHtml(final String text) =>
-    text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+String _escapeHtml(final String text) {
+  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}

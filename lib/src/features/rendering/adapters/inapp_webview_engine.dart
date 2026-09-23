@@ -42,6 +42,7 @@ class InAppWebViewEngine extends ViewerEngine {
             if (args.isNotEmpty) {
               onMessage(args.first as Object, slot);
             }
+
             return null;
           },
         );
@@ -54,6 +55,7 @@ class InAppWebViewEngine extends ViewerEngine {
         if (url.startsWith('http://localhost:') || url.startsWith('http://127.0.0.1:')) {
           return NavigationActionPolicy.ALLOW;
         }
+
         return NavigationActionPolicy.CANCEL;
       },
     );

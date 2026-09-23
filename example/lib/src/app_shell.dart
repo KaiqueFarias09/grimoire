@@ -50,6 +50,7 @@ class UbAppState {
         return book;
       }
     }
+
     return null;
   }
 
@@ -501,6 +502,7 @@ class _BooksAppShellState extends State<BooksAppShell>
             state.sheet = UbSheet.none;
           });
           showToast('Coleção “$name” criada.');
+
           return;
         }
       case 'page-reading':

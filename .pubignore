@@ -11,6 +11,8 @@ AGENTS.md
 CLAUDE.md
 GEMINI.md
 steward.yaml
+Makefile
+.flutter-version
 
 # Generated output
 build/

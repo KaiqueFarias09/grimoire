@@ -73,6 +73,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
       if (mounted) {
         setState(() => _error = error.message);
       }
+
       return const <ViewerSearchResult>[];
     }
   }
@@ -174,6 +175,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                   if (results == null || results.isEmpty) {
                     return const Center(child: Text('No results.'));
                   }
+
                   return ListView.separated(
                     itemCount: results.length,
                     separatorBuilder: (final _, final _) => const Divider(height: 1),

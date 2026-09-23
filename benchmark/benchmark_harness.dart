@@ -60,6 +60,7 @@ final class BenchmarkResult {
 
   static List<double> _sortedCopy(final List<double> list) {
     final copy = list.toList()..sort();
+
     return copy;
   }
 
@@ -85,6 +86,7 @@ final class BenchmarkResult {
 
   double _percentile(final int p) {
     final index = ((p / 100) * (samples.length - 1)).round();
+
     return samples[index.clamp(0, samples.length - 1)];
   }
 }
@@ -104,6 +106,7 @@ int get sinkChecksum => _sink;
 /// Whether [name] passes the active [benchmarkFilter].
 bool matchesFilter(final String name) {
   final filter = benchmarkFilter;
+
   return filter == null || name.toLowerCase().contains(filter.toLowerCase());
 }
 
@@ -135,9 +138,8 @@ BenchmarkResult runBenchmark(
     }
   }
 
-  if (probeMicros < 200) {
-    return _runBatched(name, action, effectiveBudget, probeMicros, note);
-  }
+  if (probeMicros < 200) return _runBatched(name, action, effectiveBudget, probeMicros, note);
+
   return _runPerIteration(name, action, effectiveBudget, probeMicros, note);
 }
 
@@ -168,6 +170,7 @@ BenchmarkResult _runBatched(
     samples.add(batch.elapsedMicroseconds / inner);
     runs += inner;
   } while (total.elapsed < budget && samples.length < 500);
+
   return BenchmarkResult(
     name: name,
     iterations: runs,
@@ -199,6 +202,7 @@ BenchmarkResult _runPerIteration(
     watch.stop();
     samples.add(watch.elapsedMicroseconds.toDouble());
   }
+
   return BenchmarkResult(
     name: name,
     iterations: iterations,
@@ -228,6 +232,7 @@ Future<BenchmarkResult> runAsyncBenchmark(
     watch.stop();
     samples.add(watch.elapsedMicroseconds.toDouble());
   }
+
   return BenchmarkResult(
     name: name,
     iterations: count,
@@ -264,6 +269,7 @@ BenchmarkResult runFirstAccessBenchmark<T>(
     _consume(result);
     samples.add(watch.elapsedMicroseconds.toDouble());
   }
+
   return BenchmarkResult(
     name: name,
     iterations: instances,
@@ -300,9 +306,8 @@ final class BenchmarkGroup {
     final String? note,
     final String? fixtureId,
   }) {
-    if (!matchesFilter('$title — $name')) {
-      return;
-    }
+    if (!matchesFilter('$title — $name')) return;
+
     _printHeaderOnce();
     final result = runBenchmark(name, action, note: note);
     _emit(result, inputBytes: inputBytes, fixtureId: fixtureId);
@@ -317,9 +322,8 @@ final class BenchmarkGroup {
     final String? note,
     final String? fixtureId,
   }) async {
-    if (!matchesFilter('$title — $name')) {
-      return;
-    }
+    if (!matchesFilter('$title — $name')) return;
+
     _printHeaderOnce();
     final result = await runAsyncBenchmark(name, action, iterations: iterations, note: note);
     _emit(result, inputBytes: inputBytes, fixtureId: fixtureId);
@@ -334,9 +338,8 @@ final class BenchmarkGroup {
     final String? note,
     final String? fixtureId,
   }) {
-    if (!matchesFilter('$title — $name')) {
-      return;
-    }
+    if (!matchesFilter('$title — $name')) return;
+
     _printHeaderOnce();
     final result = runFirstAccessBenchmark<T>(name, count, createInstance, access, note: note);
     _emit(result, fixtureId: fixtureId);
@@ -345,9 +348,7 @@ final class BenchmarkGroup {
   /// One output step per measurement: the human table row (unless the
   /// run is in JSON-only mode) plus the JSON contract record.
   void _emit(final BenchmarkResult result, {final int? inputBytes, final String? fixtureId}) {
-    if (!jsonSuppression) {
-      printResult(result, inputBytes: inputBytes);
-    }
+    if (!jsonSuppression) printResult(result, inputBytes: inputBytes);
     recordResult(
       suite: suiteName,
       scenario: '$title — ${result.name}',
@@ -366,9 +367,8 @@ final class BenchmarkGroup {
   }
 
   void _printHeaderOnce() {
-    if (_headerPrinted || jsonSuppression) {
-      return;
-    }
+    if (_headerPrinted || jsonSuppression) return;
+
     _headerPrinted = true;
     printGroupHeader(title);
   }
@@ -376,9 +376,8 @@ final class BenchmarkGroup {
 
 /// Prints the banner shown once at the start of a run.
 void printBanner() {
-  if (jsonSuppression) {
-    return;
-  }
+  if (jsonSuppression) return;
+
   stdout
     ..writeln('Grimoire reader benchmarks')
     ..writeln(
@@ -425,9 +424,8 @@ void printResult(final BenchmarkResult result, {final int? inputBytes}) {
 
 /// Prints the run summary shown after every group has run.
 void printFooter(final Duration total) {
-  if (jsonSuppression) {
-    return;
-  }
+  if (jsonSuppression) return;
+
   stdout
     ..writeln()
     ..writeln(
@@ -439,53 +437,47 @@ void printFooter(final Duration total) {
 
 /// Formats a byte count for display (188 KB, 6.4 MB, ...).
 String formatBytes(final int bytes) {
-  if (bytes >= 1000000) {
-    return '${_trimBytes(bytes / 1000000)} MB';
-  }
-  if (bytes >= 1000) {
-    return '${_trimBytes(bytes / 1000)} KB';
-  }
+  if (bytes >= 1000000) return '${_trimBytes(bytes / 1000000)} MB';
+  if (bytes >= 1000) return '${_trimBytes(bytes / 1000)} KB';
+
   return '$bytes B';
 }
 
-String _trimBytes(final double value) =>
-    value >= 100 ? value.round().toString() : value.toStringAsFixed(1);
+String _trimBytes(final double value) {
+  return value >= 100 ? value.round().toString() : value.toStringAsFixed(1);
+}
 
 /// Formats a duration given in microseconds adaptively.
 String formatMicros(final double micros) {
-  if (micros < 1) {
-    return '${(micros * 1000).toStringAsFixed(0)} ns';
-  }
+  if (micros < 1) return '${(micros * 1000).toStringAsFixed(0)} ns';
   if (micros < 1000) {
     return '${micros.toStringAsFixed(micros < 10 ? 2 : 1)} µs';
   }
-  if (micros < 1e6) {
-    return '${(micros / 1000).toStringAsFixed(2)} ms';
-  }
+  if (micros < 1e6) return '${(micros / 1000).toStringAsFixed(2)} ms';
+
   return '${(micros / 1e6).toStringAsFixed(2)} s';
 }
 
 /// Formats a count compactly (865k, 1.2M, ...).
 String compactCount(final int count) {
-  if (count < 1000) {
-    return count.toString();
-  }
+  if (count < 1000) return count.toString();
   if (count < 1e6) {
     return '${(count / 1e3).toStringAsFixed(count < 1e4 ? 1 : 0)}k';
   }
+
   return '${(count / 1e6).toStringAsFixed(1)}M';
 }
 
 /// Formats an operations-per-second rate compactly.
 String compactRate(final double rate) {
-  if (rate < 1000) {
-    return rate.toStringAsFixed(0);
-  }
+  if (rate < 1000) return rate.toStringAsFixed(0);
   if (rate < 1e6) {
     return '${(rate / 1e3).toStringAsFixed(rate < 1e4 ? 1 : 0)}k';
   }
+
   return '${(rate / 1e6).toStringAsFixed(1)}M';
 }
 
-String _formatRate(final double megaBytesPerSecond) =>
-    '${megaBytesPerSecond.toStringAsFixed(megaBytesPerSecond < 10 ? 1 : 0)} MB/s';
+String _formatRate(final double megaBytesPerSecond) {
+  return '${megaBytesPerSecond.toStringAsFixed(megaBytesPerSecond < 10 ? 1 : 0)} MB/s';
+}

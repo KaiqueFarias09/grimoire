@@ -34,6 +34,7 @@ class BookServer {
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
+
     return data.buffer.asUint8List();
   }
 
@@ -84,9 +85,8 @@ class BookServer {
   /// URLs. Book pages convert lazily, so opening a large book costs
   /// nothing until it renders.
   Future<void> start(final Book book) async {
-    if (_started) {
-      throw StateError('BookServer already started.');
-    }
+    if (_started) throw StateError('BookServer already started.');
+
     _started = true;
     _order = book.readingOrder;
     _pdfBook = book is PdfBook ? book : null;
@@ -124,16 +124,14 @@ class BookServer {
 
   /// Blob URL of the reading-order item at [index].
   Uri urlForItem(final int index) {
-    if (index < 0 || index >= _order.length) {
-      throw RangeError.index(index, _order);
-    }
+    if (index < 0 || index >= _order.length) throw RangeError.index(index, _order);
+
     final item = _order[index];
     if (_pdfBook != null && pdfReadingMode == PdfReadingMode.facsimile) {
       return Uri.parse(_pdfPageUrl(index));
     }
-    if (item.isHtml) {
-      return Uri.parse(_urlFor(_canonicalOrThrow(item.name, 'reading order item')));
-    }
+    if (item.isHtml) return Uri.parse(_urlFor(_canonicalOrThrow(item.name, 'reading order item')));
+
     return Uri.parse(_comicPageUrl(index));
   }
 
@@ -145,9 +143,8 @@ class BookServer {
 
   String _canonicalOrThrow(final String rawPath, final String what) {
     final entry = _lookupEntry(rawPath);
-    if (entry == null) {
-      throw StateError('No such $what: $rawPath');
-    }
+    if (entry == null) throw StateError('No such $what: $rawPath');
+
     return entry.key;
   }
 
@@ -156,9 +153,8 @@ class BookServer {
 
   String _create(final String path) {
     final content = _files[path];
-    if (content == null) {
-      return _notFoundUrl();
-    }
+    if (content == null) return _notFoundUrl();
+
     _building.add(path);
     try {
       final url = switch (content) {
@@ -170,6 +166,7 @@ class BookServer {
         final Uint8List bytes => _register(bytes, mimeOf(path)),
         _ => _notFoundUrl(),
       };
+
       return url;
     } finally {
       _building.remove(path);
@@ -188,6 +185,7 @@ class BookServer {
     if (containsMath(html)) {
       prepared = injectMathJax(prepared, scriptBase: _mathJaxBase);
     }
+
     return prepared;
   }
 
@@ -195,6 +193,7 @@ class BookServer {
     if (path.toLowerCase().endsWith('.css')) {
       return rewriteCssResources(text, cssPath: path, resolve: _resolveOrNull);
     }
+
     return text;
   }
 
@@ -202,18 +201,17 @@ class BookServer {
   /// file is missing or currently being built (cycle guard leaves
   /// self-referencing imports untouched).
   String? _resolveOrNull(final String bookPath) {
-    if (_building.contains(bookPath)) {
-      return null;
-    }
+    if (_building.contains(bookPath)) return null;
+
     final entry = _lookupEntry(bookPath);
-    if (entry == null) {
-      return null;
-    }
+    if (entry == null) return null;
+
     return _urlFor(entry.key);
   }
 
   String get _mathJaxBase {
     final base = mathJaxSource?.scriptBase;
+
     return base == null || base.isEmpty ? MathJaxLoader.defaultBaseUrl : base;
   }
 
@@ -225,6 +223,7 @@ class BookServer {
   String injectViewer(final String html) {
     final css = _blobUrls['__viewer__/viewer.css'];
     final js = _blobUrls['__viewer__/viewer.js'];
+
     return injectViewerAssets(
       sanitizeBookHtml(html, policy: bookJavaScriptPolicy),
       cssUrl: css ?? '/__viewer__/viewer.css',
@@ -235,39 +234,36 @@ class BookServer {
   /// Pre-created blob URL for a bundled viewer asset.
   String _assetUrl(final String name) {
     final url = _blobUrls['__viewer__/$name'];
-    if (url == null) {
-      throw StateError('BookServer.start() must run before building pages.');
-    }
+    if (url == null) throw StateError('BookServer.start() must run before building pages.');
+
     return url;
   }
 
   Future<void> _preloadAsset(final String name, final String mime) async {
-    if (_blobUrls.containsKey('__viewer__/$name')) {
-      return;
-    }
+    if (_blobUrls.containsKey('__viewer__/$name')) return;
+
     final bytes = await _assetLoader(name);
     _blobUrls['__viewer__/$name'] = _register(bytes, mime);
   }
 
   String _comicPageUrl(final int index) {
     final existing = _comicPages[index];
-    if (existing != null) {
-      return existing;
-    }
+    if (existing != null) return existing;
+
     final item = _order[index];
     final html = syntheticComicPageHtml(
       imageUrl: _urlFor(_canonicalOrThrow(item.name, 'comic image')),
       cssUrl: _assetUrl('viewer.css'),
       jsUrl: _assetUrl('viewer.js'),
     );
+
     return _comicPages[index] = _register(utf8.encode(html), 'text/html; charset=utf-8');
   }
 
   String _pdfPageUrl(final int index) {
     final existing = _pdfPages[index];
-    if (existing != null) {
-      return existing;
-    }
+    if (existing != null) return existing;
+
     final pdf = _pdfBook!;
     final pageText = index < pdf.pageTexts.length
         ? pdf.pageTexts[index]
@@ -286,14 +282,14 @@ class BookServer {
 
   String get _pdfJsBase {
     final base = pdfJsSource?.scriptBase;
+
     return base == null || base.isEmpty ? PdfJsLoader.defaultBaseUrl : base;
   }
 
   String _notFoundUrl() {
     final cached = _blobUrls['__notfound__'];
-    if (cached != null) {
-      return cached;
-    }
+    if (cached != null) return cached;
+
     return _blobUrls['__notfound__'] = _register(
       utf8.encode('<!DOCTYPE html><html><head><title></title></head><body></body></html>'),
       'text/html; charset=utf-8',
@@ -304,6 +300,7 @@ class BookServer {
     final blob = web.Blob(<JSAny>[bytes.toJS].toJS, web.BlobPropertyBag(type: mime));
     final url = web.URL.createObjectURL(blob);
     _createdUrls.add(url);
+
     return url;
   }
 }

@@ -16,6 +16,7 @@ class _MatchCycleBar extends StatelessWidget {
         }
         final (cursor, total) = controller.searchCursorState;
         final position = cursor < 0 ? '-' : '${(cursor % total) + 1}';
+
         return Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 12, 4),
           child: Row(

@@ -267,6 +267,7 @@ class _GrimoireViewState extends State<GrimoireView> {
           return Center(child: Text('Failed to open book: ${snapshot.error}'));
         }
         final controller = _controller;
+
         return AnimatedBuilder(
           animation: controller,
           builder: (final context, final _) {
@@ -289,6 +290,7 @@ class _GrimoireViewState extends State<GrimoireView> {
                     availableWidth: outer.maxWidth,
                     availableHeight: outer.maxHeight,
                   );
+
                   return Padding(
                     padding: EdgeInsets.fromLTRB(
                       insets.left,

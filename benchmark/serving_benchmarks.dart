@@ -29,6 +29,7 @@ Future<void> _get(final Uri url, {final int expectedStatus = HttpStatus.ok}) asy
     if (response.statusCode != expectedStatus) {
       throw StateError('GET $url -> ${response.statusCode}');
     }
+
     await response.fold<List<int>>(<int>[], (final a, final b) => a..addAll(b));
   } finally {
     client.close(force: true);
@@ -68,6 +69,7 @@ Future<void> runServingBenchmarks() async {
       await cold.start(big.book);
       await _get(cold.urlForItem(0));
       await cold.stop();
+
       return cold.itemCount;
     },
     inputBytes: big.largestChapter.content.length,

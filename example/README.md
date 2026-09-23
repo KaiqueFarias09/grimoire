@@ -1,18 +1,29 @@
-# grimoire_example
+# Grimoire example
 
-Small Flutter application demonstrating the Grimoire reader with the
-local Unseal format fixtures.
+This Flutter app demonstrates a host for Grimoire. It lists bundled sample
+books, opens them through Unseal, and shows the reader with navigation,
+search, themes, annotations, and PDF modes. The app owns its demo shelf and
+persistence; those are not part of the Grimoire package.
 
-## Getting Started
+From this directory, run `flutter pub get`, then `flutter run` on a supported
+device. Run `flutter analyze` and `flutter test` to check the example without a
+device. The widget tests use a fake rendering engine; they do not exercise a
+native WebView.
 
-This project is a starting point for a Flutter application.
+The app includes bundled sample books and deterministic synthetic fixtures.
+Their sources and licenses are recorded in
+[the example asset provenance](assets/books/PROVENANCE.md).
+The parser-to-reader contract fixtures used by package tests are described
+in the [fixture record](https://github.com/KaiqueFarias09/grimoire/blob/main/test/resources/README.md). To
+refresh synthetic assets from an Unseal checkout, run
+`UNSEAL_CHECKOUT=/path/to/unseal tool/sync_unseal_fixtures.sh` at the package
+root.
 
-A few resources to get you started if this is your first Flutter project:
+The example's `pubspec.yaml` temporarily overrides `flutter_inappwebview`
+with a beta version and its macOS provider with a pinned upstream commit for
+current Android and Xcode compatibility. These overrides apply to this demo
+app, not to the published Grimoire library. Recheck them before treating the
+example as a production host.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+For host network entitlements, supported platforms, and the public API, read
+the [package README](../README.md).

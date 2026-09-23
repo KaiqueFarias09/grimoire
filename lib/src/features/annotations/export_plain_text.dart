@@ -23,9 +23,7 @@ String renderPlainText(final ViewerExportModel model) {
         buffer.writeln('Note: ${item.note}');
       }
       final locator = _locatorText(item, options.locationLinks);
-      if (locator.isNotEmpty) {
-        buffer.writeln(locator);
-      }
+      if (locator.isNotEmpty) buffer.writeln(locator);
       buffer.writeln();
     }
   }
@@ -50,5 +48,6 @@ String _locatorText(final ViewerExportItem item, final ViewerExportLocationLinks
       if (item.locator case final locator?)
         'Section ${locator.sectionIndex + 1}, characters ${locator.start}-${locator.end}',
   ];
+
   return parts.isEmpty ? '' : '[${parts.join(' · ')}]';
 }

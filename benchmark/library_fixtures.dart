@@ -50,9 +50,8 @@ List<LibraryBook>? _books;
 /// machine-specific path is baked into the repository.
 String? _resolveRoot() {
   final value = Platform.environment['GRIMOIRE_BENCH_LIBRARY'];
-  if (value == null || value.isEmpty) {
-    return null;
-  }
+  if (value == null || value.isEmpty) return null;
+
   return Directory(value).existsSync() ? value : null;
 }
 
@@ -73,9 +72,8 @@ void skipLibraryGroup(final String groupLabel) {
 /// root is configured.
 List<LibraryBook> get libraryBooks {
   final root = _libraryRoot;
-  if (root == null) {
-    return const <LibraryBook>[];
-  }
+  if (root == null) return const <LibraryBook>[];
+
   return _books ??=
       Directory(root)
           .listSync(recursive: true)
@@ -83,6 +81,7 @@ List<LibraryBook> get libraryBooks {
           .where((final file) => _bookExtensions.contains(_extension(file.path)))
           .map((final file) {
             final size = file.lengthSync();
+
             return LibraryBook(name: _fileName(file.path), path: file.path, size: size);
           })
           .toList()
@@ -95,19 +94,20 @@ List<LibraryBook> get libraryBooks {
 LibraryBook? findLibraryBook(final String pattern) {
   final needle = pattern.toLowerCase();
   for (final book in libraryBooks) {
-    if (book.name.toLowerCase().contains(needle)) {
-      return book;
-    }
+    if (book.name.toLowerCase().contains(needle)) return book;
   }
+
   return null;
 }
 
 String _extension(final String path) {
   final dot = path.lastIndexOf('.');
+
   return dot < 0 ? '' : path.substring(dot).toLowerCase();
 }
 
 String _fileName(final String path) {
   final slash = path.lastIndexOf(Platform.pathSeparator);
+
   return slash < 0 ? path : path.substring(slash + 1);
 }

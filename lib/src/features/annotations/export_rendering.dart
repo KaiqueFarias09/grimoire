@@ -12,8 +12,9 @@ extension ViewerExportRendering on ViewerExportModel {
 
   /// Renders this document as a standalone HTML document, or as a fragment
   /// when [ViewerHtmlExportOptions.includeDocumentShell] is false.
-  String toHtml({final ViewerHtmlExportOptions options = const ViewerHtmlExportOptions()}) =>
-      renderHtml(this, options);
+  String toHtml({final ViewerHtmlExportOptions options = const ViewerHtmlExportOptions()}) {
+    return renderHtml(this, options);
+  }
 
   /// Renders this document as plain text using its snapshot options.
   String toPlainText() => renderPlainText(this);

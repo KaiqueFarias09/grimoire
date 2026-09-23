@@ -40,9 +40,8 @@ class PageRenderTarget {
 
   /// The zero-based facsimile page [index] of a [PdfBook].
   static PageRenderTarget pdfPage(final int index) {
-    if (index < 0) {
-      throw RangeError('pdf page index must be non-negative: $index');
-    }
+    if (index < 0) throw RangeError('pdf page index must be non-negative: $index');
+
     return PageRenderTarget._(PageRenderKind.pdfPage, index);
   }
 }
@@ -133,6 +132,7 @@ class GrimoirePageRenderer {
   Future<Uint8List> _enqueue(final Future<Uint8List> Function() job) {
     final result = _queueTail.then((final _) => job());
     _queueTail = result.then((final _) {}, onError: (final _) {});
+
     return result;
   }
 
@@ -151,12 +151,15 @@ class GrimoirePageRenderer {
       var itemIndex = 0;
       if (book is PdfBook) {
         itemIndex = target.kind == PageRenderKind.pdfPage ? target.index : 0;
+
         if (itemIndex >= server.itemCount) {
           throw RangeError.range(itemIndex, 0, server.itemCount - 1, 'page index');
         }
+
         server.pdfReadingMode = PdfReadingMode.facsimile;
         server.pdfJsSource = await _pdfJsLoader(pdfJsCachePath);
       }
+
       final url = server.urlForItem(itemIndex);
 
       final capture = _captureFactory.create();
@@ -166,9 +169,7 @@ class GrimoirePageRenderer {
           url,
           size: viewport,
           onBridgeMessage: (final message) {
-            if (!ready.isCompleted && _isReadyMessage(message)) {
-              ready.complete();
-            }
+            if (!ready.isCompleted && _isReadyMessage(message)) ready.complete();
           },
         );
         if (book is PdfBook) {
@@ -191,9 +192,8 @@ class GrimoirePageRenderer {
         final bytes = book is PdfBook
             ? await _pdfCanvasBytes(capture) ?? await capture.capture()
             : await capture.capture();
-        if (bytes == null || bytes.isEmpty) {
-          throw StateError('headless capture returned no pixels');
-        }
+        if (bytes == null || bytes.isEmpty) throw StateError('headless capture returned no pixels');
+
         return bytes;
       } finally {
         await capture.dispose();
@@ -216,11 +216,11 @@ class GrimoirePageRenderer {
         "(function(){var c=document.getElementById('elv-pdf-canvas');"
         "return c ? c.toDataURL('image/png') : null;})()",
       );
-      if (dataUrl is! String || !dataUrl.startsWith('data:image/png;base64,')) {
-        return null;
-      }
+      if (dataUrl is! String || !dataUrl.startsWith('data:image/png;base64,')) return null;
+
       final encoded = dataUrl.substring(dataUrl.indexOf(',') + 1);
       final bytes = base64Decode(encoded);
+
       return bytes.isEmpty ? null : bytes;
     } on Object {
       return null;
@@ -230,9 +230,8 @@ class GrimoirePageRenderer {
   /// Whether [message] is viewer.js's `ready` post. The bridge
   /// delivers either a decoded map or its JSON string.
   static bool _isReadyMessage(final Object message) {
-    if (message is Map && message['type'] == 'ready') {
-      return true;
-    }
+    if (message is Map && message['type'] == 'ready') return true;
+
     return message is String && message.contains('"type":"ready"');
   }
 
@@ -253,10 +252,12 @@ class GrimoirePageRenderer {
       if (DateTime.now().isAfter(deadline)) {
         throw TimeoutException('timed out waiting for $what', timeout);
       }
+
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }
 
-  static bool _isTrue(final Object? value) =>
-      value == true || value == 1 || value == 'true' || value == '1';
+  static bool _isTrue(final Object? value) {
+    return value == true || value == 1 || value == 'true' || value == '1';
+  }
 }
