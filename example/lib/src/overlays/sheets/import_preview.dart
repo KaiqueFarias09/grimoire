@@ -1,4 +1,4 @@
-part of '../modals.dart';
+part of '../sheets.dart';
 
 class _ImportPreview extends StatelessWidget {
   const _ImportPreview({required this.book, required this.description});

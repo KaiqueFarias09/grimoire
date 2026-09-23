@@ -79,7 +79,7 @@ class _NoteModalState extends State<_NoteModal> {
           ),
           onChanged: (final value) => widget.host.state.noteText = value,
         ),
-        _ModalFooter(
+        UbOverlayFooter(
           alignment: MainAxisAlignment.end,
           children: <Widget>[
             UbButton.outline('Cancelar', () => widget.host.dispatch('close-modal')),

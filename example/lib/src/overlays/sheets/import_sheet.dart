@@ -1,7 +1,7 @@
-part of '../modals.dart';
+part of '../sheets.dart';
 
-class _ImportModal extends StatelessWidget {
-  const _ImportModal({required this.host});
+class _ImportSheet extends StatelessWidget {
+  const _ImportSheet({required this.host});
 
   final UbHost host;
 
@@ -21,10 +21,10 @@ class _ImportModal extends StatelessWidget {
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const _ModalAlert(
+          const UbOverlayAlert(
             'Este arquivo não pode ser aberto aqui. Escolha um EPUB, PDF, documento ou quadrinho compatível.',
           ),
-          _ModalFooter(
+          UbOverlayFooter(
             alignment: MainAxisAlignment.end,
             children: <Widget>[
               UbButton.outline('Escolher outro arquivo', () => host.dispatch('reset-import')),
@@ -38,13 +38,14 @@ class _ImportModal extends StatelessWidget {
       body = _ImportConfirm(host: host);
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        _ModalHead(title: title, subtitle: intro, onClose: () => host.dispatch('close-modal')),
-        body,
-        if (!hasType) const _FormatSection(),
-      ],
+    return _SheetFrame(
+      title: title,
+      subtitle: intro,
+      onClose: () => host.dispatch('close-sheet'),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[body, if (!hasType) const UbFormatSection()],
+      ),
     );
   }
 }

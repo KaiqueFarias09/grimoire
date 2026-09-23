@@ -47,6 +47,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('add-book sheet opens and steps to the import confirm', (
+    final WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, size: const Size(390, 844));
+
+    await tester.tap(find.text('Adicionar livro'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Adicionar um livro'), findsOneWidget);
+    expect(
+      find.text('Escolha uma amostra ou selecione um arquivo do seu dispositivo.'),
+      findsOneWidget,
+    );
+    expect(find.text('Formatos aceitos'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.textContaining('A cidade depois da chuva'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Adicionar livro'), findsWidgets);
+    expect(find.text('Adicionar à biblioteca'), findsOneWidget);
+  });
+
   testWidgets('reader chrome hides and shows on a gutter tap', (final WidgetTester tester) async {
     await _pumpApp(tester);
 

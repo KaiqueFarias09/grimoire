@@ -1,30 +1,20 @@
-/// Centered modals: the add-book import flow, accepted formats help
-/// and the note editor, mirroring the prototype's modal host.
+/// Centered modals: the accepted formats help and the note editor,
+/// mirroring the prototype's modal host.
 library;
 
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
-import '../demo_data.dart';
 import '../ub_icon.dart';
 import '../ub_theme.dart';
 import '../ub_widgets.dart';
+import 'shared.dart';
 
 part 'modals/modal_head.dart';
 part 'modals/modal_close_button.dart';
-part 'modals/import_modal.dart';
-part 'modals/import_picker.dart';
-part 'modals/import_option.dart';
-part 'modals/pdf_password_step.dart';
-part 'modals/import_confirm.dart';
-part 'modals/import_preview.dart';
 part 'modals/format_help_modal.dart';
-part 'modals/format_section.dart';
 part 'modals/note_modal.dart';
-part 'modals/modal_section.dart';
-part 'modals/modal_footer.dart';
-part 'modals/modal_alert.dart';
 
 class UbModalHost extends StatefulWidget {
   const UbModalHost({required this.host, required this.modal, required this.onDismiss, super.key});
@@ -128,7 +118,6 @@ class _UbModalHostState extends State<UbModalHost> with SingleTickerProviderStat
               ),
               child: SingleChildScrollView(
                 child: switch (_contentModal) {
-                  UbModal.add => _ImportModal(host: widget.host),
                   UbModal.formatHelp => _FormatHelpModal(host: widget.host),
                   UbModal.note => _NoteModal(host: widget.host),
                   UbModal.none => const SizedBox.shrink(),

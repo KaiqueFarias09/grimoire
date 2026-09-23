@@ -1,4 +1,4 @@
-part of '../modals.dart';
+part of '../sheets.dart';
 
 class _ImportConfirm extends StatelessWidget {
   const _ImportConfirm({required this.host});
@@ -23,7 +23,7 @@ class _ImportConfirm extends StatelessWidget {
           description:
               '${imported.author} · ${imported.formatLabel}\nPronto para entrar na sua biblioteca.',
         ),
-        _ModalFooter(
+        UbOverlayFooter(
           alignment: MainAxisAlignment.end,
           children: <Widget>[
             UbButton.outline('Voltar', () => host.dispatch('reset-import')),

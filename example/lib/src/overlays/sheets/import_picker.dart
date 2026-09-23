@@ -1,4 +1,4 @@
-part of '../modals.dart';
+part of '../sheets.dart';
 
 class _ImportPicker extends StatelessWidget {
   const _ImportPicker({required this.host});
@@ -52,10 +52,10 @@ class _ImportPicker extends StatelessWidget {
                     ),
                 ],
               ),
-        _ModalSection(
+        UbOverlaySection(
           title: 'Do seu dispositivo',
           description: 'O seletor de arquivos do app host entra aqui.',
-          child: _ModalFooter(
+          child: UbOverlayFooter(
             alignment: MainAxisAlignment.start,
             children: <Widget>[
               UbButton.outline(

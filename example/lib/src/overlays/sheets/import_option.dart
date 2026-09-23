@@ -1,4 +1,4 @@
-part of '../modals.dart';
+part of '../sheets.dart';
 
 class _ImportOption extends StatelessWidget {
   const _ImportOption({

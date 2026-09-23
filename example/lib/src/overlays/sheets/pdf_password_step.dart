@@ -1,4 +1,4 @@
-part of '../modals.dart';
+part of '../sheets.dart';
 
 class _PdfPasswordStep extends StatefulWidget {
   const _PdfPasswordStep({required this.host, required this.book});
@@ -72,8 +72,8 @@ class _PdfPasswordStepState extends State<_PdfPasswordStep> {
           ),
           onChanged: (final value) => widget.host.state.pdfPassword = value,
         ),
-        if (error.isNotEmpty) ...<Widget>[const SizedBox(height: 13), _ModalAlert(error)],
-        _ModalFooter(
+        if (error.isNotEmpty) ...<Widget>[const SizedBox(height: 13), UbOverlayAlert(error)],
+        UbOverlayFooter(
           alignment: MainAxisAlignment.end,
           children: <Widget>[
             UbButton.outline('Voltar', () => widget.host.dispatch('reset-import')),

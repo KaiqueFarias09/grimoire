@@ -1,15 +1,18 @@
-/// Bottom sheets: global library search, in-book search, chapter
-/// summary and collections, mirroring the prototype's sheet host.
+/// Bottom sheets: global library search, the add-book import flow,
+/// in-book search, chapter summary and collections, mirroring the
+/// prototype's sheet host.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
+import '../demo_data.dart';
 import '../ub_icon.dart';
 import '../pages/reader_screen.dart' show ReaderHooks;
 import 'package:unseal/unseal.dart' show NavPoint;
 import '../ub_theme.dart';
 import '../ub_widgets.dart';
+import 'shared.dart';
 
 part 'sheets/sheet_frame.dart';
 part 'sheets/sheet_close_button.dart';
@@ -17,6 +20,12 @@ part 'sheets/sheet_search_box.dart';
 part 'sheets/sheet_list.dart';
 part 'sheets/sheet_list_row.dart';
 part 'sheets/global_search_sheet.dart';
+part 'sheets/import_sheet.dart';
+part 'sheets/import_picker.dart';
+part 'sheets/import_option.dart';
+part 'sheets/import_preview.dart';
+part 'sheets/import_confirm.dart';
+part 'sheets/pdf_password_step.dart';
 part 'sheets/reader_search_sheet.dart';
 part 'sheets/summary_sheet.dart';
 part 'sheets/collections_sheet.dart';
@@ -146,6 +155,7 @@ class _UbSheetHostState extends State<UbSheetHost> with SingleTickerProviderStat
                 child: SingleChildScrollView(
                   child: switch (_contentSheet) {
                     UbSheet.globalSearch => _GlobalSearchSheet(host: widget.host),
+                    UbSheet.addBook => _ImportSheet(host: widget.host),
                     UbSheet.readerSearch => _ReaderSearchSheet(host: widget.host),
                     UbSheet.summary => _SummarySheet(host: widget.host),
                     UbSheet.collections => _CollectionsSheet(host: widget.host),

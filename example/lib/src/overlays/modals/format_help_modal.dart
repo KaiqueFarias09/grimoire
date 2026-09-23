@@ -15,9 +15,9 @@ class _FormatHelpModal extends StatelessWidget {
           subtitle: 'Escolha o formato que você quer adicionar à sua estante.',
           onClose: () => host.dispatch('close-modal'),
         ),
-        const _FormatSection(),
+        const UbFormatSection(),
         const SizedBox(height: 13),
-        const _ModalAlert(
+        const UbOverlayAlert(
           'Arquivos protegidos por DRM e formatos não reconhecidos são recusados com uma mensagem clara.',
         ),
       ],

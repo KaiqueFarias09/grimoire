@@ -27,9 +27,9 @@ import 'ub_theme.dart';
 
 enum UbPage { reading, detail, reader }
 
-enum UbModal { none, add, formatHelp, note }
+enum UbModal { none, formatHelp, note }
 
-enum UbSheet { none, globalSearch, readerSearch, summary, collections }
+enum UbSheet { none, globalSearch, addBook, readerSearch, summary, collections }
 
 enum ReaderMode { reflow, pages, comic }
 
@@ -189,7 +189,7 @@ class _BooksAppShellState extends State<BooksAppShell>
     }
     switch (const String.fromEnvironment('UB_OVERLAY')) {
       case 'add':
-        state.modal = UbModal.add;
+        state.sheet = UbSheet.addBook;
       case 'note':
         state.modal = UbModal.note;
       case 'search':
@@ -309,8 +309,8 @@ class _BooksAppShellState extends State<BooksAppShell>
     switch (action) {
       case 'open-add':
         _mutate(() {
-          state.sheet = UbSheet.none;
-          state.modal = UbModal.add;
+          state.modal = UbModal.none;
+          state.sheet = UbSheet.addBook;
           state.importType = '';
           state.importStep = 1;
           state.importError = '';
@@ -714,6 +714,7 @@ class _BooksAppShellState extends State<BooksAppShell>
         state.books = [...state.books, loaded];
         state.selectedBook = id;
         state.modal = UbModal.none;
+        state.sheet = UbSheet.none;
         state.importType = '';
         state.importStep = 1;
         state.importError = '';
@@ -827,18 +828,21 @@ class _BooksAppShellState extends State<BooksAppShell>
                 child: KeyedSubtree(key: ValueKey<UbPage>(state.page), child: chrome),
               ),
             ),
-            Positioned.fill(
-              child: UbModalHost(
-                host: this,
-                modal: state.modal,
-                onDismiss: () => dispatch('close-modal'),
-              ),
-            ),
+            // The sheet host sits below the modal host so the
+            // accepted-formats modal opens on top of the add-book
+            // sheet without dismissing it.
             Positioned.fill(
               child: UbSheetHost(
                 host: this,
                 sheet: state.sheet,
                 onDismiss: () => dispatch('close-sheet'),
+              ),
+            ),
+            Positioned.fill(
+              child: UbModalHost(
+                host: this,
+                modal: state.modal,
+                onDismiss: () => dispatch('close-modal'),
               ),
             ),
             if (state.toast.isNotEmpty)
