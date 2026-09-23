@@ -1,30 +1,24 @@
-part of '../reader_screen.dart';
+part of '../sheets.dart';
 
-class _ReaderSettingsPanel extends StatelessWidget {
-  const _ReaderSettingsPanel({required this.host, required this.isPdf, required this.isComic});
+class _ReaderSettingsSheet extends StatelessWidget {
+  const _ReaderSettingsSheet({required this.host});
 
   final UbHost host;
-  final bool isPdf;
-  final bool isComic;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
     final state = host.state;
+    final book = state.bookById(state.selectedBook)?.book;
+    final isPdf = book is PdfBook;
+    final isComic = book is ComicBook;
 
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: palette.surface2,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: palette.lineSoft),
-      ),
-      child: Column(
+    return _SheetFrame(
+      title: 'Temas e ajustes',
+      subtitle: 'Escolha o tema, o tamanho do texto e o layout da leitura.',
+      onClose: () => host.dispatch('close-sheet'),
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Temas e ajustes', style: TextStyle(fontSize: 14, color: palette.ink)),
-          const SizedBox(height: 15),
           _SettingRow(
             label: 'Tema',
             options: const <(String, String)>[
@@ -56,6 +50,7 @@ class _ReaderSettingsPanel extends StatelessWidget {
               activeValue: state.readerMode.name,
               onSelect: (final value) => host.dispatch('reader-mode', data: value),
             ),
+          const _HostNote(),
         ],
       ),
     );

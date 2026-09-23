@@ -24,10 +24,6 @@ part 'reader_screen/reader_app_bar.dart';
 part 'reader_screen/reader_bottom_chrome.dart';
 part 'reader_screen/reader_bottom_bar_content.dart';
 part 'reader_screen/reader_bottom_button.dart';
-part 'reader_screen/reader_settings_panel.dart';
-part 'reader_screen/setting_row.dart';
-part 'reader_screen/setting_option.dart';
-part 'reader_screen/host_note.dart';
 
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({required this.host, super.key});

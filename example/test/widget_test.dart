@@ -100,6 +100,33 @@ void main() {
     expect(find.text('Sumário'), findsOneWidget);
   });
 
+  testWidgets('reader settings opens as a bottom sheet', (final WidgetTester tester) async {
+    await _pumpApp(tester, size: const Size(390, 844));
+
+    await tester.tap(find.textContaining('Frankenstein').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continuar lendo'));
+    // The viewer's start never completes under the fake clock, so its
+    // loading spinner keeps animating: pump fixed frames, not settle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.byTooltip('Temas e ajustes'));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Temas e ajustes'), findsWidgets);
+    expect(find.text('Claro'), findsOneWidget);
+    expect(find.text('Papel'), findsOneWidget);
+    expect(find.text('Escuro'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // Picking a theme keeps the sheet open for further adjustments.
+    await tester.tap(find.text('Escuro'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Temas e ajustes'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   test('the bundled PDF fixture is password-protected', () async {
     final data = await rootBundle.load('assets/books/dickens-sample.pdf');
     final bytes = Uint8List.fromList(

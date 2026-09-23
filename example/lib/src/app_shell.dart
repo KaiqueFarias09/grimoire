@@ -29,7 +29,7 @@ enum UbPage { reading, detail, reader }
 
 enum UbModal { none, formatHelp, note }
 
-enum UbSheet { none, globalSearch, addBook, readerSearch, summary, collections }
+enum UbSheet { none, globalSearch, addBook, readerSearch, readerSettings, summary, collections }
 
 enum ReaderMode { reflow, pages, comic }
 
@@ -65,7 +65,6 @@ class UbAppState {
   ReaderMode readerMode = ReaderMode.reflow;
   ReaderThemeMode readerTheme = ReaderThemeMode.day;
   int fontSize = 17;
-  bool readerSettings = false;
   UbSheet sheet = UbSheet.none;
   bool bookmarked = false;
   String noteText = '';
@@ -199,7 +198,7 @@ class _BooksAppShellState extends State<BooksAppShell>
       case 'summary':
         state.sheet = UbSheet.summary;
       case 'settings':
-        state.readerSettings = true;
+        state.sheet = UbSheet.readerSettings;
     }
   }
 
@@ -288,7 +287,6 @@ class _BooksAppShellState extends State<BooksAppShell>
         'pages' => ReaderMode.pages,
         _ => ReaderMode.reflow,
       };
-      state.readerSettings = false;
       state.modal = UbModal.none;
       state.sheet = UbSheet.none;
       _setPage(UbPage.reader);
@@ -412,8 +410,11 @@ class _BooksAppShellState extends State<BooksAppShell>
         final previous = state.previousPage == UbPage.reader ? UbPage.reading : state.previousPage;
         _mutate(() => state.sheet = UbSheet.none);
         goToPage(previous);
-      case 'toggle-reader-settings':
-        _mutate(() => state.readerSettings = !state.readerSettings);
+      case 'open-reader-settings':
+        _mutate(() {
+          state.modal = UbModal.none;
+          state.sheet = UbSheet.readerSettings;
+        });
       case 'reader-theme':
         _mutate(
           () => state.readerTheme = switch (data) {

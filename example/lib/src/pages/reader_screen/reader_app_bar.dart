@@ -70,8 +70,8 @@ class _ReaderAppBar extends StatelessWidget {
                     UbIconButton(
                       icon: UbIcons.type,
                       tooltip: 'Temas e ajustes',
-                      active: state.readerSettings,
-                      onPressed: () => host.dispatch('toggle-reader-settings'),
+                      active: state.sheet == UbSheet.readerSettings,
+                      onPressed: () => host.dispatch('open-reader-settings'),
                     ),
                   ],
                 ),

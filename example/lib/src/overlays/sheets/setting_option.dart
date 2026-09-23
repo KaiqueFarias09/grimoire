@@ -1,4 +1,4 @@
-part of '../reader_screen.dart';
+part of '../sheets.dart';
 
 class _SettingOption extends StatelessWidget {
   const _SettingOption({required this.label, required this.active, required this.onTap});

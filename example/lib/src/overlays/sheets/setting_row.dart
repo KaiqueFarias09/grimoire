@@ -1,4 +1,4 @@
-part of '../reader_screen.dart';
+part of '../sheets.dart';
 
 class _SettingRow extends StatelessWidget {
   const _SettingRow({
