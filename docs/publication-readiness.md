@@ -12,7 +12,7 @@ have not occurred.
 | Public contract | `lib/grimoire.dart` is the facade; README describes formats, supported platforms, host setup, usage, PDF/passwords, annotation export, and narration hooks. | Review every facade export and README example when cutting a version. |
 | Architecture and code tour | `docs/architecture.md` records boundaries and runtime flows; `docs/grimoire-codebase-guide.md` maps all 78 tracked Dart files under `lib/`, every feature family, and representative tests. | Keep both guides in sync with public or module changes. |
 | Package metadata | `pubspec.yaml` names `grimoire` 1.0.0, declares MIT license and hosted `unseal: ^1.1.0`. The CHANGELOG has one 1.0.0 section containing all pre-public work. | Confirm the packaged metadata in the final clean-tree dry-run. |
-| Package scope | `.pubignore` excludes repository tooling, test/benchmark data, development docs, and generated output. The runnable example retains 18 books recorded in `example/assets/books/PROVENANCE.md`. | Inspect the final archive file list before uploading. |
+| Package scope | `.pubignore` excludes repository tooling, test/benchmark data, development docs, and generated output. The runnable example retains 18 books recorded in `example/assets/books/PROVENANCE.md`. The clean-tree dry-run produced a 4 MB archive with zero warnings. | Inspect the file list again before uploading. |
 | CI | Two GitHub Actions jobs use Flutter 3.47.5 and pinned actions. The library job checks formatting, analysis, API docs, tests, and coverage. The example job checks its analysis and tests. | Push the changes and confirm both jobs are green on the actual remote. |
 | CD | `Makefile` and `tool/release.sh` provide `release-check`, `release-github`, and `publish`, in the same order as Unseal. Mutation targets verify a clean, synchronized `main`, the tag and GitHub Release; the pub.dev step stays interactive. | Run only for a chosen release after green CI. |
 
@@ -20,14 +20,14 @@ have not occurred.
 
 1. **Repository identity is fixed locally.** The GitHub repository was renamed
    to `grimoire`, and local `origin`, package metadata, and README links point
-   to it. A fresh fetch confirmed local `main` is 93 commits ahead of
-   `origin/main`. Push the reviewed release commit later and wait for remote CI;
+   to it. A fresh fetch confirmed local `main` is ahead of `origin/main`.
+   Push the reviewed release commits later and wait for remote CI;
    neither action is part of this preparation.
-2. **Version is prepared; a clean-tree gate remains.** `pubspec.yaml` and
-   CHANGELOG now identify 1.0.0 as the first public release. Commit the
-   reviewed changes, then run `make release-check VERSION=1.0.0` on clean
-   `main`. The earlier pub.dev dry-run had a dirty-Git warning and is not a
-   clean-tree result.
+2. **Version and local gate are prepared.** `pubspec.yaml` and CHANGELOG
+   identify 1.0.0 as the first public release. The clean-tree
+   `make release-check VERSION=1.0.0` passed on 2026-09-23 with no package
+   warnings. Re-run it on the final release commit immediately before the
+   user-controlled remote steps.
 3. **Example assets are inventoried.** The 18 retained books have exact hashes,
    source, and redistribution notes in `example/assets/books/PROVENANCE.md`.
    An unreferenced commercial EPUB was removed; a Calibre-produced AZW3 with
@@ -199,8 +199,10 @@ and infos are review work, not release gates.
 - Example `flutter analyze --no-pub`: clean after the ownership and
   accessibility refactors; all 21 widget tests passed after the asset cleanup.
 - `dart doc --dry-run`: zero warnings and errors.
-- `flutter pub publish --dry-run`: inspected the archive and found only the
-  dirty-Git warning; rerun on a clean versioned commit.
+- `make release-check VERSION=1.0.0`: passed on clean local `main`, including
+  formatting, root and example analysis, API documentation, 297 library
+  tests, the 93.8% coverage gate, 21 example tests, and the pub.dev dry-run.
+  The archive is about 4 MB and pub.dev validation reported zero warnings.
 - The pub.dev package API returned HTTP 404 for `grimoire` on 2026-09-23;
   no published version of this package was confirmed in this audit.
 - Release script shell syntax and `make help`: passed locally. GitHub Actions
