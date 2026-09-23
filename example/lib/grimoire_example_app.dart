@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
-import 'src/app_shell.dart';
+import 'src/app/app_shell.dart';
 import 'src/demo_data.dart';
 import 'src/store/demo_store.dart';
 import 'src/ub_theme.dart';
@@ -9,7 +9,7 @@ import 'src/ub_theme.dart';
 part 'src/palette_bridge.dart';
 part 'src/no_scrollbar_behavior.dart';
 
-class GrimoireExampleApp extends StatelessWidget {
+class GrimoireExampleApp extends StatefulWidget {
   const GrimoireExampleApp({this.shelfLoader, this.store, super.key});
 
   /// Passed through to [BooksAppShell]; see there for why tests use it.
@@ -20,28 +20,40 @@ class GrimoireExampleApp extends StatelessWidget {
   final DemoStore? store;
 
   @override
+  State<GrimoireExampleApp> createState() => _GrimoireExampleAppState();
+}
+
+class _GrimoireExampleAppState extends State<GrimoireExampleApp> {
+  // Created once: the shell owns the GoRouter, whose identity is the
+  // navigation state.
+  late final BooksAppShell _shell = BooksAppShell(
+    shelfLoader: widget.shelfLoader,
+    store: widget.store,
+  );
+
+  @override
   Widget build(final BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'Livros',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const _NoScrollbarBehavior(),
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      home: _PaletteBridge(
-        child: BooksAppShell(shelfLoader: shelfLoader, store: store),
-      ),
-      // `--dart-define=UB_FULLSCREEN=true` removes the safe-area insets
-      // so screenshots line up 1:1 with the browser-rendered prototype.
+      routerConfig: _shell.router.router,
+      // The palette bridge sits above everything that paints.
       builder: (final context, final child) {
-        if (!const bool.fromEnvironment('UB_FULLSCREEN') || child == null) {
-          return child ?? const SizedBox.shrink();
+        Widget content = child ?? const SizedBox.shrink();
+        // `--dart-define=UB_FULLSCREEN=true` removes the safe-area
+        // insets so screenshots line up 1:1 with the browser-rendered
+        // prototype.
+        if (const bool.fromEnvironment('UB_FULLSCREEN')) {
+          final data = MediaQuery.of(context);
+          content = MediaQuery(
+            data: data.copyWith(padding: EdgeInsets.zero, viewPadding: EdgeInsets.zero),
+            child: content,
+          );
         }
-        final data = MediaQuery.of(context);
-
-        return MediaQuery(
-          data: data.copyWith(padding: EdgeInsets.zero, viewPadding: EdgeInsets.zero),
-          child: child,
-        );
+        return _PaletteBridge(child: content);
       },
     );
   }

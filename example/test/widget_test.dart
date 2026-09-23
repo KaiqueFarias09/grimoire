@@ -28,6 +28,8 @@ void main() {
     await tester.tap(find.textContaining('Frankenstein').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continuar lendo'));
+    // The pushed reader route enters on the frame after the tap.
+    await tester.pump();
     await tester.pump();
 
     expect(find.text('Sumário'), findsOneWidget);

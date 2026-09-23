@@ -1,113 +1,38 @@
-/// App shell for the Unseal Books demo: single-screen page host, the
-/// prototype's state machine and the modal/sheet/toast overlay hosts.
+/// App shell for the Unseal Books demo: the host implementation
+/// behind every screen, the modal/sheet/toast overlay hosts, and the
+/// router that owns navigation.
 library;
 
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data' show Uint8List;
 
-import 'package:animations/animations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, KeyDownEvent, LogicalKeyboardKey, rootBundle;
+import 'package:go_router/go_router.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'demo_data.dart';
-import 'overlays/modals.dart';
-import 'overlays/sheets.dart';
-import 'pages/detail_page.dart';
-import 'pages/reader_screen.dart';
-import 'pages/reading_page.dart';
-import 'store/demo_store.dart';
-import 'ub_icon.dart';
-import 'ub_theme.dart';
+import '../demo_data.dart';
+import '../overlays/modals.dart';
+import '../overlays/sheets.dart';
+import '../pages/reader_screen.dart' show ReaderHooks;
+import '../store/demo_store.dart';
+import '../ub_icon.dart';
+import '../ub_theme.dart';
+import 'app_router.dart';
+import 'app_routes.dart';
+import 'app_state.dart';
 
-enum UbPage { reading, detail, reader }
-
-enum UbModal { none, formatHelp, note }
-
-enum UbSheet { none, globalSearch, addBook, readerSearch, readerSettings, summary, collections }
-
-enum ReaderMode { reflow, pages, comic }
-
-enum ReaderThemeMode { day, sepia, night }
-
-/// Mutable demo state, field-for-field like the prototype's `state`.
-class UbAppState {
-  UbPage page = UbPage.reading;
-  String selectedBook = 'alice';
-
-  /// Parsed fixtures; empty until [shelfReady] flips.
-  List<LoadedBook> books = const <LoadedBook>[];
-  bool shelfReady = false;
-
-  LoadedBook? bookById(final String id) {
-    for (final book in books) {
-      if (book.fixture.id == id) {
-        return book;
-      }
-    }
-
-    return null;
-  }
-
-  List<DemoCollection> collections = List<DemoCollection>.of(initialCollections);
-  String newCollectionName = '';
-  String collectionError = '';
-  String searchQuery = '';
-  bool searchRan = false;
-
-  /// Real in-book search results, filled by the reader's [search] hook.
-  List<ViewerSearchResult> readerSearchResults = const <ViewerSearchResult>[];
-  ReaderMode readerMode = ReaderMode.reflow;
-  ReaderThemeMode readerTheme = ReaderThemeMode.day;
-  int fontSize = 17;
-  UbSheet sheet = UbSheet.none;
-  bool bookmarked = false;
-  String noteText = '';
-
-  /// The selected passage shown in the note modal; empty when the
-  /// reader has no active selection.
-  String noteQuote = '';
-  UbModal modal = UbModal.none;
-  String importType = '';
-  int importStep = 1;
-  String importError = '';
-  String pdfPassword = '';
-  UbPage previousPage = UbPage.reading;
-  String toast = '';
-
-  /// Persisted progress override per book id; the fixture value stays
-  /// as the seed until the book is opened for the first time.
-  final Map<String, int> storedPercent = <String, int>{};
-  final Map<String, String> storedChapter = <String, String>{};
-
-  int percentFor(final LoadedBook book) => storedPercent[book.fixture.id] ?? book.fixture.progress;
-  String chapterFor(final LoadedBook book) =>
-      storedChapter[book.fixture.id] ?? book.fixture.chapter;
-}
-
-/// Host services the pages and overlays use: state plus dispatch.
-abstract class UbHost {
-  UbAppState get state;
-
-  /// Host-owned persistence; null in widget tests.
-  DemoStore? get store;
-
-  /// Mirrors the prototype's `handleAction(action, target)` with the
-  /// target's `data-*` attribute collapsed into [data].
-  void dispatch(final String action, {final String? data});
-
-  void goToPage(final UbPage page);
-
-  void showToast(final String message);
-}
-
-class BooksAppShell extends StatefulWidget {
-  const BooksAppShell({this.shelfLoader, this.store, super.key});
+/// The demo's host configuration: owns the router and the revision
+/// notifier route pages rebuild on. The live host state lives in
+/// [BooksAppShellHost]'s state, which the ShellRoute mounts around
+/// every matched route.
+class BooksAppShell {
+  BooksAppShell({this.shelfLoader, this.store});
 
   /// Overrides how the shelf fixtures are parsed; widget tests preload
   /// the books under `runAsync` because asset IO never completes in
@@ -117,74 +42,93 @@ class BooksAppShell extends StatefulWidget {
   /// Host-owned persistence; null in tests (session-only features).
   final DemoStore? store;
 
-  @override
-  State<BooksAppShell> createState() => _BooksAppShellState();
+  /// Bumped on every host state mutation; route pages listen to it
+  /// because go_router caches page widgets across host rebuilds.
+  final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  /// The demo's single router. The shell owns it because navigation
+  /// actions dispatch through it.
+  late final AppRouter router = AppRouter(
+    initialLocation: _startLocation,
+    revision: revision,
+    shell: this,
+  );
+
+  /// `UB_START=detail:pdf|reader:txt` puts screenshot runs straight on
+  /// a route.
+  String get _startLocation {
+    final start = const String.fromEnvironment('UB_START');
+    if (start.isEmpty) {
+      return AppRoutes.home;
+    }
+    final parts = start.split(':');
+    return switch (parts.first) {
+      'detail' => AppRoutes.bookPath(parts.length > 1 ? parts[1] : 'alice'),
+      'reader' => AppRoutes.readerPath(parts.length > 1 ? parts[1] : 'alice'),
+      _ => AppRoutes.home,
+    };
+  }
 }
 
-class _BooksAppShellState extends State<BooksAppShell>
-    with SingleTickerProviderStateMixin
-    implements UbHost {
+class BooksAppShellHost extends StatefulWidget {
+  const BooksAppShellHost({required this.shell, required this.child, super.key});
+
+  final BooksAppShell shell;
+
+  /// The nested navigator holding the matched route, provided by the
+  /// ShellRoute builder.
+  final Widget? child;
+
+  @override
+  State<BooksAppShellHost> createState() => _BooksAppShellHostState();
+}
+
+class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost {
   @override
   final UbAppState state = UbAppState();
 
   @override
-  DemoStore? get store => widget.store;
+  DemoStore? get store => widget.shell.store;
 
   final FocusNode _keyboardFocusNode = FocusNode();
   Timer? _toastTimer;
   final GrimoirePageRenderer _pageRenderer = GrimoirePageRenderer();
 
-  DemoStore? get _store => widget.store;
+  DemoStore? get _store => store;
+
+  GoRouter get _router => widget.shell.router.router;
 
   /// Completes when the bundled fixtures finish parsing. The
   /// persisted merge waits for it: the slow shelf parse must never
   /// overwrite store-driven books (unlocked fixtures, imports).
   final Completer<void> _shelfParsed = Completer<void>();
 
-  /// Drives the cross-page fade-through; forwarded from zero on every
-  /// page change.
-  late final AnimationController _pageController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
-  );
-
   @override
   void dispose() {
     _toastTimer?.cancel();
     _keyboardFocusNode.dispose();
-    _pageController.dispose();
     super.dispose();
   }
 
-  void _mutate(final void Function() body) => setState(body);
+  void _mutate(final void Function() body) {
+    setState(body);
+    widget.shell.revision.value++;
+  }
 
   /// Screenshot automation for the side-by-side prototype checks:
-  /// `--dart-define=UB_START=detail:pdf|reader:txt` and
-  /// `--dart-define=UB_OVERLAY=add|search|collections|summary|settings`.
+  /// `--dart-define=UB_START=detail:pdf|reader:txt` picks the entry
+  /// route (see [BooksAppShell.router]) and
+  /// `--dart-define=UB_OVERLAY=add|search|collections|summary|settings`
+  /// pre-opens an overlay.
   @override
   void initState() {
     super.initState();
-    // Start settled: the first page renders without a transition.
-    _pageController.value = 1.0;
     unawaited(_loadShelf().whenComplete(_shelfParsed.complete));
     unawaited(_loadPersisted());
     final start = const String.fromEnvironment('UB_START');
-    if (start.isNotEmpty) {
-      final parts = start.split(':');
-      switch (parts.first) {
-        case 'detail':
-          state.selectedBook = parts.length > 1 ? parts[1] : 'alice';
-          state.page = UbPage.detail;
-        case 'reader':
-          state.selectedBook = parts.length > 1 ? parts[1] : 'alice';
-          final book = state.bookById(state.selectedBook);
-          state.readerMode = switch (book?.fixture.reader ?? 'reflow') {
-            'comic' => ReaderMode.comic,
-            'pages' => ReaderMode.pages,
-            _ => ReaderMode.reflow,
-          };
-          state.page = UbPage.reader;
-      }
+    final startParts = start.split(':');
+    if (startParts.length > 1 && (startParts.first == 'detail' || startParts.first == 'reader')) {
+      state.selectedBook = startParts[1];
     }
     switch (const String.fromEnvironment('UB_OVERLAY')) {
       case 'add':
@@ -202,11 +146,66 @@ class _BooksAppShellState extends State<BooksAppShell>
     }
   }
 
+  @override
+  Widget build(final BuildContext context) {
+    final child = widget.child;
+    // A Material ancestor so overlay TextFields (search, notes,
+    // collections, PDF password) work outside any Scaffold.
+    return Material(
+      type: MaterialType.transparency,
+      child: UbHostScope(
+        host: this,
+        child: KeyboardListener(
+          focusNode: _keyboardFocusNode,
+          onKeyEvent: (final event) {
+            if (event is KeyDownEvent &&
+                event.logicalKey == LogicalKeyboardKey.escape &&
+                (state.modal != UbModal.none || state.sheet != UbSheet.none)) {
+              _mutate(() {
+                state.modal = UbModal.none;
+                state.sheet = UbSheet.none;
+              });
+            }
+          },
+          child: Stack(
+            children: <Widget>[
+              // Route transitions cross-fade, but the navigator has
+              // nothing painted beneath its first frame: an opaque
+              // backdrop keeps the window's black background from
+              // flashing.
+              Positioned.fill(child: ColoredBox(color: UbScope.of(context).bg)),
+              if (child != null) Positioned.fill(child: child),
+              // The sheet host sits below the modal host so the
+              // accepted-formats modal opens on top of the add-book
+              // sheet without dismissing it.
+              Positioned.fill(
+                child: UbSheetHost(
+                  host: this,
+                  sheet: state.sheet,
+                  onDismiss: () => dispatch('close-sheet'),
+                ),
+              ),
+              Positioned.fill(
+                child: UbModalHost(
+                  host: this,
+                  modal: state.modal,
+                  onDismiss: () => dispatch('close-modal'),
+                ),
+              ),
+              if (state.toast.isNotEmpty)
+                Positioned(right: 20, bottom: 20, child: _UbToast(message: state.toast)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Parses the bundled fixtures through Unseal so the shelf shows the
   /// books' own metadata and covers.
   Future<void> _loadShelf() async {
     try {
-      final List<LoadedBook> books = await (widget.shelfLoader ?? loadDemoShelf)();
+      final List<LoadedBook> books = await (widget.shell.shelfLoader ?? loadDemoShelf)();
       if (!mounted) {
         return;
       }
@@ -262,23 +261,6 @@ class _BooksAppShellState extends State<BooksAppShell>
     });
   }
 
-  /// Every runtime page change funnels through here so the shell can
-  /// replay the fade-through (initState's direct assignments excluded:
-  /// the app starts settled).
-  void _setPage(final UbPage page) {
-    _pageController.forward(from: 0);
-    state.page = page;
-  }
-
-  @override
-  void goToPage(final UbPage page) {
-    _mutate(() {
-      state.modal = UbModal.none;
-      state.sheet = UbSheet.none;
-      _setPage(page);
-    });
-  }
-
   void _openReader() {
     _mutate(() {
       final book = state.bookById(state.selectedBook);
@@ -289,8 +271,8 @@ class _BooksAppShellState extends State<BooksAppShell>
       };
       state.modal = UbModal.none;
       state.sheet = UbSheet.none;
-      _setPage(UbPage.reader);
     });
+    unawaited(_router.push(AppRoutes.readerPath(state.selectedBook)));
   }
 
   String _mapImportedBook() {
@@ -352,21 +334,17 @@ class _BooksAppShellState extends State<BooksAppShell>
           state.selectedBook = _mapImportedBook();
           state.modal = UbModal.none;
           state.sheet = UbSheet.none;
-          _setPage(UbPage.reading);
         });
+        _router.go(AppRoutes.home);
         showToast('Livro adicionado à sua biblioteca.');
       case 'open-detail':
         _mutate(() {
           state.selectedBook = data ?? 'alice';
-          state.previousPage = state.page == UbPage.reader ? UbPage.reading : state.page;
           state.modal = UbModal.none;
           state.sheet = UbSheet.none;
-          _setPage(UbPage.detail);
         });
+        _router.go(AppRoutes.bookPath(state.selectedBook));
       case 'open-reader':
-        _mutate(
-          () => state.previousPage = state.page == UbPage.detail ? UbPage.detail : state.page,
-        );
         _openReader();
       case 'share-book':
         final sharedBook = state.bookById(state.selectedBook);
@@ -407,9 +385,12 @@ class _BooksAppShellState extends State<BooksAppShell>
         _mutate(() => state.sheet = UbSheet.none);
         showToast('Posição encontrada.');
       case 'reader-back':
-        final previous = state.previousPage == UbPage.reader ? UbPage.reading : state.previousPage;
         _mutate(() => state.sheet = UbSheet.none);
-        goToPage(previous);
+        if (_router.canPop()) {
+          _router.pop();
+        } else {
+          _router.go(AppRoutes.home);
+        }
       case 'open-reader-settings':
         _mutate(() {
           state.modal = UbModal.none;
@@ -480,10 +461,8 @@ class _BooksAppShellState extends State<BooksAppShell>
         _mutate(() => state.sheet = UbSheet.none);
         showToast('Livro adicionado à coleção $collectionName.');
       case 'select-collection':
-        _mutate(() {
-          state.sheet = UbSheet.none;
-          state.page = UbPage.reading;
-        });
+        _mutate(() => state.sheet = UbSheet.none);
+        _router.go(AppRoutes.home);
         showToast('Coleção ${data ?? 'selecionada'}.');
       case 'create-collection':
         final name = state.newCollectionName.trim();
@@ -507,7 +486,7 @@ class _BooksAppShellState extends State<BooksAppShell>
           return;
         }
       case 'page-reading':
-        goToPage(UbPage.reading);
+        _router.go(AppRoutes.home);
     }
   }
 
@@ -675,7 +654,7 @@ class _BooksAppShellState extends State<BooksAppShell>
 
   /// Opens the system file picker, copies the file into the app's
   /// documents directory and parses it through Unseal. Anything the
-  /// parser cannot read surfaces as the import modal's error.
+  /// parser cannot read surfaces as the import sheet's error.
   Future<void> _importFromDevice() async {
     final picked = await FilePicker.pickFiles(type: FileType.any);
     final path = picked.isEmpty ? null : picked.single.path;
@@ -719,8 +698,8 @@ class _BooksAppShellState extends State<BooksAppShell>
         state.importType = '';
         state.importStep = 1;
         state.importError = '';
-        _setPage(UbPage.reading);
       });
+      _router.go(AppRoutes.home);
       showToast('“${loaded.title}” importado.');
     } on Object catch (error) {
       _mutate(
@@ -732,7 +711,7 @@ class _BooksAppShellState extends State<BooksAppShell>
 
   /// Validates the typed password by really parsing the encrypted
   /// fixture with it: a wrong password fails the parse and surfaces as
-  /// the modal's error. The password is stored so future launches can
+  /// the sheet's error. The password is stored so future launches can
   /// re-open the book.
   Future<void> _unlockPdf() async {
     final password = state.pdfPassword;
@@ -769,89 +748,6 @@ class _BooksAppShellState extends State<BooksAppShell>
   static String _shortError(final Object error) {
     final text = '$error';
     return text.length > 120 ? '${text.substring(0, 120)}…' : text;
-  }
-
-  @override
-  Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    final isMobile = MediaQuery.sizeOf(context).width < 720;
-
-    final Widget chrome;
-    if (state.page == UbPage.reader) {
-      chrome = ReaderScreen(host: this);
-    } else {
-      final pageBody = switch (state.page) {
-        UbPage.reading => ReadingPage(host: this),
-        UbPage.detail => DetailPage(host: this),
-        UbPage.reader => const SizedBox.shrink(),
-      };
-      // Single-screen shell: no sidebar or bottom navigation, just the
-      // page below the system status bar (desktop windows get the same
-      // breathing room).
-      chrome = Column(
-        children: <Widget>[
-          SizedBox(height: MediaQuery.paddingOf(context).top + (isMobile ? 0 : 12)),
-          Expanded(child: pageBody),
-        ],
-      );
-    }
-
-    // A Material ancestor so overlay TextFields (search, notes,
-    // collections, PDF password) work outside any Scaffold.
-    return Material(
-      type: MaterialType.transparency,
-      child: KeyboardListener(
-        focusNode: _keyboardFocusNode,
-        onKeyEvent: (final event) {
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.escape &&
-              (state.modal != UbModal.none || state.sheet != UbSheet.none)) {
-            _mutate(() {
-              state.modal = UbModal.none;
-              state.sheet = UbSheet.none;
-            });
-          }
-        },
-        child: Stack(
-          children: <Widget>[
-            // The fade-through cross-fade is see-through at its
-            // midpoint and there is no previous page painted behind it
-            // (unlike a Navigator route stack), so an opaque backdrop
-            // keeps the window's black background from flashing.
-            Positioned.fill(child: ColoredBox(color: palette.bg)),
-            Positioned.fill(
-              child: FadeThroughTransition(
-                animation: _pageController,
-                // No route stack sits on top of the shell, so the
-                // secondary (pushed-on-top) animation stays settled.
-                secondaryAnimation: kAlwaysDismissedAnimation,
-                fillColor: palette.bg,
-                child: KeyedSubtree(key: ValueKey<UbPage>(state.page), child: chrome),
-              ),
-            ),
-            // The sheet host sits below the modal host so the
-            // accepted-formats modal opens on top of the add-book
-            // sheet without dismissing it.
-            Positioned.fill(
-              child: UbSheetHost(
-                host: this,
-                sheet: state.sheet,
-                onDismiss: () => dispatch('close-sheet'),
-              ),
-            ),
-            Positioned.fill(
-              child: UbModalHost(
-                host: this,
-                modal: state.modal,
-                onDismiss: () => dispatch('close-modal'),
-              ),
-            ),
-            if (state.toast.isNotEmpty)
-              Positioned(right: 20, bottom: 20, child: _UbToast(message: state.toast)),
-          ],
-        ),
-      ),
-    );
   }
 }
 

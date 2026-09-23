@@ -17,7 +17,10 @@ class UbPageScaffold extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
     final horizontal = isMobile ? 16.0 : (width < 900 ? 28.0 : ubPagePadding(width));
-    final top = isMobile ? 25.0 : 34.0;
+    // The system status bar plus the prototype's desktop breathing
+    // room; the pages sit under the router now, which adds nothing.
+    final systemTop = MediaQuery.paddingOf(context).top + (isMobile ? 0.0 : 12.0);
+    final top = systemTop + (isMobile ? 25.0 : 34.0);
     final bottom = isMobile ? 94.0 : 80.0;
 
     return Align(

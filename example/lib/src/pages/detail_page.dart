@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../app_shell.dart';
+import '../app/app_state.dart';
 import '../ub_icon.dart';
 import '../ub_theme.dart';
 import '../ub_widgets.dart';
@@ -12,9 +12,12 @@ import 'page_scaffold.dart';
 part 'detail_page/meta_cell.dart';
 
 class DetailPage extends StatelessWidget {
-  const DetailPage({required this.host, super.key});
+  const DetailPage({required this.host, required this.bookId, super.key});
 
   final UbHost host;
+
+  /// The demo fixture id from the `/book/:id` route.
+  final String bookId;
 
   @override
   Widget build(final BuildContext context) {
@@ -39,13 +42,13 @@ class DetailPage extends StatelessWidget {
                     UbLinkButton(
                       label: 'Início',
                       chevron: false,
-                      onPressed: () => host.goToPage(UbPage.reading),
+                      onPressed: () => host.dispatch('page-reading'),
                     ),
                   ],
                 ),
               ),
             ),
-            _DetailBody(host: host),
+            _DetailBody(host: host, bookId: bookId),
           ],
         ),
       ),
@@ -54,16 +57,17 @@ class DetailPage extends StatelessWidget {
 }
 
 class _DetailBody extends StatelessWidget {
-  const _DetailBody({required this.host});
+  const _DetailBody({required this.host, required this.bookId});
 
   final UbHost host;
+  final String bookId;
 
   @override
   Widget build(final BuildContext context) {
     final palette = UbScope.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
-    final book = host.state.bookById(host.state.selectedBook);
+    final book = host.state.bookById(bookId);
     if (book == null) {
       return const SizedBox.shrink();
     }

@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../app_shell.dart';
+import '../../app/app_state.dart';
 import '../../demo_data.dart';
 import '../../ub_theme.dart';
 import '../../ub_widgets.dart';

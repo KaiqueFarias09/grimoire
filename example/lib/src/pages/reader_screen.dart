@@ -1,7 +1,6 @@
 /// The reader screen: the prototype's reader chrome (top bar, paper,
-/// bottom bar, inline settings, host note) around either the real
-/// Grimoire viewer (books with bundled fixtures) or the prototype's
-/// mock paper.
+/// bottom bar) around the real Grimoire viewer, with the settings
+/// sheet over it.
 library;
 
 import 'dart:async';
@@ -12,7 +11,7 @@ import 'package:grimoire/grimoire.dart';
 import 'package:unseal/unseal.dart' show NavPoint;
 import 'package:path_provider/path_provider.dart';
 
-import '../app_shell.dart';
+import '../app/app_state.dart';
 import '../demo_data.dart';
 import '../ub_icon.dart';
 import '../ub_theme.dart';
@@ -26,9 +25,12 @@ part 'reader_screen/reader_bottom_bar_content.dart';
 part 'reader_screen/reader_bottom_button.dart';
 
 class ReaderScreen extends StatefulWidget {
-  const ReaderScreen({required this.host, super.key});
+  const ReaderScreen({required this.host, required this.bookId, super.key});
 
   final UbHost host;
+
+  /// The demo fixture id from the `/read/:id` route.
+  final String bookId;
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -45,7 +47,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   StreamSubscription<void>? _annotationsSub;
   StreamSubscription<ViewerPageChange>? _pageSub;
 
-  LoadedBook? get entry => widget.host.state.bookById(widget.host.state.selectedBook);
+  LoadedBook? get entry => widget.host.state.bookById(widget.bookId);
 
   @override
   void initState() {
@@ -72,7 +74,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Future<void> _buildController(final Book book, final String cachePath) async {
     final state = widget.host.state;
-    final bookId = entry?.fixture.id ?? '';
+    final bookId = widget.bookId;
     final controller =
         ViewerController(book, theme: _viewerTheme(state.readerTheme), fontFamily: UbType.serif)
           ..useHostChrome = true
