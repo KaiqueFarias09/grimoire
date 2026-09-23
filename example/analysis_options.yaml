@@ -7,6 +7,10 @@ analyzer:
     - "lib/**/*.g.dart"
     - "lib/objectbox.g.dart"
     - "lib/**/*.freezed.dart"
+    - android/**
+    - ios/**
+    - web/**
+    - macos/**
   language:
     strict-casts: true
     strict-inference: true

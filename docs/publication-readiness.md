@@ -78,6 +78,13 @@ Do not suppress whole rules simply to reduce counts. Prioritize public
 contract, resource safety, state lifecycle, and maintainability findings with
 deterministic evidence.
 
+The example's `flutter.analysis-options.out-of-sync` warning reflects
+Flutter-managed platform exclusions plus the generated `objectbox.g.dart`
+exclusion. The Flutter tooling adds the platform paths during `pub get`; keep
+them in the tracked file so the release gate and pub.dev dry-run see a clean
+tree. The generated ObjectBox file needs its explicit exclusion for the
+example's strict analyzer settings.
+
 ### All remaining convention rules
 
 The tables give every rule reported by the final `--severity info` scan.
