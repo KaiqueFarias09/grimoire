@@ -120,6 +120,10 @@ final class NavigationCoordinator {
     final index = target.clamp(0, itemCount - 1);
     final other = 1 - _activeSlot;
     if (_loadedFiles[other] == index && _engineReady[other]) {
+      // A ready spare activated through this path never replays its
+      // ready pass, so its document can still hold the appearance
+      // from before a theme or font change: reapply first.
+      await host.applyEngineSettings(other);
       await applyIntent(other, intent);
       _activate(other);
 

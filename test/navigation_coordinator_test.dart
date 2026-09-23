@@ -63,6 +63,43 @@ void main() {
     expect(navigation.resolveRelativePath('./chapter1.html'), 0);
     expect(navigation.resolveRelativePath('missing.html'), isNull);
   });
+
+  test('activating a ready spare engine reapplies host settings', () async {
+    final host = _NavigationHost();
+    final navigation = _navigation(host)..prepareInitial(0);
+    navigation.beginEngineReady(0);
+
+    // The spare engine prefetched file 1 and went ready, then the host
+    // appearance changed; the ready pass applied the old settings.
+    await navigation.preloadNext();
+    navigation.beginEngineReady(1);
+    host.settingsSlots.clear();
+
+    await navigation.navigate(1, const NavigationIntent());
+
+    expect(host.fileIndex, 1);
+    expect(host.settingsSlots, <int>[1]);
+  });
+
+  test('backward navigation into a ready engine reapplies host settings', () async {
+    final host = _NavigationHost();
+    final navigation = _navigation(host)..prepareInitial(0);
+    navigation.beginEngineReady(0);
+
+    await navigation.jumpTo(
+      currentFileIndex: host.fileIndex,
+      currentOffset: host.charOffset,
+      fileIndex: 1,
+      intent: const NavigationIntent(offset: 7),
+    );
+    await _finishReady(navigation, 1);
+    host.settingsSlots.clear();
+
+    await navigation.goBack();
+
+    expect(host.fileIndex, 0);
+    expect(host.settingsSlots, <int>[0]);
+  });
 }
 
 NavigationCoordinator _navigation(final NavigationHost host) => NavigationCoordinator(
@@ -82,6 +119,7 @@ Future<void> _finishReady(final NavigationCoordinator navigation, final int slot
 final class _NavigationHost implements NavigationHost {
   final List<(int, int)> loads = <(int, int)>[];
   final List<(int, Map<String, Object?>)> commands = <(int, Map<String, Object?>)>[];
+  final List<int> settingsSlots = <int>[];
   int fileIndex = 0;
   int charOffset = 0;
 
@@ -96,6 +134,11 @@ final class _NavigationHost implements NavigationHost {
   @override
   Future<void> sendNavigationCommand(final int slot, final Map<String, Object?> command) async {
     commands.add((slot, command));
+  }
+
+  @override
+  Future<void> applyEngineSettings(final int slot) async {
+    settingsSlots.add(slot);
   }
 
   @override

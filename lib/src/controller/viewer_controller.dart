@@ -1566,6 +1566,9 @@ class ViewerController extends ChangeNotifier
       _sendTo(slot, command);
 
   @override
+  Future<void> applyEngineSettings(final int slot) => _applySettingsTo(slot);
+
+  @override
   void navigationDidActivate(final int slot, final int fileIndex) {
     _position = ViewerPosition(fileIndex: fileIndex, charOffset: 0);
     notifyListeners();

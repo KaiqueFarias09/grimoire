@@ -9,6 +9,10 @@ abstract interface class NavigationHost {
   /// Sends one positioning command to [slot].
   Future<void> sendNavigationCommand(int slot, Map<String, Object?> command);
 
+  /// Reapplies the host's current appearance settings (theme, font
+  /// size, margins, ...) to [slot].
+  Future<void> applyEngineSettings(int slot);
+
   /// Makes [slot] visible at [fileIndex].
   void navigationDidActivate(int slot, int fileIndex);
 
