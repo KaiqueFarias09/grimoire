@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:html/parser.dart' show parseFragment;
 import 'package:unseal/unseal.dart';
 
 import 'store/demo_store.dart';
@@ -244,7 +245,19 @@ class LoadedBook {
       format == BookFormat.cb7 ||
       format == BookFormat.cbc;
 
-  String get description => metadataDescription ?? fixture.descriptionFallback;
+  /// The book's synopsis in plain text. Publishers store the OPF
+  /// description as escaped HTML (Standard Ebooks wraps it in `<p>`
+  /// with `<i>` and `<a>` markup), so tags and entities are decoded
+  /// before any screen shows it.
+  String get description {
+    final value = metadataDescription;
+    if (value == null) {
+      return fixture.descriptionFallback;
+    }
+    final text = (parseFragment(value).text ?? value).replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return text.isEmpty ? fixture.descriptionFallback : text;
+  }
 
   /// A 1x1 "cover" (or anything smaller than 16px on a side) counts as
   /// no cover at all.
