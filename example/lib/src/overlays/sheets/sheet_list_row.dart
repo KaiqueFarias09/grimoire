@@ -40,15 +40,7 @@ class _SheetListRow extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Text(title, style: TextStyle(fontSize: 13, color: palette.ink)),
-                        const SizedBox(height: 4),
-                        Text(subtitle, style: TextStyle(fontSize: 11, color: palette.muted)),
-                      ],
-                    ),
+                    child: Text(title, style: TextStyle(fontSize: 13, color: palette.ink)),
                   ),
                   if (trailing != null) ...<Widget>[const SizedBox(width: 16), trailing!],
                 ],

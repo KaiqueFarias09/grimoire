@@ -32,9 +32,6 @@ class UbOverlaySection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: TextStyle(fontSize: 14, color: palette.ink)),
-          const SizedBox(height: 7),
-          Text(description, style: TextStyle(fontSize: 13, height: 1.5, color: palette.muted)),
           const SizedBox(height: 12),
           child,
         ],
