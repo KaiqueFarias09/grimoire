@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'grimoire_example_app.dart';
-import 'src/store/demo_store.dart';
+import 'package:grimoire_example/grimoire_example_app.dart';
+import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

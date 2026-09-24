@@ -4,11 +4,11 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../ub_theme.dart';
-import '../ub_widgets.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
+import 'package:grimoire_example/src/shared/widgets/app_widgets.dart';
 
-class UbPageScaffold extends StatelessWidget {
-  const UbPageScaffold({required this.child, super.key});
+class AppPageScaffold extends StatelessWidget {
+  const AppPageScaffold({required this.child, super.key});
 
   final Widget child;
 
@@ -16,7 +16,7 @@ class UbPageScaffold extends StatelessWidget {
   Widget build(final BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
-    final horizontal = isMobile ? 16.0 : (width < 900 ? 28.0 : ubPagePadding(width));
+    final horizontal = isMobile ? 16.0 : (width < 900 ? 28.0 : appPagePadding(width));
     // The system status bar plus the prototype's desktop breathing
     // room; the pages sit under the router now, which adds nothing.
     final systemTop = MediaQuery.paddingOf(context).top + (isMobile ? 0.0 : 12.0);
@@ -38,8 +38,8 @@ class UbPageScaffold extends StatelessWidget {
 
 /// The page heading block: overline, big title, subtitle, trailing
 /// action aligned to the bottom (start of the text block on mobile).
-class UbPageHeading extends StatelessWidget {
-  const UbPageHeading({required this.title, required this.subtitle, this.action, super.key});
+class AppPageHeading extends StatelessWidget {
+  const AppPageHeading({required this.title, required this.subtitle, this.action, super.key});
 
   final String title;
   final String subtitle;
@@ -47,10 +47,10 @@ class UbPageHeading extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
-    final titleSize = isMobile ? 32.0 : ubH1Size(width);
+    final titleSize = isMobile ? 32.0 : appH1Size(width);
 
     final Widget textColumn = Column(
       // Stretched on mobile so the subtitle wraps across the full
@@ -93,8 +93,8 @@ class UbPageHeading extends StatelessWidget {
 }
 
 /// Section heading with title, subtitle and a trailing text link.
-class UbSectionHeading extends StatelessWidget {
-  const UbSectionHeading({
+class AppSectionHeading extends StatelessWidget {
+  const AppSectionHeading({
     required this.title,
     required this.subtitle,
     this.actionLabel,
@@ -109,7 +109,7 @@ class UbSectionHeading extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final isMobile = MediaQuery.sizeOf(context).width < 720;
 
     return Padding(
@@ -133,7 +133,7 @@ class UbSectionHeading extends StatelessWidget {
               ],
             ),
           ),
-          if (actionLabel != null) UbLinkButton(label: actionLabel!, onPressed: onAction ?? () {}),
+          if (actionLabel != null) AppLinkButton(label: actionLabel!, onPressed: onAction ?? () {}),
         ],
       ),
     );

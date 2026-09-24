@@ -5,13 +5,13 @@ part of '../reader_screen.dart';
 class _ReaderAppBar extends StatelessWidget {
   const _ReaderAppBar({required this.host, required this.visible, required this.onBack});
 
-  final UbHost host;
+  final DemoHost host;
   final bool visible;
   final VoidCallback onBack;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final state = host.state;
     final book = state.bookById(state.selectedBook);
 
@@ -37,7 +37,7 @@ class _ReaderAppBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: <Widget>[
-                    UbIconButton(icon: UbIcons.arrowLeft, tooltip: 'Voltar', onPressed: onBack),
+                    AppIconButton(icon: AppIcons.arrowLeft, tooltip: 'Voltar', onPressed: onBack),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Column(
@@ -60,17 +60,17 @@ class _ReaderAppBar extends StatelessWidget {
                         ],
                       ),
                     ),
-                    UbIconButton(
-                      icon: UbIcons.bookmark,
+                    AppIconButton(
+                      icon: AppIcons.bookmark,
                       tooltip: 'Marcar posição',
                       active: state.bookmarked,
                       onPressed: () => host.dispatch('toggle-bookmark'),
                     ),
                     const SizedBox(width: 4),
-                    UbIconButton(
-                      icon: UbIcons.type,
+                    AppIconButton(
+                      icon: AppIcons.type,
                       tooltip: 'Temas e ajustes',
-                      active: state.sheet == UbSheet.readerSettings,
+                      active: state.sheet == DemoSheet.readerSettings,
                       onPressed: () => host.dispatch('open-reader-settings'),
                     ),
                   ],

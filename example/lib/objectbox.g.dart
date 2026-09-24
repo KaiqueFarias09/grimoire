@@ -14,7 +14,7 @@ import 'package:objectbox/internal.dart'
 import 'package:objectbox/objectbox.dart' as obx;
 import 'package:objectbox_flutter_libs/objectbox_flutter_libs.dart';
 
-import 'src/store/demo_store.dart';
+import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
 
 export 'package:objectbox/objectbox.dart'; // so that callers only have to import this file
 

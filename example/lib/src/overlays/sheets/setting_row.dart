@@ -15,7 +15,7 @@ class _SettingRow extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 11),
       child: Wrap(

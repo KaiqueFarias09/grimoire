@@ -3,7 +3,7 @@ part of '../modals.dart';
 class _FormatHelpModal extends StatelessWidget {
   const _FormatHelpModal({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
@@ -15,9 +15,9 @@ class _FormatHelpModal extends StatelessWidget {
           subtitle: 'Escolha o formato que você quer adicionar à sua estante.',
           onClose: () => host.dispatch('close-modal'),
         ),
-        const UbFormatSection(),
+        const FormatSection(),
         const SizedBox(height: 13),
-        const UbOverlayAlert(
+        const OverlayAlert(
           'Arquivos protegidos por DRM e formatos não reconhecidos são recusados com uma mensagem clara.',
         ),
       ],

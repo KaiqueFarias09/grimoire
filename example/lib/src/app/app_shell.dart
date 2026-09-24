@@ -16,16 +16,17 @@ import 'package:go_router/go_router.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../demo_data.dart';
-import '../overlays/modals.dart';
-import '../overlays/sheets.dart';
-import '../pages/reader_screen.dart' show ReaderHooks;
-import '../store/demo_store.dart';
-import '../ub_icon.dart';
-import '../ub_theme.dart';
-import 'app_router.dart';
-import 'app_routes.dart';
-import 'app_state.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/overlays/modals.dart';
+import 'package:grimoire_example/src/overlays/sheets.dart';
+import 'package:grimoire_example/src/pages/reader_screen.dart' show ReaderHooks;
+import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
+import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
+import 'package:grimoire_example/src/app/app_router.dart';
+import 'package:grimoire_example/src/core/demo_flags.dart';
+import 'package:grimoire_example/src/app/app_routes.dart';
+import 'package:grimoire_example/src/app/app_state.dart';
 
 /// The demo's host configuration: owns the router and the revision
 /// notifier route pages rebuild on. The live host state lives in
@@ -55,9 +56,9 @@ class BooksAppShell {
   );
 
   /// `UB_START=detail:pdf|reader:txt` puts screenshot runs straight on
-  /// a route.
+  /// a route. Parsed in core/demo_flags.
   String get _startLocation {
-    final start = const String.fromEnvironment('UB_START');
+    final start = ubStart;
     if (start.isEmpty) {
       return AppRoutes.home;
     }
@@ -83,9 +84,9 @@ class BooksAppShellHost extends StatefulWidget {
   State<BooksAppShellHost> createState() => _BooksAppShellHostState();
 }
 
-class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost {
+class _BooksAppShellHostState extends State<BooksAppShellHost> implements DemoHost {
   @override
-  final UbAppState state = UbAppState();
+  final DemoAppState state = DemoAppState();
 
   @override
   DemoStore? get store => widget.shell.store;
@@ -125,24 +126,24 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
     super.initState();
     unawaited(_loadShelf().whenComplete(_shelfParsed.complete));
     unawaited(_loadPersisted());
-    final start = const String.fromEnvironment('UB_START');
+    final start = ubStart;
     final startParts = start.split(':');
     if (startParts.length > 1 && (startParts.first == 'detail' || startParts.first == 'reader')) {
       state.selectedBook = startParts[1];
     }
-    switch (const String.fromEnvironment('UB_OVERLAY')) {
+    switch (ubOverlay) {
       case 'add':
-        state.sheet = UbSheet.addBook;
+        state.sheet = DemoSheet.addBook;
       case 'note':
-        state.modal = UbModal.note;
+        state.modal = DemoModal.note;
       case 'search':
-        state.sheet = UbSheet.globalSearch;
+        state.sheet = DemoSheet.globalSearch;
       case 'collections':
-        state.sheet = UbSheet.collections;
+        state.sheet = DemoSheet.collections;
       case 'summary':
-        state.sheet = UbSheet.summary;
+        state.sheet = DemoSheet.summary;
       case 'settings':
-        state.sheet = UbSheet.readerSettings;
+        state.sheet = DemoSheet.readerSettings;
     }
   }
 
@@ -153,17 +154,17 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
     // collections, PDF password) work outside any Scaffold.
     return Material(
       type: MaterialType.transparency,
-      child: UbHostScope(
+      child: DemoHostScope(
         host: this,
         child: KeyboardListener(
           focusNode: _keyboardFocusNode,
           onKeyEvent: (final event) {
             if (event is KeyDownEvent &&
                 event.logicalKey == LogicalKeyboardKey.escape &&
-                (state.modal != UbModal.none || state.sheet != UbSheet.none)) {
+                (state.modal != DemoModal.none || state.sheet != DemoSheet.none)) {
               _mutate(() {
-                state.modal = UbModal.none;
-                state.sheet = UbSheet.none;
+                state.modal = DemoModal.none;
+                state.sheet = DemoSheet.none;
               });
             }
           },
@@ -173,20 +174,20 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
               // nothing painted beneath its first frame: an opaque
               // backdrop keeps the window's black background from
               // flashing.
-              Positioned.fill(child: ColoredBox(color: UbScope.of(context).bg)),
+              Positioned.fill(child: ColoredBox(color: AppScope.of(context).bg)),
               if (child != null) Positioned.fill(child: child),
               // The sheet host sits below the modal host so the
               // accepted-formats modal opens on top of the add-book
               // sheet without dismissing it.
               Positioned.fill(
-                child: UbSheetHost(
+                child: SheetHost(
                   host: this,
                   sheet: state.sheet,
                   onDismiss: () => dispatch('close-sheet'),
                 ),
               ),
               Positioned.fill(
-                child: UbModalHost(
+                child: ModalHost(
                   host: this,
                   modal: state.modal,
                   onDismiss: () => dispatch('close-modal'),
@@ -276,8 +277,8 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         'pages' => ReaderMode.pages,
         _ => ReaderMode.reflow,
       };
-      state.modal = UbModal.none;
-      state.sheet = UbSheet.none;
+      state.modal = DemoModal.none;
+      state.sheet = DemoSheet.none;
     });
     unawaited(_router.push(AppRoutes.readerPath(state.selectedBook)));
   }
@@ -296,8 +297,8 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
     switch (action) {
       case 'open-add':
         _mutate(() {
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.addBook;
+          state.modal = DemoModal.none;
+          state.sheet = DemoSheet.addBook;
           state.importType = '';
           state.importStep = 1;
           state.importError = '';
@@ -305,21 +306,21 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         });
       case 'open-global-search':
         _mutate(() {
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.globalSearch;
+          state.modal = DemoModal.none;
+          state.sheet = DemoSheet.globalSearch;
           state.searchRan = false;
           state.searchQuery = '';
         });
       case 'open-collections':
         _mutate(() {
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.collections;
+          state.modal = DemoModal.none;
+          state.sheet = DemoSheet.collections;
           state.collectionError = '';
         });
       case 'open-format-help':
-        _mutate(() => state.modal = UbModal.formatHelp);
+        _mutate(() => state.modal = DemoModal.formatHelp);
       case 'close-modal':
-        _mutate(() => state.modal = UbModal.none);
+        _mutate(() => state.modal = DemoModal.none);
       case 'select-import':
         _mutate(() {
           state.importType = data ?? 'alice';
@@ -339,16 +340,16 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
       case 'add-imported':
         _mutate(() {
           state.selectedBook = _mapImportedBook();
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.none;
+          state.modal = DemoModal.none;
+          state.sheet = DemoSheet.none;
         });
         _router.go(AppRoutes.home);
         showToast('Livro adicionado à sua biblioteca.');
       case 'open-detail':
         _mutate(() {
           state.selectedBook = data ?? 'alice';
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.none;
+          state.modal = DemoModal.none;
+          state.sheet = DemoSheet.none;
         });
         _router.go(AppRoutes.bookPath(state.selectedBook));
       case 'open-reader':
@@ -369,14 +370,14 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         }
       case 'close-sheet':
         _mutate(() {
-          state.sheet = UbSheet.none;
+          state.sheet = DemoSheet.none;
           state.collectionError = '';
         });
       case 'open-summary-sheet':
-        _mutate(() => state.sheet = UbSheet.summary);
+        _mutate(() => state.sheet = DemoSheet.summary);
       case 'open-reader-search-sheet':
         _mutate(() {
-          state.sheet = UbSheet.readerSearch;
+          state.sheet = DemoSheet.readerSearch;
           state.searchRan = false;
           state.searchQuery = '';
         });
@@ -384,15 +385,15 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         unawaited(_runReaderSearch());
       case 'select-chapter':
         ReaderHooks.selectedChapter?.call(data);
-        _mutate(() => state.sheet = UbSheet.none);
+        _mutate(() => state.sheet = DemoSheet.none);
         showToast('Capítulo selecionado.');
       case 'jump-to-result':
         final index = int.tryParse(data ?? '') ?? 0;
         ReaderHooks.jumpToSearchResult?.call(index);
-        _mutate(() => state.sheet = UbSheet.none);
+        _mutate(() => state.sheet = DemoSheet.none);
         showToast('Posição encontrada.');
       case 'reader-back':
-        _mutate(() => state.sheet = UbSheet.none);
+        _mutate(() => state.sheet = DemoSheet.none);
         if (_router.canPop()) {
           _router.pop();
         } else {
@@ -400,8 +401,8 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         }
       case 'open-reader-settings':
         _mutate(() {
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.readerSettings;
+          state.modal = DemoModal.none;
+          state.sheet = DemoSheet.readerSettings;
         });
       case 'reader-theme':
         _mutate(
@@ -444,10 +445,10 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
           return;
         }
         _mutate(() {
-          state.sheet = UbSheet.none;
+          state.sheet = DemoSheet.none;
           state.noteQuote = quote;
           state.noteText = '';
-          state.modal = UbModal.note;
+          state.modal = DemoModal.note;
         });
       case 'save-note':
         final note = state.noteText.trim();
@@ -457,18 +458,18 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         }
         unawaited(ReaderHooks.saveNote?.call(note));
         _mutate(() {
-          state.modal = UbModal.none;
-          state.sheet = UbSheet.none;
+          state.modal = DemoModal.none;
+          state.sheet = DemoSheet.none;
         });
         showToast('Nota salva junto do trecho.');
       case 'choose-collection':
         final collectionName = data ?? 'coleção';
         _store?.addToCollection(collectionName, state.selectedBook);
         _refreshCollectionCounts();
-        _mutate(() => state.sheet = UbSheet.none);
+        _mutate(() => state.sheet = DemoSheet.none);
         showToast('Livro adicionado à coleção $collectionName.');
       case 'select-collection':
-        _mutate(() => state.sheet = UbSheet.none);
+        _mutate(() => state.sheet = DemoSheet.none);
         _router.go(AppRoutes.home);
         showToast('Coleção ${data ?? 'selecionada'}.');
       case 'create-collection':
@@ -486,7 +487,7 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
           _mutate(() {
             state.newCollectionName = '';
             state.collectionError = '';
-            state.sheet = UbSheet.none;
+            state.sheet = DemoSheet.none;
           });
           showToast('Coleção “$name” criada.');
 
@@ -709,8 +710,8 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
       _mutate(() {
         state.books = [...state.books, loaded];
         state.selectedBook = id;
-        state.modal = UbModal.none;
-        state.sheet = UbSheet.none;
+        state.modal = DemoModal.none;
+        state.sheet = DemoSheet.none;
         state.importType = '';
         state.importStep = 1;
         state.importError = '';
@@ -775,7 +776,7 @@ class _UbToast extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Container(
       constraints: const BoxConstraints(maxWidth: 360),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -790,7 +791,7 @@ class _UbToast extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          UbIcon(UbIcons.checkCircle, size: 18, color: palette.inverseFg),
+          AppIcon(AppIcons.checkCircle, size: 18, color: palette.inverseFg),
           const SizedBox(width: 8),
           Flexible(
             child: Text(

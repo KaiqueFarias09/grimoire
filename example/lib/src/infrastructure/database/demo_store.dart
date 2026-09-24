@@ -14,7 +14,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:objectbox/objectbox.dart';
 
 // Generated query bindings (DemoBook_ etc.).
-import '../../objectbox.g.dart';
+import 'package:grimoire_example/objectbox.g.dart';
 
 /// Per-book persisted state: reading position, progress, the canonical
 /// annotations blob (bookmarks + highlights + notes) and the password

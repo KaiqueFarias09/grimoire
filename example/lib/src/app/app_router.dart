@@ -7,12 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../pages/detail_page.dart';
-import '../pages/reader_screen.dart';
-import '../pages/reading_page.dart';
-import 'app_routes.dart';
-import 'app_state.dart';
-import 'app_shell.dart';
+import 'package:grimoire_example/src/pages/detail_page.dart';
+import 'package:grimoire_example/src/pages/reader_screen.dart';
+import 'package:grimoire_example/src/pages/reading_page.dart';
+import 'package:grimoire_example/src/app/app_routes.dart';
+import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/app/app_shell.dart';
 
 class AppRouter {
   AppRouter({required String initialLocation, required this.revision, required this.shell})
@@ -52,21 +52,24 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.home,
         pageBuilder: (final context, final state) =>
-            _page(state, () => ReadingPage(host: UbHostScope.of(context))),
+            _page(state, () => ReadingPage(host: DemoHostScope.of(context))),
         routes: [
           GoRoute(
             path: 'book/:id',
             pageBuilder: (final context, final state) => _page(
               state,
-              () => DetailPage(host: UbHostScope.of(context), bookId: state.pathParameters['id']!),
+              () =>
+                  DetailPage(host: DemoHostScope.of(context), bookId: state.pathParameters['id']!),
             ),
           ),
           GoRoute(
             path: 'read/:id',
             pageBuilder: (final context, final state) => _page(
               state,
-              () =>
-                  ReaderScreen(host: UbHostScope.of(context), bookId: state.pathParameters['id']!),
+              () => ReaderScreen(
+                host: DemoHostScope.of(context),
+                bookId: state.pathParameters['id']!,
+              ),
             ),
           ),
         ],

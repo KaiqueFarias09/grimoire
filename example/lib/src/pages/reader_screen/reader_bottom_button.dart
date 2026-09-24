@@ -9,8 +9,8 @@ class _ReaderBottomButton extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return UbHover(
+    final palette = AppScope.of(context);
+    return AppHover(
       builder: (final context, final hovered) {
         final Color background = hovered ? palette.surface : Colors.transparent;
         final Color foreground = hovered ? palette.ink : palette.muted;
@@ -30,7 +30,7 @@ class _ReaderBottomButton extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  UbIcon(icon, size: 18, color: foreground),
+                  AppIcon(icon, size: 18, color: foreground),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(

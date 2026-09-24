@@ -6,19 +6,19 @@ library;
 import 'package:flutter/material.dart';
 import 'package:grimoire/grimoire.dart';
 
-import '../demo_data.dart';
-import '../store/demo_store.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
 
-enum UbModal { none, formatHelp, note }
+enum DemoModal { none, formatHelp, note }
 
-enum UbSheet { none, globalSearch, addBook, readerSearch, readerSettings, summary, collections }
+enum DemoSheet { none, globalSearch, addBook, readerSearch, readerSettings, summary, collections }
 
 enum ReaderMode { reflow, pages, comic }
 
 enum ReaderThemeMode { day, sepia, night }
 
 /// Mutable demo state, field-for-field like the prototype's `state`.
-class UbAppState {
+class DemoAppState {
   String selectedBook = 'alice';
 
   /// Parsed fixtures; empty until [shelfReady] flips.
@@ -46,14 +46,14 @@ class UbAppState {
   ReaderMode readerMode = ReaderMode.reflow;
   ReaderThemeMode readerTheme = ReaderThemeMode.day;
   int fontSize = 17;
-  UbSheet sheet = UbSheet.none;
+  DemoSheet sheet = DemoSheet.none;
   bool bookmarked = false;
   String noteText = '';
 
   /// The selected passage shown in the note modal; empty when the
   /// reader has no active selection.
   String noteQuote = '';
-  UbModal modal = UbModal.none;
+  DemoModal modal = DemoModal.none;
   String importType = '';
   int importStep = 1;
   String importError = '';
@@ -71,8 +71,8 @@ class UbAppState {
 }
 
 /// Host services the pages and overlays use: state plus dispatch.
-abstract class UbHost {
-  UbAppState get state;
+abstract class DemoHost {
+  DemoAppState get state;
 
   /// Host-owned persistence; null in widget tests.
   DemoStore? get store;
@@ -86,14 +86,14 @@ abstract class UbHost {
 
 /// Surfaces the host to route builders: go_router builds pages before
 /// any screen exists, so the host arrives from context, not a field.
-class UbHostScope extends InheritedWidget {
-  const UbHostScope({required this.host, required super.child, super.key});
+class DemoHostScope extends InheritedWidget {
+  const DemoHostScope({required this.host, required super.child, super.key});
 
-  final UbHost host;
+  final DemoHost host;
 
-  static UbHost of(final BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<UbHostScope>()!.host;
+  static DemoHost of(final BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<DemoHostScope>()!.host;
 
   @override
-  bool updateShouldNotify(final UbHostScope oldWidget) => false;
+  bool updateShouldNotify(final DemoHostScope oldWidget) => false;
 }

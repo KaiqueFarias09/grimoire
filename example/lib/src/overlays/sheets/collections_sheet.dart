@@ -3,7 +3,7 @@ part of '../sheets.dart';
 class _CollectionsSheet extends StatefulWidget {
   const _CollectionsSheet({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   State<_CollectionsSheet> createState() => _CollectionsSheetState();
@@ -20,7 +20,7 @@ class _CollectionsSheetState extends State<_CollectionsSheet> {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final state = widget.host.state;
 
     return _SheetFrame(
@@ -37,8 +37,8 @@ class _CollectionsSheetState extends State<_CollectionsSheet> {
                   title: collection.name,
                   subtitle: '${collection.count} livros',
                   onTap: () => widget.host.dispatch('choose-collection', data: collection.name),
-                  trailing: UbIcon(
-                    collection.name == 'Todos os livros' ? UbIcons.check : UbIcons.chevronRight,
+                  trailing: AppIcon(
+                    collection.name == 'Todos os livros' ? AppIcons.check : AppIcons.chevronRight,
                     size: 18,
                     color: palette.muted,
                   ),
@@ -88,7 +88,7 @@ class _CollectionsSheetState extends State<_CollectionsSheet> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    UbButton.blue('Criar', () => widget.host.dispatch('create-collection')),
+                    AppButton.blue('Criar', () => widget.host.dispatch('create-collection')),
                   ],
                 ),
                 if (state.collectionError.isNotEmpty) ...<Widget>[
@@ -103,7 +103,7 @@ class _CollectionsSheetState extends State<_CollectionsSheet> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        const UbIcon(UbIcons.alert, size: 18, color: Color(0xFFB42318)),
+                        const AppIcon(AppIcons.alert, size: 18, color: Color(0xFFB42318)),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(

@@ -4,7 +4,7 @@ part of '../reading_page.dart';
 class _BookShelf extends StatelessWidget {
   const _BookShelf({required this.host, required this.ids});
 
-  final UbHost host;
+  final DemoHost host;
   final List<String> ids;
 
   List<LoadedBook> get books => <LoadedBook>[
@@ -29,7 +29,7 @@ class _BookShelf extends StatelessWidget {
         separatorBuilder: (final _, final _) => SizedBox(width: gap),
         itemBuilder: (final context, final index) => SizedBox(
           width: cardWidth,
-          child: UbBookCard(host: host, book: books[index], coverMinHeight: coverMinHeight),
+          child: AppBookCard(host: host, book: books[index], coverMinHeight: coverMinHeight),
         ),
       ),
     );

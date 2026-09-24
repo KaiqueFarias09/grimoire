@@ -10,7 +10,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:html/parser.dart' show parseFragment;
 import 'package:unseal/unseal.dart';
 
-import 'store/demo_store.dart';
+import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
 
 /// A bundled fixture plus the demo-only reading state shown on the
 /// shelf before the book is opened.

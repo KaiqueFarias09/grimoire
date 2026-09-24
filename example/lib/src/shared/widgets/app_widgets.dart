@@ -4,23 +4,23 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'demo_data.dart';
-import 'ub_icon.dart';
-import 'ub_theme.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
 
-enum UbButtonVariant { dark, outline, blue, text, plain }
+enum AppButtonVariant { dark, outline, blue, text, plain }
 
 /// Rebuilds [builder] with the hovered state (desktop pointer).
-class UbHover extends StatefulWidget {
-  const UbHover({required this.builder, super.key});
+class AppHover extends StatefulWidget {
+  const AppHover({required this.builder, super.key});
 
   final Widget Function(BuildContext context, bool hovered) builder;
 
   @override
-  State<UbHover> createState() => _UbHoverState();
+  State<AppHover> createState() => _UbHoverState();
 }
 
-class _UbHoverState extends State<UbHover> {
+class _UbHoverState extends State<AppHover> {
   bool _hovered = false;
 
   @override
@@ -36,76 +36,94 @@ class _UbHoverState extends State<UbHover> {
 
 /// The prototype's button family: 38px tall, radius 8, 13px/600 labels,
 /// 18px icons, 7px gap.
-class UbButton extends StatelessWidget {
-  const UbButton({
+class AppButton extends StatelessWidget {
+  const AppButton({
     required this.label,
     required this.onPressed,
     this.icon,
-    this.variant = UbButtonVariant.outline,
+    this.variant = AppButtonVariant.outline,
     super.key,
   });
 
-  const UbButton.dark(String label, VoidCallback onPressed, {String? icon, Key? key})
-    : this(label: label, onPressed: onPressed, icon: icon, variant: UbButtonVariant.dark, key: key);
-
-  const UbButton.outline(String label, VoidCallback onPressed, {String? icon, Key? key})
+  const AppButton.dark(String label, VoidCallback onPressed, {String? icon, Key? key})
     : this(
         label: label,
         onPressed: onPressed,
         icon: icon,
-        variant: UbButtonVariant.outline,
+        variant: AppButtonVariant.dark,
         key: key,
       );
 
-  const UbButton.blue(String label, VoidCallback onPressed, {String? icon, Key? key})
-    : this(label: label, onPressed: onPressed, icon: icon, variant: UbButtonVariant.blue, key: key);
+  const AppButton.outline(String label, VoidCallback onPressed, {String? icon, Key? key})
+    : this(
+        label: label,
+        onPressed: onPressed,
+        icon: icon,
+        variant: AppButtonVariant.outline,
+        key: key,
+      );
 
-  const UbButton.text(String label, VoidCallback onPressed, {String? icon, Key? key})
-    : this(label: label, onPressed: onPressed, icon: icon, variant: UbButtonVariant.text, key: key);
+  const AppButton.blue(String label, VoidCallback onPressed, {String? icon, Key? key})
+    : this(
+        label: label,
+        onPressed: onPressed,
+        icon: icon,
+        variant: AppButtonVariant.blue,
+        key: key,
+      );
+
+  const AppButton.text(String label, VoidCallback onPressed, {String? icon, Key? key})
+    : this(
+        label: label,
+        onPressed: onPressed,
+        icon: icon,
+        variant: AppButtonVariant.text,
+        key: key,
+      );
 
   final String label;
   final VoidCallback onPressed;
   final String? icon;
-  final UbButtonVariant variant;
+  final AppButtonVariant variant;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final Color foreground;
     final Color background;
     final Color hoverBackground;
     final double horizontalPadding;
     switch (variant) {
-      case UbButtonVariant.dark:
+      case AppButtonVariant.dark:
         foreground = palette.inverseFg;
         background = palette.inverseBg;
         hoverBackground = palette.inverseBg.withValues(alpha: 0.82);
         horizontalPadding = 16;
-      case UbButtonVariant.outline:
+      case AppButtonVariant.outline:
         foreground = palette.ink;
         background = palette.bg;
         hoverBackground = palette.surface;
         horizontalPadding = 14;
-      case UbButtonVariant.blue:
+      case AppButtonVariant.blue:
         foreground = Colors.white;
         background = palette.blue;
         hoverBackground = const Color(0xFF006BD6);
         horizontalPadding = 16;
-      case UbButtonVariant.text:
+      case AppButtonVariant.text:
         foreground = palette.blue;
         background = Colors.transparent;
         hoverBackground = Colors.transparent;
         horizontalPadding = 7;
-      case UbButtonVariant.plain:
+      case AppButtonVariant.plain:
         foreground = palette.muted;
         background = Colors.transparent;
         hoverBackground = palette.surface;
         horizontalPadding = 7;
     }
 
-    return UbHover(
+    return AppHover(
       builder: (final context, final hovered) {
-        final underline = variant == UbButtonVariant.text && hovered;
+        final underline = variant == AppButtonVariant.text && hovered;
         return Semantics(
           button: true,
           label: label,
@@ -121,13 +139,15 @@ class UbButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: hovered ? hoverBackground : background,
                 borderRadius: BorderRadius.circular(8),
-                border: variant == UbButtonVariant.outline ? Border.all(color: palette.line) : null,
+                border: variant == AppButtonVariant.outline
+                    ? Border.all(color: palette.line)
+                    : null,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   if (icon != null) ...<Widget>[
-                    UbIcon(icon!, size: 18, color: foreground),
+                    AppIcon(icon!, size: 18, color: foreground),
                     const SizedBox(width: 7),
                   ],
                   Flexible(
@@ -155,8 +175,8 @@ class UbButton extends StatelessWidget {
 
 /// Blue inline link with an optional trailing chevron, used next to
 /// section headings ("Ver mais >").
-class UbLinkButton extends StatelessWidget {
-  const UbLinkButton({
+class AppLinkButton extends StatelessWidget {
+  const AppLinkButton({
     required this.label,
     required this.onPressed,
     this.chevron = true,
@@ -169,8 +189,8 @@ class UbLinkButton extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return UbHover(
+    final palette = AppScope.of(context);
+    return AppHover(
       builder: (final context, final hovered) {
         return Semantics(
           button: true,
@@ -195,7 +215,7 @@ class UbLinkButton extends StatelessWidget {
                 ),
                 if (chevron) ...<Widget>[
                   const SizedBox(width: 3),
-                  UbIcon(UbIcons.chevronRight, size: 18, color: palette.blue),
+                  AppIcon(AppIcons.chevronRight, size: 18, color: palette.blue),
                 ],
               ],
             ),
@@ -207,8 +227,8 @@ class UbLinkButton extends StatelessWidget {
 }
 
 /// 38x38 transparent icon button, radius 8.
-class UbIconButton extends StatelessWidget {
-  const UbIconButton({
+class AppIconButton extends StatelessWidget {
+  const AppIconButton({
     required this.icon,
     required this.onPressed,
     this.active = false,
@@ -225,8 +245,8 @@ class UbIconButton extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return UbHover(
+    final palette = AppScope.of(context);
+    return AppHover(
       builder: (final context, final hovered) {
         final Color background = active || hovered ? palette.surface : Colors.transparent;
         final Color foreground = active || hovered ? palette.ink : palette.muted;
@@ -242,7 +262,7 @@ class UbIconButton extends StatelessWidget {
               width: size,
               height: size,
               decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
-              child: Center(child: UbIcon(icon, size: 18, color: foreground)),
+              child: Center(child: AppIcon(icon, size: 18, color: foreground)),
             ),
           ),
         );
@@ -255,8 +275,8 @@ class UbIconButton extends StatelessWidget {
 /// Book cover slot: the real cover image when Unseal found one,
 /// otherwise a subtle card that names the file type clearly (and sits
 /// a bit shorter than covered books).
-class UbCover extends StatelessWidget {
-  const UbCover({required this.entry, this.width, this.minHeight, super.key});
+class AppCover extends StatelessWidget {
+  const AppCover({required this.entry, this.width, this.minHeight, super.key});
 
   final LoadedBook entry;
   final double? width;
@@ -264,7 +284,7 @@ class UbCover extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final coverFloor = minHeight;
 
     return LayoutBuilder(
@@ -304,7 +324,7 @@ class UbCover extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        UbIcon(UbIcons.bookOpen, size: 20, color: palette.subtle),
+                        AppIcon(AppIcons.bookOpen, size: 20, color: palette.subtle),
                         const SizedBox(height: 7),
                         Text(
                           entry.formatLabel,
@@ -338,15 +358,15 @@ class UbCover extends StatelessWidget {
 }
 
 /// Track + fill progress bar; fill fraction `0..1`.
-class UbProgressBar extends StatelessWidget {
-  const UbProgressBar({required this.fraction, this.height = 4, super.key});
+class AppProgressBar extends StatelessWidget {
+  const AppProgressBar({required this.fraction, this.height = 4, super.key});
 
   final double fraction;
   final double height;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return LayoutBuilder(
       builder: (final context, final constraints) {
         final width = constraints.maxWidth;

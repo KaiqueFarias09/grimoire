@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire_example/grimoire_example_app.dart';
-import 'package:grimoire_example/src/demo_data.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
 import 'package:unseal/unseal.dart';
 
 void main() {

@@ -26,7 +26,7 @@ class _SheetSearchBoxState extends State<_SheetSearchBox> {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -37,7 +37,7 @@ class _SheetSearchBoxState extends State<_SheetSearchBox> {
       ),
       child: Row(
         children: <Widget>[
-          UbIcon(UbIcons.search, size: 18, color: palette.muted),
+          AppIcon(AppIcons.search, size: 18, color: palette.muted),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -52,8 +52,8 @@ class _SheetSearchBoxState extends State<_SheetSearchBox> {
               onSubmitted: widget.onSubmitted,
             ),
           ),
-          UbIconButton(
-            icon: UbIcons.arrowRight,
+          AppIconButton(
+            icon: AppIcons.arrowRight,
             tooltip: 'Buscar no livro',
             onPressed: () => widget.onSubmitted(_controller.text),
           ),

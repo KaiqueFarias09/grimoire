@@ -7,7 +7,7 @@ class _ModalCloseButton extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Semantics(
       button: true,
       label: 'Fechar janela',
@@ -19,7 +19,7 @@ class _ModalCloseButton extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(color: palette.surface, shape: BoxShape.circle),
-          child: Center(child: UbIcon(UbIcons.close, size: 18, color: palette.muted)),
+          child: Center(child: AppIcon(AppIcons.close, size: 18, color: palette.muted)),
         ),
       ),
     );

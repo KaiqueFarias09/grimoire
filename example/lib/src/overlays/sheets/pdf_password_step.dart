@@ -3,7 +3,7 @@ part of '../sheets.dart';
 class _PdfPasswordStep extends StatefulWidget {
   const _PdfPasswordStep({required this.host, required this.book});
 
-  final UbHost host;
+  final DemoHost host;
 
   /// Null while the fixture is still locked (it enters the shelf only
   /// after the password unlocks it).
@@ -24,7 +24,7 @@ class _PdfPasswordStepState extends State<_PdfPasswordStep> {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final error = widget.host.state.importError;
     final book = widget.book;
 
@@ -72,12 +72,12 @@ class _PdfPasswordStepState extends State<_PdfPasswordStep> {
           ),
           onChanged: (final value) => widget.host.state.pdfPassword = value,
         ),
-        if (error.isNotEmpty) ...<Widget>[const SizedBox(height: 13), UbOverlayAlert(error)],
-        UbOverlayFooter(
+        if (error.isNotEmpty) ...<Widget>[const SizedBox(height: 13), OverlayAlert(error)],
+        OverlayFooter(
           alignment: MainAxisAlignment.end,
           children: <Widget>[
-            UbButton.outline('Voltar', () => widget.host.dispatch('reset-import')),
-            UbButton.blue('Abrir livro', () => widget.host.dispatch('unlock-pdf')),
+            AppButton.outline('Voltar', () => widget.host.dispatch('reset-import')),
+            AppButton.blue('Abrir livro', () => widget.host.dispatch('unlock-pdf')),
           ],
         ),
         const SizedBox(height: 13),

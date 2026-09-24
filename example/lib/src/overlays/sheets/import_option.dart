@@ -15,8 +15,8 @@ class _ImportOption extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return UbHover(
+    final palette = AppScope.of(context);
+    return AppHover(
       builder: (final context, final hovered) {
         return Semantics(
           button: true,
@@ -42,7 +42,7 @@ class _ImportOption extends StatelessWidget {
                       color: palette.surface,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Center(child: UbIcon(icon, size: 18, color: palette.ink)),
+                    child: Center(child: AppIcon(icon, size: 18, color: palette.ink)),
                   ),
                   const SizedBox(width: 11),
                   Expanded(

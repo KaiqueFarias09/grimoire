@@ -5,11 +5,11 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../ub_icon.dart';
-import '../ub_theme.dart';
+import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
 
-class UbOverlaySection extends StatelessWidget {
-  const UbOverlaySection({
+class OverlaySection extends StatelessWidget {
+  const OverlaySection({
     required this.title,
     required this.description,
     required this.child,
@@ -22,7 +22,7 @@ class UbOverlaySection extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -31,17 +31,14 @@ class UbOverlaySection extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const SizedBox(height: 12),
-          child,
-        ],
+        children: <Widget>[const SizedBox(height: 12), child],
       ),
     );
   }
 }
 
-class UbOverlayFooter extends StatelessWidget {
-  const UbOverlayFooter({required this.alignment, required this.children, super.key});
+class OverlayFooter extends StatelessWidget {
+  const OverlayFooter({required this.alignment, required this.children, super.key});
 
   final MainAxisAlignment alignment;
   final List<Widget> children;
@@ -67,8 +64,8 @@ class UbOverlayFooter extends StatelessWidget {
   }
 }
 
-class UbOverlayAlert extends StatelessWidget {
-  const UbOverlayAlert(this.message, {super.key});
+class OverlayAlert extends StatelessWidget {
+  const OverlayAlert(this.message, {super.key});
 
   final String message;
 
@@ -84,7 +81,7 @@ class UbOverlayAlert extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const UbIcon(UbIcons.alert, size: 18, color: Color(0xFFB42318)),
+          const AppIcon(AppIcons.alert, size: 18, color: Color(0xFFB42318)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -98,8 +95,8 @@ class UbOverlayAlert extends StatelessWidget {
   }
 }
 
-class UbFormatSection extends StatelessWidget {
-  const UbFormatSection({super.key});
+class FormatSection extends StatelessWidget {
+  const FormatSection({super.key});
 
   static const _formats = <String>[
     'EPUB',
@@ -119,8 +116,8 @@ class UbFormatSection extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return UbOverlaySection(
+    final palette = AppScope.of(context);
+    return OverlaySection(
       title: 'Formatos aceitos',
       description: 'Adicione livros, documentos e quadrinhos que você já possui.',
       child: Wrap(

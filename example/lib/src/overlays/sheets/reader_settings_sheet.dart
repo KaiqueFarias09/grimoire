@@ -3,7 +3,7 @@ part of '../sheets.dart';
 class _ReaderSettingsSheet extends StatelessWidget {
   const _ReaderSettingsSheet({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {

@@ -11,11 +11,11 @@ import 'package:grimoire/grimoire.dart';
 import 'package:unseal/unseal.dart' show NavPoint;
 import 'package:path_provider/path_provider.dart';
 
-import '../app/app_state.dart';
-import '../demo_data.dart';
-import '../ub_icon.dart';
-import '../ub_theme.dart';
-import '../ub_widgets.dart';
+import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
+import 'package:grimoire_example/src/shared/widgets/app_widgets.dart';
 
 part 'reader_screen/reader_hooks.dart';
 part 'reader_screen/real_paper.dart';
@@ -27,7 +27,7 @@ part 'reader_screen/reader_bottom_button.dart';
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({required this.host, required this.bookId, super.key});
 
-  final UbHost host;
+  final DemoHost host;
 
   /// The demo fixture id from the `/read/:id` route.
   final String bookId;
@@ -85,7 +85,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final state = widget.host.state;
     final bookId = widget.bookId;
     final controller =
-        ViewerController(book, theme: _viewerTheme(state.readerTheme), fontFamily: UbType.serif)
+        ViewerController(book, theme: _viewerTheme(state.readerTheme), fontFamily: AppType.serif)
           ..useHostChrome = true
           ..mathJaxCachePath = cachePath
           ..pdfJsCachePath = cachePath;
@@ -221,7 +221,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   ViewerTheme _viewerTheme(final ReaderThemeMode mode) {
-    final dark = UbScope.of(context).brightness == Brightness.dark;
+    final dark = AppScope.of(context).brightness == Brightness.dark;
     return switch (mode) {
       ReaderThemeMode.day => ViewerTheme(
         background: dark ? const Color(0xFF292725) : const Color(0xFFFBFAF6),
@@ -373,12 +373,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final controller = _controller;
     final book = entry;
     final state = widget.host.state;
     final width = MediaQuery.sizeOf(context).width;
-    final horizontal = width < 720 ? 16.0 : (width < 900 ? 28.0 : ubPagePadding(width));
+    final horizontal = width < 720 ? 16.0 : (width < 900 ? 28.0 : appPagePadding(width));
 
     final progress = _liveProgress > 0
         ? _liveProgress

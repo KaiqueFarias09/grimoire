@@ -17,8 +17,8 @@ class _SheetListRow extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
-    return UbHover(
+    final palette = AppScope.of(context);
+    return AppHover(
       builder: (final context, final hovered) {
         return Semantics(
           button: true,

@@ -3,7 +3,7 @@ part of '../modals.dart';
 class _NoteModal extends StatefulWidget {
   const _NoteModal({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   State<_NoteModal> createState() => _NoteModalState();
@@ -22,7 +22,7 @@ class _NoteModalState extends State<_NoteModal> {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final quote = widget.host.state.noteQuote;
 
     return Column(
@@ -39,7 +39,7 @@ class _NoteModalState extends State<_NoteModal> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              UbIcon(UbIcons.highlighter, size: 18, color: palette.muted),
+              AppIcon(AppIcons.highlighter, size: 18, color: palette.muted),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
@@ -79,11 +79,11 @@ class _NoteModalState extends State<_NoteModal> {
           ),
           onChanged: (final value) => widget.host.state.noteText = value,
         ),
-        UbOverlayFooter(
+        OverlayFooter(
           alignment: MainAxisAlignment.end,
           children: <Widget>[
-            UbButton.outline('Cancelar', () => widget.host.dispatch('close-modal')),
-            UbButton.blue('Salvar nota', () => widget.host.dispatch('save-note')),
+            AppButton.outline('Cancelar', () => widget.host.dispatch('close-modal')),
+            AppButton.blue('Salvar nota', () => widget.host.dispatch('save-note')),
           ],
         ),
       ],

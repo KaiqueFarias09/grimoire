@@ -9,7 +9,7 @@ class _ModalHead extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Row(

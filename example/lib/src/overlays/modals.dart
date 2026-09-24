@@ -5,31 +5,31 @@ library;
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
-import '../app/app_state.dart';
-import '../ub_icon.dart';
-import '../ub_theme.dart';
-import '../ub_widgets.dart';
-import 'shared.dart';
+import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
+import 'package:grimoire_example/src/shared/widgets/app_widgets.dart';
+import 'package:grimoire_example/src/overlays/shared.dart';
 
 part 'modals/modal_head.dart';
 part 'modals/modal_close_button.dart';
 part 'modals/format_help_modal.dart';
 part 'modals/note_modal.dart';
 
-class UbModalHost extends StatefulWidget {
-  const UbModalHost({required this.host, required this.modal, required this.onDismiss, super.key});
+class ModalHost extends StatefulWidget {
+  const ModalHost({required this.host, required this.modal, required this.onDismiss, super.key});
 
-  final UbHost host;
-  final UbModal modal;
+  final DemoHost host;
+  final DemoModal modal;
   final VoidCallback onDismiss;
 
   @override
-  State<UbModalHost> createState() => _UbModalHostState();
+  State<ModalHost> createState() => _ModalHostState();
 }
 
 /// Mounted for the shell's whole life: the barrier fades while the
 /// card plays the Material fade-through-scale pattern.
-class _UbModalHostState extends State<UbModalHost> with SingleTickerProviderStateMixin {
+class _ModalHostState extends State<ModalHost> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 260),
@@ -44,27 +44,27 @@ class _UbModalHostState extends State<UbModalHost> with SingleTickerProviderStat
   /// The modal shown while animating: the shell clears `modal` to none
   /// on dismiss, but the card must stay visible until the fade-out
   /// finishes.
-  UbModal _contentModal = UbModal.none;
+  DemoModal _contentModal = DemoModal.none;
 
   @override
   void initState() {
     super.initState();
     // Screenshot automation mounts the shell with a modal already open.
-    if (widget.modal != UbModal.none) {
+    if (widget.modal != DemoModal.none) {
       _contentModal = widget.modal;
       _controller.value = 1.0;
     }
   }
 
   @override
-  void didUpdateWidget(final UbModalHost oldWidget) {
+  void didUpdateWidget(final ModalHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.modal != UbModal.none) {
+    if (widget.modal != DemoModal.none) {
       _contentModal = widget.modal;
-      if (oldWidget.modal == UbModal.none) {
+      if (oldWidget.modal == DemoModal.none) {
         _controller.forward(from: 0);
       }
-    } else if (oldWidget.modal != UbModal.none) {
+    } else if (oldWidget.modal != DemoModal.none) {
       _controller.reverse();
     }
   }
@@ -78,10 +78,10 @@ class _UbModalHostState extends State<UbModalHost> with SingleTickerProviderStat
 
   @override
   Widget build(final BuildContext context) {
-    if (widget.modal == UbModal.none && _controller.isDismissed) {
+    if (widget.modal == DemoModal.none && _controller.isDismissed) {
       return const SizedBox.shrink();
     }
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final isMobile = MediaQuery.sizeOf(context).width < 720;
 
     return Stack(
@@ -118,9 +118,9 @@ class _UbModalHostState extends State<UbModalHost> with SingleTickerProviderStat
               ),
               child: SingleChildScrollView(
                 child: switch (_contentModal) {
-                  UbModal.formatHelp => _FormatHelpModal(host: widget.host),
-                  UbModal.note => _NoteModal(host: widget.host),
-                  UbModal.none => const SizedBox.shrink(),
+                  DemoModal.formatHelp => _FormatHelpModal(host: widget.host),
+                  DemoModal.note => _NoteModal(host: widget.host),
+                  DemoModal.none => const SizedBox.shrink(),
                 },
               ),
             ),

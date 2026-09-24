@@ -4,22 +4,22 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../app/app_state.dart';
-import '../demo_data.dart';
-import '../ub_icon.dart';
-import '../ub_theme.dart';
-import '../ub_widgets.dart';
-import 'page_scaffold.dart';
-import 'reading_page/ub_book_card.dart';
+import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
+import 'package:grimoire_example/src/shared/widgets/app_widgets.dart';
+import 'package:grimoire_example/src/shared/widgets/page_scaffold.dart';
+import 'reading_page/book_card.dart';
 
-export 'reading_page/ub_book_card.dart' show UbBookCard, ubBookCardHeightFor;
+export 'reading_page/book_card.dart' show AppBookCard, appBookCardHeightFor;
 
 part 'reading_page/book_shelf.dart';
 
 class ReadingPage extends StatelessWidget {
   const ReadingPage({required this.host, super.key});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
@@ -32,33 +32,33 @@ class ReadingPage extends StatelessWidget {
         state.bookById(state.selectedBook) ?? (state.books.isEmpty ? null : state.books.first);
 
     return SingleChildScrollView(
-      key: const Key('ub-page-scroll'),
-      child: UbPageScaffold(
+      key: const Key('page-scroll'),
+      child: AppPageScaffold(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            UbPageHeading(
+            AppPageHeading(
               title: 'Ler agora',
               subtitle: 'Continue de onde você parou e encontre um novo livro para começar.',
               action: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  UbIconButton(
-                    icon: UbIcons.search,
+                  AppIconButton(
+                    icon: AppIcons.search,
                     tooltip: 'Buscar',
                     onPressed: () => host.dispatch('open-global-search'),
                   ),
                   const SizedBox(width: 9),
-                  UbButton.outline(
+                  AppButton.outline(
                     'Adicionar livro',
                     () => host.dispatch('open-add'),
-                    icon: UbIcons.plus,
+                    icon: AppIcons.plus,
                   ),
                 ],
               ),
             ),
             if (hero != null) _ContinueCard(host: host, book: hero),
-            const UbSectionHeading(
+            const AppSectionHeading(
               title: 'Na sua biblioteca',
               subtitle: 'Continue uma história ou escolha a próxima.',
             ),
@@ -74,7 +74,7 @@ class ReadingPage extends StatelessWidget {
                 'txt',
               ],
             ),
-            const UbSectionHeading(
+            const AppSectionHeading(
               title: 'Adicionados recentemente',
               subtitle: 'Livros que chegaram à sua biblioteca.',
             ),
@@ -98,12 +98,12 @@ class ReadingPage extends StatelessWidget {
 class _ContinueCard extends StatelessWidget {
   const _ContinueCard({required this.host, required this.book});
 
-  final UbHost host;
+  final DemoHost host;
   final LoadedBook book;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
     final isCompact = width < 900;
@@ -112,9 +112,9 @@ class _ContinueCard extends StatelessWidget {
     final coverMinHeight = isMobile ? 154.0 : (isCompact ? 210.0 : 255.0);
     final gap = isMobile
         ? 18.0
-        : (isCompact ? (width * 0.04).clamp(22.0, 46.0) : ubContinueGap(width));
-    final padding = isMobile ? 18.0 : ubContinuePadding(width);
-    final titleSize = isMobile ? 20.0 : ubContinueTitleSize(width);
+        : (isCompact ? (width * 0.04).clamp(22.0, 46.0) : appContinueGap(width));
+    final padding = isMobile ? 18.0 : appContinuePadding(width);
+    final titleSize = isMobile ? 20.0 : appContinueTitleSize(width);
 
     return Container(
       padding: EdgeInsets.all(padding),
@@ -122,13 +122,13 @@ class _ContinueCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          UbCover(entry: book, width: coverWidth, minHeight: coverMinHeight),
+          AppCover(entry: book, width: coverWidth, minHeight: coverMinHeight),
           SizedBox(width: gap),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(book.title, style: UbType.serifTitle(titleSize).copyWith(color: palette.ink)),
+                Text(book.title, style: AppType.serifTitle(titleSize).copyWith(color: palette.ink)),
                 SizedBox(height: isMobile ? 8.0 : 12.0),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
@@ -152,7 +152,7 @@ class _ContinueCard extends StatelessWidget {
                         style: TextStyle(fontSize: isMobile ? 10 : 12, color: palette.muted),
                       ),
                       SizedBox(width: isMobile ? 7.0 : 12.0),
-                      Expanded(child: UbProgressBar(fraction: host.state.percentFor(book) / 100)),
+                      Expanded(child: AppProgressBar(fraction: host.state.percentFor(book) / 100)),
                       SizedBox(width: isMobile ? 7.0 : 12.0),
                       Text(
                         'Cap. 5 de 12',
@@ -182,16 +182,16 @@ class _ContinueCard extends StatelessWidget {
                   runSpacing: 9,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: <Widget>[
-                    UbButton.dark(
+                    AppButton.dark(
                       'Continuar lendo',
                       () => host.dispatch('open-reader'),
-                      icon: UbIcons.play,
+                      icon: AppIcons.play,
                     ),
                     if (!isMobile)
-                      UbButton.outline(
+                      AppButton.outline(
                         'Ver detalhes',
                         () => host.dispatch('open-detail', data: book.fixture.id),
-                        icon: UbIcons.info,
+                        icon: AppIcons.info,
                       ),
                   ],
                 ),

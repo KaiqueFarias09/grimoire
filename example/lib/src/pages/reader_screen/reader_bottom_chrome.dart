@@ -10,14 +10,14 @@ class _ReaderBottomChrome extends StatelessWidget {
     required this.chapterLabel,
   });
 
-  final UbHost host;
+  final DemoHost host;
   final bool visible;
   final double progress;
   final String chapterLabel;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final isMobile = MediaQuery.sizeOf(context).width < 720;
 
     return AnimatedSlide(

@@ -3,7 +3,7 @@ part of '../sheets.dart';
 class _ImportSheet extends StatelessWidget {
   const _ImportSheet({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
@@ -21,13 +21,13 @@ class _ImportSheet extends StatelessWidget {
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const UbOverlayAlert(
+          const OverlayAlert(
             'Este arquivo não pode ser aberto aqui. Escolha um EPUB, PDF, documento ou quadrinho compatível.',
           ),
-          UbOverlayFooter(
+          OverlayFooter(
             alignment: MainAxisAlignment.end,
             children: <Widget>[
-              UbButton.outline('Escolher outro arquivo', () => host.dispatch('reset-import')),
+              AppButton.outline('Escolher outro arquivo', () => host.dispatch('reset-import')),
             ],
           ),
         ],
@@ -44,7 +44,7 @@ class _ImportSheet extends StatelessWidget {
       onClose: () => host.dispatch('close-sheet'),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[body, if (!hasType) const UbFormatSection()],
+        children: <Widget>[body, if (!hasType) const FormatSection()],
       ),
     );
   }

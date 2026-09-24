@@ -3,11 +3,11 @@ part of '../sheets.dart';
 class _GlobalSearchSheet extends StatelessWidget {
   const _GlobalSearchSheet({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final state = host.state;
     final query = state.searchQuery.trim().toLowerCase();
     final results = query.isNotEmpty
@@ -28,7 +28,7 @@ class _GlobalSearchSheet extends StatelessWidget {
                   title: book.title,
                   subtitle: '${book.author} · ${book.formatLabel}',
                   onTap: () => host.dispatch('open-detail', data: book.fixture.id),
-                  trailing: UbIcon(UbIcons.chevronRight, size: 18, color: palette.muted),
+                  trailing: AppIcon(AppIcons.chevronRight, size: 18, color: palette.muted),
                 ),
             ],
           )

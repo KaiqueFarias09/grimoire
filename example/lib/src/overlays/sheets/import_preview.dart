@@ -8,13 +8,13 @@ class _ImportPreview extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: palette.surface, borderRadius: BorderRadius.circular(10)),
       child: Row(
         children: <Widget>[
-          UbCover(entry: book, width: 92, minHeight: 132),
+          AppCover(entry: book, width: 92, minHeight: 132),
           const SizedBox(width: 17),
           Expanded(
             child: Column(

@@ -8,7 +8,7 @@ class _RealPaper extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final Color paperColor = switch (theme) {
       ReaderThemeMode.day => palette.paper,
       ReaderThemeMode.sepia => const Color(0xFFF3ECDC),

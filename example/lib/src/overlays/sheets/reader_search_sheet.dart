@@ -3,11 +3,11 @@ part of '../sheets.dart';
 class _ReaderSearchSheet extends StatelessWidget {
   const _ReaderSearchSheet({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final state = host.state;
     final book = state.bookById(state.selectedBook);
 
@@ -26,7 +26,7 @@ class _ReaderSearchSheet extends StatelessWidget {
               title: 'Resultado ${index + 1} de ${state.readerSearchResults.length}',
               subtitle: result.excerpt,
               onTap: () => host.dispatch('jump-to-result', data: '$index'),
-              trailing: UbIcon(UbIcons.chevronRight, size: 18, color: palette.muted),
+              trailing: AppIcon(AppIcons.chevronRight, size: 18, color: palette.muted),
             ),
         ],
       );

@@ -2,27 +2,27 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../app/app_state.dart';
-import '../../demo_data.dart';
-import '../../ub_theme.dart';
-import '../../ub_widgets.dart';
+import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
+import 'package:grimoire_example/src/shared/widgets/app_widgets.dart';
 
 /// Shared book card used by the home shelves.
-class UbBookCard extends StatelessWidget {
-  const UbBookCard({
+class AppBookCard extends StatelessWidget {
+  const AppBookCard({
     required this.host,
     required this.book,
     required this.coverMinHeight,
     super.key,
   });
 
-  final UbHost host;
+  final DemoHost host;
   final LoadedBook book;
   final double coverMinHeight;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final String statusLabel;
     if (host.state.percentFor(book) >= 100) {
       statusLabel = 'Concluído';
@@ -33,7 +33,7 @@ class UbBookCard extends StatelessWidget {
     }
     final semanticLabel = 'Abrir ${book.title}, ${book.author}, $statusLabel';
 
-    return UbHover(
+    return AppHover(
       builder: (final context, final hovered) {
         return Semantics(
           button: true,
@@ -49,7 +49,7 @@ class UbBookCard extends StatelessWidget {
                   duration: const Duration(milliseconds: 180),
                   transform: Matrix4.translationValues(0, hovered ? -2 : 0, 0),
                   margin: const EdgeInsets.only(bottom: 11),
-                  child: UbCover(entry: book, minHeight: coverMinHeight),
+                  child: AppCover(entry: book, minHeight: coverMinHeight),
                 ),
                 Text(
                   book.title,
@@ -79,7 +79,7 @@ class UbBookCard extends StatelessWidget {
                         host.state.percentFor(book) < 100) ...<Widget>[
                       const SizedBox(width: 6),
                       Expanded(
-                        child: UbProgressBar(
+                        child: AppProgressBar(
                           fraction: host.state.percentFor(book) / 100,
                           height: 3,
                         ),
@@ -97,5 +97,5 @@ class UbBookCard extends StatelessWidget {
 }
 
 // Shelf card height helper for callers that need the extent up front.
-double ubBookCardHeightFor(final double cellWidth, final double coverMinHeight) =>
+double appBookCardHeightFor(final double cellWidth, final double coverMinHeight) =>
     math.max(cellWidth / 0.68, coverMinHeight) + 67;

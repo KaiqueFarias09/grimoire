@@ -8,14 +8,14 @@ class _ReaderBottomBarContent extends StatelessWidget {
     required this.isMobile,
   });
 
-  final UbHost host;
+  final DemoHost host;
   final double progress;
   final String chapterLabel;
   final bool isMobile;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
 
     final Widget progressBar = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 470),
@@ -26,7 +26,7 @@ class _ReaderBottomBarContent extends StatelessWidget {
             style: TextStyle(fontSize: 11, color: palette.muted),
           ),
           const SizedBox(width: 9),
-          Expanded(child: UbProgressBar(fraction: progress, height: 3)),
+          Expanded(child: AppProgressBar(fraction: progress, height: 3)),
           const SizedBox(width: 9),
           Flexible(
             child: Text(
@@ -51,28 +51,28 @@ class _ReaderBottomBarContent extends StatelessWidget {
               children: <Widget>[
                 Expanded(
                   child: _ReaderBottomButton(
-                    icon: UbIcons.list,
+                    icon: AppIcons.list,
                     label: 'Sumário',
                     onPressed: () => host.dispatch('open-summary-sheet'),
                   ),
                 ),
                 Expanded(
                   child: _ReaderBottomButton(
-                    icon: UbIcons.search,
+                    icon: AppIcons.search,
                     label: 'Buscar',
                     onPressed: () => host.dispatch('open-reader-search-sheet'),
                   ),
                 ),
                 Expanded(
                   child: _ReaderBottomButton(
-                    icon: UbIcons.highlighter,
+                    icon: AppIcons.highlighter,
                     label: 'Destacar',
                     onPressed: () => host.dispatch('toggle-highlight'),
                   ),
                 ),
                 Expanded(
                   child: _ReaderBottomButton(
-                    icon: UbIcons.note,
+                    icon: AppIcons.note,
                     label: 'Nota',
                     onPressed: () => host.dispatch('open-note'),
                   ),
@@ -89,13 +89,13 @@ class _ReaderBottomBarContent extends StatelessWidget {
       child: Row(
         children: <Widget>[
           _ReaderBottomButton(
-            icon: UbIcons.list,
+            icon: AppIcons.list,
             label: 'Sumário',
             onPressed: () => host.dispatch('open-summary-sheet'),
           ),
           const SizedBox(width: 3),
           _ReaderBottomButton(
-            icon: UbIcons.search,
+            icon: AppIcons.search,
             label: 'Buscar',
             onPressed: () => host.dispatch('open-reader-search-sheet'),
           ),
@@ -103,13 +103,13 @@ class _ReaderBottomBarContent extends StatelessWidget {
           Expanded(child: progressBar),
           const SizedBox(width: 16),
           _ReaderBottomButton(
-            icon: UbIcons.highlighter,
+            icon: AppIcons.highlighter,
             label: 'Destacar',
             onPressed: () => host.dispatch('toggle-highlight'),
           ),
           const SizedBox(width: 3),
           _ReaderBottomButton(
-            icon: UbIcons.note,
+            icon: AppIcons.note,
             label: 'Nota',
             onPressed: () => host.dispatch('open-note'),
           ),

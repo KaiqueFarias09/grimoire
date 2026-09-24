@@ -9,7 +9,7 @@ class _SettingOption extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Semantics(
       button: true,
       selected: active,

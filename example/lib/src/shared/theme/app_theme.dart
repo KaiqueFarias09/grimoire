@@ -5,8 +5,8 @@ library;
 import 'package:flutter/material.dart';
 
 @immutable
-class UbPalette {
-  const UbPalette({
+class AppPalette {
+  const AppPalette({
     required this.brightness,
     required this.bg,
     required this.surface,
@@ -30,7 +30,7 @@ class UbPalette {
     required this.sheetBarrier,
   });
 
-  factory UbPalette.light() => const UbPalette(
+  factory AppPalette.light() => const AppPalette(
     brightness: Brightness.light,
     bg: Color(0xFFFFFFFF),
     surface: Color(0xFFF5F5F7),
@@ -54,7 +54,7 @@ class UbPalette {
     sheetBarrier: Color(0x52000000),
   );
 
-  factory UbPalette.dark() => const UbPalette(
+  factory AppPalette.dark() => const AppPalette(
     brightness: Brightness.dark,
     bg: Color(0xFF1C1C1E),
     surface: Color(0xFF2C2C2E),
@@ -116,8 +116,8 @@ class UbPalette {
 /// Text styles ported from the prototype. Sizes are logical px, equal
 /// to the prototype's CSS px at 100% zoom.
 @immutable
-class UbType {
-  const UbType._();
+class AppType {
+  const AppType._();
 
   static const String serif = 'Georgia';
   static const List<String> serifFallback = <String>['Iowan Old Style', 'Times New Roman'];
@@ -140,53 +140,53 @@ class UbType {
 }
 
 /// Makes the palette reachable from any widget below [BooksApp].
-class UbScope extends InheritedWidget {
-  const UbScope({required this.palette, required super.child, super.key});
+class AppScope extends InheritedWidget {
+  const AppScope({required this.palette, required super.child, super.key});
 
-  final UbPalette palette;
+  final AppPalette palette;
 
-  static UbPalette of(final BuildContext context) {
-    final scope = context.dependOnInheritedWidgetOfExactType<UbScope>();
+  static AppPalette of(final BuildContext context) {
+    final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();
 
     return scope!.palette;
   }
 
   @override
-  bool updateShouldNotify(final UbScope oldWidget) => oldWidget.palette != palette;
+  bool updateShouldNotify(final AppScope oldWidget) => oldWidget.palette != palette;
 }
 
 /// Resolves the prototype's clamp() paddings for the current width.
-double ubPagePadding(final double width) => width.clamp(24.0, 64.0);
+double appPagePadding(final double width) => width.clamp(24.0, 64.0);
 
 /// clamp(30px, 4vw, 42px)
-double ubH1Size(final double width) => (width * 0.04).clamp(30.0, 42.0);
+double appH1Size(final double width) => (width * 0.04).clamp(30.0, 42.0);
 
 /// clamp(31px, 4vw, 52px)
-double ubContinueTitleSize(final double width) => (width * 0.04).clamp(31.0, 52.0);
+double appContinueTitleSize(final double width) => (width * 0.04).clamp(31.0, 52.0);
 
 /// clamp(28px, 6vw, 70px) vertical paper padding
-double ubPaperPaddingV(final double width) => (width * 0.06).clamp(28.0, 70.0);
+double appPaperPaddingV(final double width) => (width * 0.06).clamp(28.0, 70.0);
 
 /// clamp(22px, 7vw, 100px) horizontal paper padding
-double ubPaperPaddingH(final double width) => (width * 0.07).clamp(22.0, 100.0);
+double appPaperPaddingH(final double width) => (width * 0.07).clamp(22.0, 100.0);
 
 /// clamp(23px, 5vw, 58px) PDF padding
-double ubPdfPadding(final double width) => (width * 0.05).clamp(23.0, 58.0);
+double appPdfPadding(final double width) => (width * 0.05).clamp(23.0, 58.0);
 
 /// clamp(27px, 4vw, 42px) reader chapter title
-double ubReaderH2Size(final double width) => (width * 0.04).clamp(27.0, 42.0);
+double appReaderH2Size(final double width) => (width * 0.04).clamp(27.0, 42.0);
 
 /// clamp(17px, 2vw, 22px) reader body text
-double ubReaderBodySize(final double width) => (width * 0.02).clamp(17.0, 22.0);
+double appReaderBodySize(final double width) => (width * 0.02).clamp(17.0, 22.0);
 
 /// clamp(22px, 4vw, 46px) continue card gap
-double ubContinueGap(final double width) => (width * 0.04).clamp(22.0, 46.0);
+double appContinueGap(final double width) => (width * 0.04).clamp(22.0, 46.0);
 
 /// clamp(22px, 4vw, 42px) continue card padding
-double ubContinuePadding(final double width) => (width * 0.04).clamp(22.0, 42.0);
+double appContinuePadding(final double width) => (width * 0.04).clamp(22.0, 42.0);
 
 /// clamp(32px, 5vw, 56px) detail title
-double ubDetailTitleSize(final double width) => (width * 0.05).clamp(32.0, 56.0);
+double appDetailTitleSize(final double width) => (width * 0.05).clamp(32.0, 56.0);
 
 /// clamp(28px, 6vw, 74px) detail gap
-double ubDetailGap(final double width) => (width * 0.06).clamp(28.0, 74.0);
+double appDetailGap(final double width) => (width * 0.06).clamp(28.0, 74.0);

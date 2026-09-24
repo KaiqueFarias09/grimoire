@@ -3,11 +3,11 @@ part of '../sheets.dart';
 class _SummarySheet extends StatelessWidget {
   const _SummarySheet({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final toc = ReaderHooks.tocSource?.call() ?? const <NavPoint>[];
     if (toc.isEmpty) {
       return _SheetFrame(

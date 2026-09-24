@@ -3,28 +3,28 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../app/app_state.dart';
-import '../ub_icon.dart';
-import '../ub_theme.dart';
-import '../ub_widgets.dart';
-import 'page_scaffold.dart';
+import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
+import 'package:grimoire_example/src/shared/widgets/app_widgets.dart';
+import 'package:grimoire_example/src/shared/widgets/page_scaffold.dart';
 
 part 'detail_page/meta_cell.dart';
 
 class DetailPage extends StatelessWidget {
   const DetailPage({required this.host, required this.bookId, super.key});
 
-  final UbHost host;
+  final DemoHost host;
 
   /// The demo fixture id from the `/book/:id` route.
   final String bookId;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return SingleChildScrollView(
-      key: const Key('ub-page-scroll'),
-      child: UbPageScaffold(
+      key: const Key('page-scroll'),
+      child: AppPageScaffold(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -37,9 +37,9 @@ class DetailPage extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    UbIcon(UbIcons.arrowLeft, size: 18, color: palette.blue),
+                    AppIcon(AppIcons.arrowLeft, size: 18, color: palette.blue),
                     const SizedBox(width: 3),
-                    UbLinkButton(
+                    AppLinkButton(
                       label: 'Início',
                       chevron: false,
                       onPressed: () => host.dispatch('page-reading'),
@@ -59,12 +59,12 @@ class DetailPage extends StatelessWidget {
 class _DetailBody extends StatelessWidget {
   const _DetailBody({required this.host, required this.bookId});
 
-  final UbHost host;
+  final DemoHost host;
   final String bookId;
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 720;
     final book = host.state.bookById(bookId);
@@ -73,16 +73,16 @@ class _DetailBody extends StatelessWidget {
     }
 
     final coverWidth = isMobile ? 106.0 : 230.0;
-    final gap = isMobile ? 20.0 : ubDetailGap(width);
-    final titleSize = isMobile ? 30.0 : ubDetailTitleSize(width);
+    final gap = isMobile ? 20.0 : appDetailGap(width);
+    final titleSize = isMobile ? 30.0 : appDetailTitleSize(width);
 
-    final Widget cover = UbCover(entry: book, width: coverWidth);
+    final Widget cover = AppCover(entry: book, width: coverWidth);
     final Widget heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           book.title,
-          style: UbType.serifTitle(
+          style: AppType.serifTitle(
             titleSize,
             letterSpacingEm: -0.045,
             height: 1.01,
@@ -116,17 +116,17 @@ class _DetailBody extends StatelessWidget {
       runSpacing: 9,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
-        UbButton.dark(
+        AppButton.dark(
           host.state.percentFor(book) > 0 ? 'Continuar lendo' : 'Começar a ler',
           () => host.dispatch('open-reader'),
-          icon: UbIcons.bookOpen,
+          icon: AppIcons.bookOpen,
         ),
-        UbButton.outline(
+        AppButton.outline(
           'Adicionar à coleção',
           () => host.dispatch('open-collections'),
-          icon: UbIcons.folderPlus,
+          icon: AppIcons.folderPlus,
         ),
-        UbButton.outline('Compartilhar', () => host.dispatch('share-book'), icon: UbIcons.share),
+        AppButton.outline('Compartilhar', () => host.dispatch('share-book'), icon: AppIcons.share),
       ],
     );
 
@@ -156,7 +156,7 @@ class _DetailBody extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          UbIcon(UbIcons.checkCircle, size: 18, color: palette.muted),
+          AppIcon(AppIcons.checkCircle, size: 18, color: palette.muted),
           const SizedBox(width: 9),
           Expanded(
             child: Text(

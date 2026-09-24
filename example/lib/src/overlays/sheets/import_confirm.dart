@@ -3,7 +3,7 @@ part of '../sheets.dart';
 class _ImportConfirm extends StatelessWidget {
   const _ImportConfirm({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
@@ -23,14 +23,14 @@ class _ImportConfirm extends StatelessWidget {
           description:
               '${imported.author} · ${imported.formatLabel}\nPronto para entrar na sua biblioteca.',
         ),
-        UbOverlayFooter(
+        OverlayFooter(
           alignment: MainAxisAlignment.end,
           children: <Widget>[
-            UbButton.outline('Voltar', () => host.dispatch('reset-import')),
-            UbButton.dark(
+            AppButton.outline('Voltar', () => host.dispatch('reset-import')),
+            AppButton.dark(
               'Adicionar à biblioteca',
               () => host.dispatch('add-imported'),
-              icon: UbIcons.library,
+              icon: AppIcons.library,
             ),
           ],
         ),

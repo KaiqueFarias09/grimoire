@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 /// Icon names used across the demo chrome.
-abstract final class UbIcons {
+abstract final class AppIcons {
   static const String plus = 'plus';
   static const String bookOpen = 'bookOpen';
   static const String library = 'library';
@@ -35,7 +35,7 @@ abstract final class UbIcons {
   static const String check = 'check';
 }
 
-const Map<String, String> _ubGlyphs = <String, String>{
+const Map<String, String> _appGlyphs = <String, String>{
   'arrowDownUp':
       '<svg class="lucide lucide-arrow-down-up" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" > <path d="m3 16 4 4 4-4" /> <path d="M7 20V4" /> <path d="m21 8-4-4-4 4" /> <path d="M17 4v16" /> </svg>',
   'arrowLeft':
@@ -89,8 +89,8 @@ const Map<String, String> _ubGlyphs = <String, String>{
 };
 
 /// A lucide glyph at [size] logical px, tinted with [color].
-class UbIcon extends StatelessWidget {
-  const UbIcon(this.name, {this.size = 18, this.color, super.key});
+class AppIcon extends StatelessWidget {
+  const AppIcon(this.name, {this.size = 18, this.color, super.key});
 
   final String name;
   final double size;
@@ -99,7 +99,7 @@ class UbIcon extends StatelessWidget {
   @override
   Widget build(final BuildContext context) {
     return SvgPicture.string(
-      _ubGlyphs[name] ?? _ubGlyphs[UbIcons.plus]!,
+      _appGlyphs[name] ?? _appGlyphs[AppIcons.plus]!,
       width: size,
       height: size,
       colorFilter: ColorFilter.mode(color ?? const Color(0xFF1D1D1F), BlendMode.srcIn),

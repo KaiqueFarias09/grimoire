@@ -3,16 +3,16 @@ part of '../sheets.dart';
 class _ImportPicker extends StatelessWidget {
   const _ImportPicker({required this.host});
 
-  final UbHost host;
+  final DemoHost host;
 
   @override
   Widget build(final BuildContext context) {
     final isMobile = MediaQuery.sizeOf(context).width < 720;
     final options = <(String, String, String, String)>[
-      ('alice', UbIcons.bookOpen, 'Alice’s Adventures in Wonderland', 'EPUB · amostra incluída'),
-      ('pdf', UbIcons.fileText, 'O pequeno atlas das ideias', 'PDF · senha necessária'),
-      ('comic', UbIcons.comic, 'A cidade depois da chuva', 'CBZ · páginas'),
-      ('office', UbIcons.fileEdit, 'Cartas para uma casa nova', 'DOCX · documento'),
+      ('alice', AppIcons.bookOpen, 'Alice’s Adventures in Wonderland', 'EPUB · amostra incluída'),
+      ('pdf', AppIcons.fileText, 'O pequeno atlas das ideias', 'PDF · senha necessária'),
+      ('comic', AppIcons.comic, 'A cidade depois da chuva', 'CBZ · páginas'),
+      ('office', AppIcons.fileEdit, 'Cartas para uma casa nova', 'DOCX · documento'),
     ];
 
     return Column(
@@ -52,18 +52,18 @@ class _ImportPicker extends StatelessWidget {
                     ),
                 ],
               ),
-        UbOverlaySection(
+        OverlaySection(
           title: 'Do seu dispositivo',
           description: 'O seletor de arquivos do app host entra aqui.',
-          child: UbOverlayFooter(
+          child: OverlayFooter(
             alignment: MainAxisAlignment.start,
             children: <Widget>[
-              UbButton.outline(
+              AppButton.outline(
                 'Escolher arquivo',
                 () => host.dispatch('choose-device'),
-                icon: UbIcons.upload,
+                icon: AppIcons.upload,
               ),
-              UbButton.text('Ver formatos aceitos', () => host.dispatch('open-format-help')),
+              AppButton.text('Ver formatos aceitos', () => host.dispatch('open-format-help')),
             ],
           ),
         ),

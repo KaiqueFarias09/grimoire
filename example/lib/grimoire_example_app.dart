@@ -1,10 +1,11 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
-import 'src/app/app_shell.dart';
-import 'src/demo_data.dart';
-import 'src/store/demo_store.dart';
-import 'src/ub_theme.dart';
+import 'package:grimoire_example/src/app/app_shell.dart';
+import 'package:grimoire_example/src/core/demo_flags.dart';
+import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
+import 'package:grimoire_example/src/shared/theme/app_theme.dart';
 
 part 'src/palette_bridge.dart';
 part 'src/no_scrollbar_behavior.dart';
@@ -43,10 +44,10 @@ class _GrimoireExampleAppState extends State<GrimoireExampleApp> {
       // The palette bridge sits above everything that paints.
       builder: (final context, final child) {
         Widget content = child ?? const SizedBox.shrink();
-        // `--dart-define=UB_FULLSCREEN=true` removes the safe-area
-        // insets so screenshots line up 1:1 with the browser-rendered
-        // prototype.
-        if (const bool.fromEnvironment('UB_FULLSCREEN')) {
+        // See core/demo_flags: `UB_FULLSCREEN=true` removes the
+        // safe-area insets so screenshots line up 1:1 with the
+        // browser-rendered prototype.
+        if (ubFullscreen) {
           final data = MediaQuery.of(context);
           content = MediaQuery(
             data: data.copyWith(padding: EdgeInsets.zero, viewPadding: EdgeInsets.zero),
@@ -59,7 +60,7 @@ class _GrimoireExampleAppState extends State<GrimoireExampleApp> {
   }
 
   static ThemeData _theme(final Brightness brightness) {
-    final palette = brightness == Brightness.light ? UbPalette.light() : UbPalette.dark();
+    final palette = brightness == Brightness.light ? AppPalette.light() : AppPalette.dark();
 
     return ThemeData(
       useMaterial3: true,

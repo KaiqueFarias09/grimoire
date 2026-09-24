@@ -7,7 +7,7 @@ class _SheetEmpty extends StatelessWidget {
 
   @override
   Widget build(final BuildContext context) {
-    final palette = UbScope.of(context);
+    final palette = AppScope.of(context);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 15),
