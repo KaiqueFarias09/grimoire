@@ -296,5 +296,15 @@ class DemoStore {
     return _memberships.query(DemoCollectionBook_.collectionName.equals(name)).build().count();
   }
 
+  /// The book ids belonging to [name], for shelf filtering.
+  List<String> bookIdsIn(final String name) {
+    final query = _memberships.query(DemoCollectionBook_.collectionName.equals(name)).build();
+    try {
+      return <String>[for (final row in query.find()) row.bookId];
+    } finally {
+      query.close();
+    }
+  }
+
   void close() => _store.close();
 }

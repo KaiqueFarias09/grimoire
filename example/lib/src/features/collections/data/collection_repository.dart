@@ -40,6 +40,9 @@ class CollectionRepository {
 
   void addBook(final String name, final String bookId) => _store?.addToCollection(name, bookId);
 
+  /// The book ids belonging to [name], for shelf filtering.
+  List<String> bookIdsIn(final String name) => _store?.bookIdsIn(name) ?? const <String>[];
+
   /// Seeds a starter collection on first launch so the sheet never
   /// shows an empty custom section.
   void ensureDefault() {
