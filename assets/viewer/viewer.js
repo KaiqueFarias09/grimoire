@@ -1918,6 +1918,23 @@
         root.style.setProperty(key, vars[key]);
       }
     }
+    // Android WebView misses the repaint of var()-driven html/body
+    // rules when only the custom property flips: the first page of a
+    // section keeps the pre-theme paint (white defaults over a dark
+    // theme, or the reverse). Re-emitting the base color rules with
+    // literal values makes every theme change a plain stylesheet
+    // mutation, which invalidates reliably.
+    var sheet = document.getElementById('elv-theme-colors');
+    if (!sheet) {
+      sheet = document.createElement('style');
+      sheet.id = 'elv-theme-colors';
+      document.head.appendChild(sheet);
+    }
+    sheet.textContent =
+      'html, body { background-color: ' + (vars['--elv-bg'] || '') + ' !important; }' +
+      'body { color: ' + (vars['--elv-fg'] || '') + ' !important; }' +
+      'a, a:link, a:visited { color: ' + (vars['--elv-link'] || '') + ' !important; }' +
+      '::selection { background: ' + (vars['--elv-selection-bg'] || '') + ' !important; }';
     var dark = detectThemeBrightness();
     if (dark !== state.themeIsDark) {
       state.themeIsDark = dark;
