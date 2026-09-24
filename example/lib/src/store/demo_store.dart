@@ -3,9 +3,17 @@
 /// outlives a session lives here, never in the package.
 library;
 
+import 'dart:typed_data';
+
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+// Kept even though objectbox.g.dart re-exports it: resolving @Entity
+// through the generated file breaks build_runner's annotation pass.
+// ignore: unnecessary_import
+import 'package:objectbox/objectbox.dart';
+
+// Generated query bindings (DemoBook_ etc.).
 import '../../objectbox.g.dart';
 
 /// Per-book persisted state: reading position, progress, the canonical
@@ -99,6 +107,42 @@ class DemoCollectionBook {
   String bookId;
 }
 
+/// Shelf metadata cache: what the library screens show, extracted once
+/// per book and reused on every launch. Bundled fixtures are immutable
+/// committed files and imports never change, so this never goes stale;
+/// the full book parses only when the book is opened.
+@Entity()
+class DemoBookMeta {
+  DemoBookMeta({
+    required this.bookId,
+    required this.formatName,
+    this.title,
+    this.author,
+    this.formatLabel,
+    this.description,
+    this.coverBytes,
+  });
+
+  int id = 0;
+
+  @Unique()
+  String bookId;
+
+  String? title;
+  String? author;
+  String? formatLabel;
+
+  /// Unseal's `BookFormat` name (e.g. `pdf`): drives layout decisions
+  /// without holding a parsed book.
+  String formatName;
+
+  /// The book's own description; null when the source has none (the
+  /// fixture fallback applies).
+  String? description;
+
+  Uint8List? coverBytes;
+}
+
 /// Typed facade over the ObjectBox store. Null-safe by design: the
 /// widget tests run without a store and the features degrade to
 /// session-only behavior.
@@ -118,6 +162,7 @@ class DemoStore {
   Box<DemoSettings> get _settings => _store.box<DemoSettings>();
   Box<DemoCollectionEntry> get _collections => _store.box<DemoCollectionEntry>();
   Box<DemoCollectionBook> get _memberships => _store.box<DemoCollectionBook>();
+  Box<DemoBookMeta> get _meta => _store.box<DemoBookMeta>();
 
   // --- settings ---
 
@@ -193,8 +238,29 @@ class DemoStore {
   /// Every tracked book row, bundled or imported.
   List<DemoBook> allBooks() => _books.getAll();
 
-  // --- collections ---
+  // --- shelf metadata cache ---
 
+  /// Cached shelf metadata for [bookId], or null before the first
+  /// parse.
+  DemoBookMeta? shelfMeta(final String bookId) {
+    final query = _meta.query(DemoBookMeta_.bookId.equals(bookId)).build();
+    try {
+      return query.findFirst();
+    } finally {
+      query.close();
+    }
+  }
+
+  /// Inserts or updates the cache row for [meta]'s book.
+  void saveShelfMeta(final DemoBookMeta meta) {
+    final existing = shelfMeta(meta.bookId);
+    if (existing != null) {
+      meta.id = existing.id;
+    }
+    _meta.put(meta);
+  }
+
+  // --- collections ---
   List<DemoCollectionEntry> collections() {
     return _collections.getAll()..sort((final a, final b) => a.createdAt.compareTo(b.createdAt));
   }

@@ -199,6 +199,65 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(5, 9063898100873792228),
+    name: 'DemoBookMeta',
+    lastPropertyId: const obx_int.IdUid(8, 758170370626576610),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 8675910113069627611),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 1578095758065802655),
+        name: 'bookId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(3, 222261990344073759),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 2070800242770141252),
+        name: 'title',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 1723687482742602888),
+        name: 'author',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 3717257227071753616),
+        name: 'formatLabel',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 8856714265533308237),
+        name: 'formatName',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 6649680408926538968),
+        name: 'description',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 758170370626576610),
+        name: 'coverBytes',
+        type: 23,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -244,8 +303,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(4, 1676227001604084459),
-    lastIndexId: const obx_int.IdUid(2, 204547669573205261),
+    lastEntityId: const obx_int.IdUid(5, 9063898100873792228),
+    lastIndexId: const obx_int.IdUid(3, 222261990344073759),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -493,6 +552,83 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    DemoBookMeta: obx_int.EntityDefinition<DemoBookMeta>(
+      model: _entities[4],
+      toOneRelations: (DemoBookMeta object) => [],
+      toManyRelations: (DemoBookMeta object) => {},
+      getId: (DemoBookMeta object) => object.id,
+      setId: (DemoBookMeta object, int id) {
+        object.id = id;
+      },
+      objectToFB: (DemoBookMeta object, fb.Builder fbb) {
+        final bookIdOffset = fbb.writeString(object.bookId);
+        final titleOffset = object.title == null
+            ? null
+            : fbb.writeString(object.title!);
+        final authorOffset = object.author == null
+            ? null
+            : fbb.writeString(object.author!);
+        final formatLabelOffset = object.formatLabel == null
+            ? null
+            : fbb.writeString(object.formatLabel!);
+        final formatNameOffset = fbb.writeString(object.formatName);
+        final descriptionOffset = object.description == null
+            ? null
+            : fbb.writeString(object.description!);
+        final coverBytesOffset = object.coverBytes == null
+            ? null
+            : fbb.writeListInt8(object.coverBytes!);
+        fbb.startTable(9);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, bookIdOffset);
+        fbb.addOffset(2, titleOffset);
+        fbb.addOffset(3, authorOffset);
+        fbb.addOffset(4, formatLabelOffset);
+        fbb.addOffset(5, formatNameOffset);
+        fbb.addOffset(6, descriptionOffset);
+        fbb.addOffset(7, coverBytesOffset);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final bookIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final formatNameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 14, '');
+        final titleParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 8);
+        final authorParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 10);
+        final formatLabelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 12);
+        final descriptionParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 16);
+        final coverBytesParam =
+            const fb.Uint8ListReader(
+                  lazy: false,
+                ).vTableGetNullable(buffer, rootOffset, 18)
+                as Uint8List?;
+        final object = DemoBookMeta(
+          bookId: bookIdParam,
+          formatName: formatNameParam,
+          title: titleParam,
+          author: authorParam,
+          formatLabel: formatLabelParam,
+          description: descriptionParam,
+          coverBytes: coverBytesParam,
+        )..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -622,5 +758,48 @@ class DemoSettings_ {
   /// See [DemoSettings.fontSize].
   static final fontSize = obx.QueryIntegerProperty<DemoSettings>(
     _entities[3].properties[3],
+  );
+}
+
+/// [DemoBookMeta] entity fields to define ObjectBox queries.
+class DemoBookMeta_ {
+  /// See [DemoBookMeta.id].
+  static final id = obx.QueryIntegerProperty<DemoBookMeta>(
+    _entities[4].properties[0],
+  );
+
+  /// See [DemoBookMeta.bookId].
+  static final bookId = obx.QueryStringProperty<DemoBookMeta>(
+    _entities[4].properties[1],
+  );
+
+  /// See [DemoBookMeta.title].
+  static final title = obx.QueryStringProperty<DemoBookMeta>(
+    _entities[4].properties[2],
+  );
+
+  /// See [DemoBookMeta.author].
+  static final author = obx.QueryStringProperty<DemoBookMeta>(
+    _entities[4].properties[3],
+  );
+
+  /// See [DemoBookMeta.formatLabel].
+  static final formatLabel = obx.QueryStringProperty<DemoBookMeta>(
+    _entities[4].properties[4],
+  );
+
+  /// See [DemoBookMeta.formatName].
+  static final formatName = obx.QueryStringProperty<DemoBookMeta>(
+    _entities[4].properties[5],
+  );
+
+  /// See [DemoBookMeta.description].
+  static final description = obx.QueryStringProperty<DemoBookMeta>(
+    _entities[4].properties[6],
+  );
+
+  /// See [DemoBookMeta.coverBytes].
+  static final coverBytes = obx.QueryByteVectorProperty<DemoBookMeta>(
+    _entities[4].properties[7],
   );
 }

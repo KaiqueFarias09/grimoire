@@ -9,6 +9,8 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:unseal/unseal.dart';
 
+import 'store/demo_store.dart';
+
 /// A bundled fixture plus the demo-only reading state shown on the
 /// shelf before the book is opened.
 class DemoFixture {
@@ -33,6 +35,10 @@ class DemoFixture {
   final String reader;
   final String source;
   final String descriptionFallback;
+
+  /// Bundled fixtures load from the asset bundle; imports from a file
+  /// path in the app's documents directory.
+  bool get isBundled => asset.startsWith('assets/');
 }
 
 const demoFixtures = <DemoFixture>[
@@ -196,37 +202,49 @@ class DemoCollection {
   final String? filter;
 }
 
-/// A fixture parsed through Unseal: shelf presentation comes from the
-/// book's own metadata, with filename fallbacks when it has none.
+/// A shelf entry: Unseal-parsed metadata (title, author, format,
+/// cover) plus the demo-only reading state shown before the book is
+/// opened. The full [Book] parses on demand — when the book is opened
+/// or its cover page rendered — never on the shelf path.
 class LoadedBook {
-  const LoadedBook({
+  LoadedBook({
     required this.fixture,
-    required this.book,
     required this.title,
     required this.author,
     required this.formatLabel,
+    required this.format,
+    this.metadataDescription,
     this.coverBytes,
+    this.book,
   });
 
   final DemoFixture fixture;
-  final Book book;
   final String title;
   final String author;
   final String formatLabel;
-  final Uint8List? coverBytes;
+
+  /// The Unseal format the metadata came from: drives the reader
+  /// layout decisions (PDF page mode, comic navigation) without a
+  /// parsed book.
+  final BookFormat format;
+  final String? metadataDescription;
+  Uint8List? coverBytes;
+
+  /// The full parse, filled lazily by the first reader open and then
+  /// reused for the rest of the session.
+  Book? book;
 
   bool get hasCover => coverBytes != null;
 
-  LoadedBook copyWith({final Uint8List? coverBytes}) => LoadedBook(
-    fixture: fixture,
-    book: book,
-    title: title,
-    author: author,
-    formatLabel: formatLabel,
-    coverBytes: coverBytes ?? this.coverBytes,
-  );
+  bool get isPdf => format == BookFormat.pdf || format == BookFormat.azw4;
 
-  String get description => book.metadata.description ?? fixture.descriptionFallback;
+  bool get isComic =>
+      format == BookFormat.cbz ||
+      format == BookFormat.cbr ||
+      format == BookFormat.cb7 ||
+      format == BookFormat.cbc;
+
+  String get description => metadataDescription ?? fixture.descriptionFallback;
 
   /// A 1x1 "cover" (or anything smaller than 16px on a side) counts as
   /// no cover at all.
@@ -240,8 +258,11 @@ class LoadedBook {
     return width >= 16 && height >= 16;
   }
 
-  static LoadedBook fromFixture(final DemoFixture fixture, final Book book) {
-    final metadata = book.metadata;
+  factory LoadedBook.fromMetadata(
+    final DemoFixture fixture,
+    final BookMetadata metadata, {
+    final Book? book,
+  }) {
     final title = (metadata.title == null || metadata.title!.trim().isEmpty)
         ? titleFromAsset(fixture.asset)
         : metadata.title!.trim();
@@ -249,13 +270,54 @@ class LoadedBook {
 
     return LoadedBook(
       fixture: fixture,
-      book: book,
       title: title,
       author: authors.isEmpty ? 'Autor desconhecido' : authors.join(', '),
-      formatLabel: book.format.name.toUpperCase(),
+      formatLabel: metadata.format.name.toUpperCase(),
+      format: metadata.format,
+      metadataDescription: metadata.description,
       coverBytes: hasUsableCover(metadata.cover) ? metadata.cover!.bytes : null,
+      book: book,
     );
   }
+
+  /// From a full parse: the metadata path with the book already at
+  /// hand, so opening it skips the re-parse.
+  factory LoadedBook.fromFixture(final DemoFixture fixture, final Book book) =>
+      LoadedBook.fromMetadata(fixture, book.metadata, book: book);
+
+  /// From the persisted shelf cache. Null when the row is unusable
+  /// (an unknown format name); the caller then re-parses instead.
+  static LoadedBook? fromCache(final DemoFixture fixture, final DemoBookMeta meta) {
+    final format = BookFormat.values.asNameMap()[meta.formatName];
+    if (format == null) {
+      return null;
+    }
+
+    return LoadedBook(
+      fixture: fixture,
+      title: (meta.title == null || meta.title!.trim().isEmpty)
+          ? titleFromAsset(fixture.asset)
+          : meta.title!.trim(),
+      author: (meta.author == null || meta.author!.trim().isEmpty)
+          ? 'Autor desconhecido'
+          : meta.author!,
+      formatLabel: meta.formatLabel ?? format.name.toUpperCase(),
+      format: format,
+      metadataDescription: meta.description,
+      coverBytes: meta.coverBytes,
+    );
+  }
+
+  LoadedBook copyWith({final Uint8List? coverBytes}) => LoadedBook(
+    fixture: fixture,
+    title: title,
+    author: author,
+    formatLabel: formatLabel,
+    format: format,
+    metadataDescription: metadataDescription,
+    coverBytes: coverBytes ?? this.coverBytes,
+    book: book,
+  );
 
   /// "assets/books/dickens-sample.pdf" -> "Dickens Sample".
   static String titleFromAsset(final String asset) {
@@ -269,21 +331,67 @@ class LoadedBook {
   }
 }
 
-/// Parses every bundled fixture in [demoFixtures] order. A fixture
-/// that fails to parse (an encrypted PDF opened without its password,
-/// for instance) is skipped so one locked book cannot take the whole
-/// shelf down.
-Future<List<LoadedBook>> loadDemoShelf() async {
-  final books = <LoadedBook>[];
-  for (final fixture in demoFixtures) {
-    try {
-      final data = await rootBundle.load(fixture.asset);
+/// Builds the shelf from the persisted metadata cache where available,
+/// parsing the rest metadata-only through Unseal. Fixtures run in
+/// parallel: every parse already happens on its own background
+/// isolate, so the wall time approaches the slowest book instead of
+/// the sum of all of them. A fixture that fails to parse (an encrypted
+/// PDF opened without its password, for instance) is skipped so one
+/// locked book cannot take the whole shelf down.
+Future<List<LoadedBook>> loadDemoShelf([final DemoStore? store]) async {
+  final books = await Future.wait(
+    demoFixtures.map((final fixture) async {
+      final cached = store?.shelfMeta(fixture.id);
+      if (cached != null) {
+        final loaded = LoadedBook.fromCache(fixture, cached);
+        if (loaded != null) {
+          return loaded;
+        }
+      }
+
+      try {
+        final data = await rootBundle.load(fixture.asset);
+        final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
+        final metadata = await Unseal.readMetadata(bytes);
+        final loaded = LoadedBook.fromMetadata(fixture, metadata);
+        store?.saveShelfMeta(shelfMetaOf(loaded));
+
+        return loaded;
+      } on Exception catch (error) {
+        debugPrint('Fixture ${fixture.id} failed to load: $error');
+
+        return null;
+      }
+    }),
+  );
+
+  return books.nonNulls.toList();
+}
+
+/// The persisted shelf-cache row for a parsed entry.
+DemoBookMeta shelfMetaOf(final LoadedBook entry) => DemoBookMeta(
+  bookId: entry.fixture.id,
+  title: entry.title,
+  author: entry.author,
+  formatLabel: entry.formatLabel,
+  formatName: entry.format.name,
+  description: entry.metadataDescription,
+  coverBytes: entry.coverBytes,
+);
+
+/// The full parse behind a shelf entry: bundled fixtures load from the
+/// asset bundle, imports from their stored file path. Runs when the
+/// book is opened (or its page rendered), one book at a time — the
+/// encrypted fixtures take the stored password, without which Unseal
+/// rejects them before the viewer's own password flow ever starts.
+Future<Book> parseForReading(final LoadedBook entry, {final String? password}) {
+  if (entry.fixture.isBundled) {
+    return rootBundle.load(entry.fixture.asset).then((final data) {
       final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
-      books.add(LoadedBook.fromFixture(fixture, await Unseal.read(bytes)));
-    } on Exception catch (error) {
-      debugPrint('Fixture ${fixture.id} failed to load: $error');
-    }
+
+      return Unseal.read(bytes, password: password ?? '');
+    });
   }
 
-  return books;
+  return Unseal.readFile(entry.fixture.asset, password: password ?? '');
 }

@@ -4,7 +4,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:unseal/unseal.dart' show ComicBook, NavPoint, PdfBook;
+import 'package:unseal/unseal.dart' show NavPoint;
 
 import '../app/app_state.dart';
 import '../demo_data.dart';

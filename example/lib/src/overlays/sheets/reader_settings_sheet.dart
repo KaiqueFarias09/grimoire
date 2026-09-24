@@ -8,9 +8,9 @@ class _ReaderSettingsSheet extends StatelessWidget {
   @override
   Widget build(final BuildContext context) {
     final state = host.state;
-    final book = state.bookById(state.selectedBook)?.book;
-    final isPdf = book is PdfBook;
-    final isComic = book is ComicBook;
+    final book = state.bookById(state.selectedBook);
+    final isPdf = book?.isPdf ?? false;
+    final isComic = book?.isComic ?? false;
 
     return _SheetFrame(
       title: 'Temas e ajustes',

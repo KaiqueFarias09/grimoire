@@ -201,11 +201,13 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
     );
   }
 
-  /// Parses the bundled fixtures through Unseal so the shelf shows the
-  /// books' own metadata and covers.
+  /// Builds the bundled-fixture shelf through Unseal so it shows the
+  /// books' own metadata and covers, cached in the store after the
+  /// first parse.
   Future<void> _loadShelf() async {
     try {
-      final List<LoadedBook> books = await (widget.shell.shelfLoader ?? loadDemoShelf)();
+      final loader = widget.shell.shelfLoader;
+      final List<LoadedBook> books = await (loader != null ? loader() : loadDemoShelf(_store));
       if (!mounted) {
         return;
       }
@@ -224,23 +226,28 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
 
   /// Grimoire's headless page render paints the first page of the
   /// cover-less PDF fixture as its cover, the way Apple Books and
-  /// Calibre derive PDF covers.
+  /// Calibre derive PDF covers. The rendered cover joins the shelf
+  /// cache so later launches skip the render.
   Future<void> _renderPdfCovers() async {
     for (var index = 0; index < state.books.length; index++) {
       final entry = state.books[index];
-      if (entry.hasCover || entry.book is! PdfBook) {
+      if (entry.hasCover || !entry.isPdf) {
         continue;
       }
       try {
-        final cachePath = kIsWeb ? null : (await getTemporaryDirectory()).path;
-        final bytes = await _pageRenderer.renderCover(
-          entry.book,
-          width: 400,
-          pdfJsCachePath: cachePath,
+        final book = entry.book ??= await parseForReading(
+          entry,
+          password: _store?.passwordOf(entry.fixture.id) ?? '',
         );
         if (!mounted) {
           return;
         }
+        final cachePath = kIsWeb ? null : (await getTemporaryDirectory()).path;
+        final bytes = await _pageRenderer.renderCover(book, width: 400, pdfJsCachePath: cachePath);
+        if (!mounted) {
+          return;
+        }
+        _store?.saveShelfMeta(shelfMetaOf(entry.copyWith(coverBytes: bytes)));
         final updated = <LoadedBook>[...state.books];
         updated[index] = entry.copyWith(coverBytes: bytes);
         _mutate(() => state.books = updated);
@@ -528,8 +535,9 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
 
   /// Restores everything the ObjectBox store persisted: reader
   /// settings, per-book progress, collections and device imports.
-  /// Password-protected fixtures skipped by the shelf loader are
-  /// re-parsed here once their stored password is available.
+  /// Shelf entries (imports and password-unlocked fixtures) paint from
+  /// the metadata cache; a missing cache row falls back to a parse and
+  /// fills the cache for the next launch.
   Future<void> _loadPersisted() async {
     final store = _store;
     if (store == null) {
@@ -539,41 +547,41 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
     final settings = store.loadSettings();
     final imported = <LoadedBook>[];
     for (final entry in store.importedBooks()) {
+      final fixture = _importedFixture(entry, reader: 'reflow');
+      final meta = store.shelfMeta(entry.bookId);
+      final cached = meta == null ? null : LoadedBook.fromCache(fixture, meta);
+      if (cached != null) {
+        imported.add(cached);
+        continue;
+      }
       try {
         final book = await Unseal.readFile(entry.sourcePath!);
-        imported.add(
-          LoadedBook.fromFixture(
-            DemoFixture(
-              id: entry.bookId,
-              asset: entry.sourcePath!,
-              progress: entry.lastPercent,
-              status: entry.lastPercent >= 100 ? 'Concluído' : 'Lendo',
-              chapter: entry.chapterLabel ?? 'Ainda não iniciado',
-              reader: 'reflow',
-              source: 'Importado do dispositivo',
-              descriptionFallback: '',
-            ),
-            book,
-          ),
-        );
+        final loaded = LoadedBook.fromFixture(fixture, book);
+        store.saveShelfMeta(shelfMetaOf(loaded));
+        imported.add(loaded);
       } on Exception catch (error) {
         debugPrint('Imported book ${entry.bookId} failed to load: $error');
       }
     }
 
-    // Password-protected bundled fixtures: retry with the stored
-    // password before giving up on them.
+    // Password-protected bundled fixtures: retried with the stored
+    // password before giving up on them. A fixture with a cache row is
+    // already served by the shelf loader (the cache hit needs no
+    // password), so only a row-less fixture is parsed here.
     final unlocked = <LoadedBook>[];
     for (final fixture in demoFixtures) {
       final alreadyLoaded = state.books.any((final b) => b.fixture.id == fixture.id);
       final password = store.passwordOf(fixture.id);
-      if (alreadyLoaded || password == null) {
+      if (alreadyLoaded || password == null || store.shelfMeta(fixture.id) != null) {
         continue;
       }
       try {
         final data = await rootBundle.load(fixture.asset);
         final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
-        unlocked.add(LoadedBook.fromFixture(fixture, await Unseal.read(bytes, password: password)));
+        final metadata = await Unseal.readMetadata(bytes, password: password);
+        final loaded = LoadedBook.fromMetadata(fixture, metadata);
+        store.saveShelfMeta(shelfMetaOf(loaded));
+        unlocked.add(loaded);
       } on Exception catch (error) {
         debugPrint('Locked fixture ${fixture.id} failed to load: $error');
       }
@@ -623,6 +631,22 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         state.collections = const [DemoCollection(name: 'Favoritos', count: 0, kind: 'custom')];
       }
     });
+  }
+
+  /// The shelf fixture describing a persisted device import; [reader]
+  /// is the initial reader mode (the import-time parse knows the
+  /// format, the next launch does not).
+  DemoFixture _importedFixture(final DemoBook entry, {required final String reader}) {
+    return DemoFixture(
+      id: entry.bookId,
+      asset: entry.sourcePath!,
+      progress: entry.lastPercent,
+      status: entry.lastPercent >= 100 ? 'Concluído' : 'Lendo',
+      chapter: entry.chapterLabel ?? 'Ainda não iniciado',
+      reader: reader,
+      source: 'Importado do dispositivo',
+      descriptionFallback: '',
+    );
   }
 
   /// Persists the global reader settings (theme, layout mode, font).
@@ -678,18 +702,10 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         author: book.metadata.authors.join(', '),
         formatLabel: book.format.name.toUpperCase(),
       );
-      final fixture = DemoFixture(
-        id: id,
-        asset: storedPath,
-        progress: 0,
-        status: 'Novo',
-        chapter: 'Ainda não iniciado',
-        reader: book is PdfBook ? 'pages' : 'reflow',
-        source: 'Importado do dispositivo',
-        descriptionFallback: '',
-      );
+      final fixture = _importedFixture(entry, reader: book is PdfBook ? 'pages' : 'reflow');
       final loaded = LoadedBook.fromFixture(fixture, book);
       _store?.saveBook(entry);
+      _store?.saveShelfMeta(shelfMetaOf(loaded));
       _mutate(() {
         state.books = [...state.books, loaded];
         state.selectedBook = id;
@@ -731,6 +747,7 @@ class _BooksAppShellHostState extends State<BooksAppShellHost> implements UbHost
         store.saveBook(entry);
       }
       final loaded = LoadedBook.fromFixture(fixture, book);
+      store?.saveShelfMeta(shelfMetaOf(loaded));
       _mutate(() {
         // The freshly unlocked book joins the shelf right away.
         state.books = [...state.books.where((final b) => b.fixture.id != 'pdf'), loaded];

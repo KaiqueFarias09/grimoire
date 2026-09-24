@@ -56,15 +56,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _startViewer() async {
-    final book = entry;
-    if (book == null) {
+    final shelfEntry = entry;
+    if (shelfEntry == null) {
       setState(() => _loadError = 'Livro indisponível.');
       return;
     }
     try {
       final cachePath = kIsWeb ? '' : (await getTemporaryDirectory()).path;
       if (!mounted) return;
-      await _buildController(book.book, cachePath);
+      // The shelf holds metadata only: the full parse happens here,
+      // once per session, when the book is actually opened.
+      final book =
+          shelfEntry.book ??
+          await parseForReading(
+            shelfEntry,
+            password: widget.host.store?.passwordOf(widget.bookId) ?? '',
+          );
+      shelfEntry.book = book;
+      await _buildController(book, cachePath);
     } on Exception catch (error) {
       if (mounted) {
         setState(() => _loadError = '$error');

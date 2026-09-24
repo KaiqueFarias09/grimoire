@@ -157,10 +157,61 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "5:9063898100873792228",
+      "lastPropertyId": "8:758170370626576610",
+      "name": "DemoBookMeta",
+      "properties": [
+        {
+          "id": "1:8675910113069627611",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1578095758065802655",
+          "name": "bookId",
+          "indexId": "3:222261990344073759",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:2070800242770141252",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "4:1723687482742602888",
+          "name": "author",
+          "type": 9
+        },
+        {
+          "id": "5:3717257227071753616",
+          "name": "formatLabel",
+          "type": 9
+        },
+        {
+          "id": "6:8856714265533308237",
+          "name": "formatName",
+          "type": 9
+        },
+        {
+          "id": "7:6649680408926538968",
+          "name": "description",
+          "type": 9
+        },
+        {
+          "id": "8:758170370626576610",
+          "name": "coverBytes",
+          "type": 23
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "4:1676227001604084459",
-  "lastIndexId": "2:204547669573205261",
+  "lastEntityId": "5:9063898100873792228",
+  "lastIndexId": "3:222261990344073759",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
