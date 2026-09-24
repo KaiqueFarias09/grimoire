@@ -16,10 +16,21 @@ enum SheetKind { globalSearch, importBook, readerSearch, readerSettings, summary
 enum ModalKind { formatHelp, note }
 
 class OverlaysState {
-  const OverlaysState({this.sheet, this.modal, this.noteQuote = '', this.toast = ''});
+  const OverlaysState({
+    this.sheet,
+    this.modal,
+    this.sheetBookId,
+    this.noteQuote = '',
+    this.toast = '',
+  });
 
   final SheetKind? sheet;
   final ModalKind? modal;
+
+  /// The book a sheet acts on: the collections sheet adds this book
+  /// when opened from the detail page, and the reader sheets resolve
+  /// their controller from it.
+  final String? sheetBookId;
 
   /// The selected passage shown by the note modal; set when the modal
   /// opens, cleared when it closes.
@@ -32,14 +43,17 @@ class OverlaysState {
   OverlaysState copyWith({
     SheetKind? sheet,
     ModalKind? modal,
+    String? sheetBookId,
     String? noteQuote,
     String? toast,
     bool clearSheet = false,
     bool clearModal = false,
+    bool clearBookId = false,
   }) {
     return OverlaysState(
       sheet: clearSheet ? null : (sheet ?? this.sheet),
       modal: clearModal ? null : (modal ?? this.modal),
+      sheetBookId: clearBookId ? null : (sheetBookId ?? this.sheetBookId),
       noteQuote: noteQuote ?? this.noteQuote,
       toast: toast ?? this.toast,
     );
@@ -56,7 +70,14 @@ class OverlaysController extends Notifier<OverlaysState> {
     return const OverlaysState();
   }
 
-  void openSheet(final SheetKind kind) => state = state.copyWith(sheet: kind, clearModal: true);
+  /// Opens [kind]; [bookId] marks the book the sheet acts on and is
+  /// cleared for sheets that do not take one.
+  void openSheet(final SheetKind kind, {final String? bookId}) => state = state.copyWith(
+    sheet: kind,
+    sheetBookId: bookId,
+    clearModal: true,
+    clearBookId: bookId == null,
+  );
 
   /// Opens the note editor over the passage the reader selection
   /// returned; an empty quote means there was no selection.
