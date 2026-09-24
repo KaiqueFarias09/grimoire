@@ -27,6 +27,7 @@ import 'package:grimoire_example/src/app/app_router.dart';
 import 'package:grimoire_example/src/core/demo_flags.dart';
 import 'package:grimoire_example/src/app/app_routes.dart';
 import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/features/reader/data/reader_settings.dart';
 
 /// The demo's host configuration: owns the router and the revision
 /// notifier route pages rebuild on. The live host state lives in

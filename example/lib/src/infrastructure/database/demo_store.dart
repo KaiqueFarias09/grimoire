@@ -33,6 +33,7 @@ class DemoBook {
     this.chapterLabel,
     this.annotationsJson = '',
     this.pdfPassword,
+    this.lastOpenedAt = 0,
     int? addedAt,
   }) : addedAt = addedAt ?? DateTime.now().millisecondsSinceEpoch;
 
@@ -60,6 +61,9 @@ class DemoBook {
   /// Demo-grade: the password that opened this book, so the shelf can
   /// re-parse it on the next launch.
   String? pdfPassword;
+
+  /// Millis epoch of the last reader open; 0 when never opened.
+  int lastOpenedAt;
 
   int addedAt;
 

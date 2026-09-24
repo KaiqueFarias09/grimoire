@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:1433451358012083444",
-      "lastPropertyId": "13:5393670688718550026",
+      "lastPropertyId": "14:478865215290215066",
       "name": "DemoBook",
       "properties": [
         {
@@ -74,6 +74,11 @@
         {
           "id": "13:5393670688718550026",
           "name": "addedAt",
+          "type": 6
+        },
+        {
+          "id": "14:478865215290215066",
+          "name": "lastOpenedAt",
           "type": 6
         }
       ],

@@ -7,15 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:grimoire/grimoire.dart';
 
 import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
+import 'package:grimoire_example/src/features/reader/data/reader_settings.dart';
 import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
 
 enum DemoModal { none, formatHelp, note }
 
 enum DemoSheet { none, globalSearch, addBook, readerSearch, readerSettings, summary, collections }
-
-enum ReaderMode { reflow, pages, comic }
-
-enum ReaderThemeMode { day, sepia, night }
 
 /// Mutable demo state, field-for-field like the prototype's `state`.
 class DemoAppState {

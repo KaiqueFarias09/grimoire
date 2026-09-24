@@ -12,6 +12,7 @@ import 'package:unseal/unseal.dart' show NavPoint;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:grimoire_example/src/app/app_state.dart';
+import 'package:grimoire_example/src/features/reader/data/reader_settings.dart';
 import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
 import 'package:grimoire_example/src/shared/widgets/app_icons.dart';
 import 'package:grimoire_example/src/shared/theme/app_theme.dart';

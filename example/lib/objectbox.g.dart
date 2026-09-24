@@ -14,7 +14,7 @@ import 'package:objectbox/internal.dart'
 import 'package:objectbox/objectbox.dart' as obx;
 import 'package:objectbox_flutter_libs/objectbox_flutter_libs.dart';
 
-import 'package:grimoire_example/src/infrastructure/database/demo_store.dart';
+import 'src/infrastructure/database/demo_store.dart';
 
 export 'package:objectbox/objectbox.dart'; // so that callers only have to import this file
 
@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 1433451358012083444),
     name: 'DemoBook',
-    lastPropertyId: const obx_int.IdUid(13, 5393670688718550026),
+    lastPropertyId: const obx_int.IdUid(14, 478865215290215066),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -104,6 +104,12 @@ final _entities = <obx_int.ModelEntity>[
         type: 6,
         flags: 0,
       ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 478865215290215066),
+        name: 'lastOpenedAt',
+        type: 6,
+        flags: 0,
+      ),
     ],
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
@@ -177,24 +183,9 @@ final _entities = <obx_int.ModelEntity>[
         type: 6,
         flags: 1,
       ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(2, 11),
-        name: 'themeName',
-        type: 9,
-        flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(3, 12),
-        name: 'modeName',
-        type: 9,
-        flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(4, 13),
-        name: 'fontSize',
-        type: 6,
-        flags: 0,
-      ),
+      obx_int.ModelProperty(id: const obx_int.IdUid(2, 11), name: 'themeName', type: 9, flags: 0),
+      obx_int.ModelProperty(id: const obx_int.IdUid(3, 12), name: 'modeName', type: 9, flags: 0),
+      obx_int.ModelProperty(id: const obx_int.IdUid(4, 13), name: 'fontSize', type: 6, flags: 0),
     ],
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
@@ -330,12 +321,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final sourcePathOffset = object.sourcePath == null
             ? null
             : fbb.writeString(object.sourcePath!);
-        final titleOffset = object.title == null
-            ? null
-            : fbb.writeString(object.title!);
-        final authorOffset = object.author == null
-            ? null
-            : fbb.writeString(object.author!);
+        final titleOffset = object.title == null ? null : fbb.writeString(object.title!);
+        final authorOffset = object.author == null ? null : fbb.writeString(object.author!);
         final formatLabelOffset = object.formatLabel == null
             ? null
             : fbb.writeString(object.formatLabel!);
@@ -346,7 +333,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final pdfPasswordOffset = object.pdfPassword == null
             ? null
             : fbb.writeString(object.pdfPassword!);
-        fbb.startTable(14);
+        fbb.startTable(15);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, bookIdOffset);
         fbb.addOffset(2, sourcePathOffset);
@@ -360,6 +347,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(10, annotationsJsonOffset);
         fbb.addOffset(11, pdfPasswordOffset);
         fbb.addInt64(12, object.addedAt);
+        fbb.addInt64(13, object.lastOpenedAt);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -391,12 +379,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           rootOffset,
           18,
         );
-        final lastPercentParam = const fb.Int64Reader().vTableGet(
-          buffer,
-          rootOffset,
-          20,
-          0,
-        );
+        final lastPercentParam = const fb.Int64Reader().vTableGet(buffer, rootOffset, 20, 0);
         final chapterLabelParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 22);
@@ -406,12 +389,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final pdfPasswordParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 26);
-        final addedAtParam = const fb.Int64Reader().vTableGet(
-          buffer,
-          rootOffset,
-          28,
-          0,
-        );
+        final lastOpenedAtParam = const fb.Int64Reader().vTableGet(buffer, rootOffset, 30, 0);
+        final addedAtParam = const fb.Int64Reader().vTableGet(buffer, rootOffset, 28, 0);
         final object = DemoBook(
           bookId: bookIdParam,
           sourcePath: sourcePathParam,
@@ -424,6 +403,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           chapterLabel: chapterLabelParam,
           annotationsJson: annotationsJsonParam,
           pdfPassword: pdfPasswordParam,
+          lastOpenedAt: lastOpenedAtParam,
           addedAt: addedAtParam,
         )..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
 
@@ -457,10 +437,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final bookIdParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 8, '');
-        final object = DemoCollectionBook(
-          collectionName: collectionNameParam,
-          bookId: bookIdParam,
-        )..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+        final object = DemoCollectionBook(collectionName: collectionNameParam, bookId: bookIdParam)
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
 
         return object;
       },
@@ -488,16 +466,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final nameParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 6, '');
-        final createdAtParam = const fb.Int64Reader().vTableGet(
-          buffer,
-          rootOffset,
-          8,
-          0,
-        );
-        final object = DemoCollectionEntry(
-          name: nameParam,
-          createdAt: createdAtParam,
-        )..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+        final createdAtParam = const fb.Int64Reader().vTableGet(buffer, rootOffset, 8, 0);
+        final object = DemoCollectionEntry(name: nameParam, createdAt: createdAtParam)
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
 
         return object;
       },
@@ -524,24 +495,14 @@ obx_int.ModelDefinition getObjectBoxModel() {
       objectFromFB: (obx.Store store, ByteData fbData) {
         final buffer = fb.BufferContext(fbData);
         final rootOffset = buffer.derefObject(0);
-        final idParam = const fb.Int64Reader().vTableGet(
-          buffer,
-          rootOffset,
-          4,
-          0,
-        );
+        final idParam = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
         final themeNameParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 6, '');
         final modeNameParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 8, '');
-        final fontSizeParam = const fb.Int64Reader().vTableGet(
-          buffer,
-          rootOffset,
-          10,
-          0,
-        );
+        final fontSizeParam = const fb.Int64Reader().vTableGet(buffer, rootOffset, 10, 0);
         final object = DemoSettings(
           id: idParam,
           themeName: themeNameParam,
@@ -562,12 +523,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
       },
       objectToFB: (DemoBookMeta object, fb.Builder fbb) {
         final bookIdOffset = fbb.writeString(object.bookId);
-        final titleOffset = object.title == null
-            ? null
-            : fbb.writeString(object.title!);
-        final authorOffset = object.author == null
-            ? null
-            : fbb.writeString(object.author!);
+        final titleOffset = object.title == null ? null : fbb.writeString(object.title!);
+        final authorOffset = object.author == null ? null : fbb.writeString(object.author!);
         final formatLabelOffset = object.formatLabel == null
             ? null
             : fbb.writeString(object.formatLabel!);
@@ -612,9 +569,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 16);
         final coverBytesParam =
-            const fb.Uint8ListReader(
-                  lazy: false,
-                ).vTableGetNullable(buffer, rootOffset, 18)
+            const fb.Uint8ListReader(lazy: false).vTableGetNullable(buffer, rootOffset, 18)
                 as Uint8List?;
         final object = DemoBookMeta(
           bookId: bookIdParam,
@@ -637,77 +592,52 @@ obx_int.ModelDefinition getObjectBoxModel() {
 /// [DemoBook] entity fields to define ObjectBox queries.
 class DemoBook_ {
   /// See [DemoBook.id].
-  static final id = obx.QueryIntegerProperty<DemoBook>(
-    _entities[0].properties[0],
-  );
+  static final id = obx.QueryIntegerProperty<DemoBook>(_entities[0].properties[0]);
 
   /// See [DemoBook.bookId].
-  static final bookId = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[1],
-  );
+  static final bookId = obx.QueryStringProperty<DemoBook>(_entities[0].properties[1]);
 
   /// See [DemoBook.sourcePath].
-  static final sourcePath = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[2],
-  );
+  static final sourcePath = obx.QueryStringProperty<DemoBook>(_entities[0].properties[2]);
 
   /// See [DemoBook.title].
-  static final title = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[3],
-  );
+  static final title = obx.QueryStringProperty<DemoBook>(_entities[0].properties[3]);
 
   /// See [DemoBook.author].
-  static final author = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[4],
-  );
+  static final author = obx.QueryStringProperty<DemoBook>(_entities[0].properties[4]);
 
   /// See [DemoBook.formatLabel].
-  static final formatLabel = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[5],
-  );
+  static final formatLabel = obx.QueryStringProperty<DemoBook>(_entities[0].properties[5]);
 
   /// See [DemoBook.lastSectionIndex].
-  static final lastSectionIndex = obx.QueryIntegerProperty<DemoBook>(
-    _entities[0].properties[6],
-  );
+  static final lastSectionIndex = obx.QueryIntegerProperty<DemoBook>(_entities[0].properties[6]);
 
   /// See [DemoBook.lastCharOffset].
-  static final lastCharOffset = obx.QueryIntegerProperty<DemoBook>(
-    _entities[0].properties[7],
-  );
+  static final lastCharOffset = obx.QueryIntegerProperty<DemoBook>(_entities[0].properties[7]);
 
   /// See [DemoBook.lastPercent].
-  static final lastPercent = obx.QueryIntegerProperty<DemoBook>(
-    _entities[0].properties[8],
-  );
+  static final lastPercent = obx.QueryIntegerProperty<DemoBook>(_entities[0].properties[8]);
 
   /// See [DemoBook.chapterLabel].
-  static final chapterLabel = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[9],
-  );
+  static final chapterLabel = obx.QueryStringProperty<DemoBook>(_entities[0].properties[9]);
 
   /// See [DemoBook.annotationsJson].
-  static final annotationsJson = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[10],
-  );
+  static final annotationsJson = obx.QueryStringProperty<DemoBook>(_entities[0].properties[10]);
 
   /// See [DemoBook.pdfPassword].
-  static final pdfPassword = obx.QueryStringProperty<DemoBook>(
-    _entities[0].properties[11],
-  );
+  static final pdfPassword = obx.QueryStringProperty<DemoBook>(_entities[0].properties[11]);
 
   /// See [DemoBook.addedAt].
-  static final addedAt = obx.QueryIntegerProperty<DemoBook>(
-    _entities[0].properties[12],
-  );
+  static final addedAt = obx.QueryIntegerProperty<DemoBook>(_entities[0].properties[12]);
+
+  /// See [DemoBook.lastOpenedAt].
+  static final lastOpenedAt = obx.QueryIntegerProperty<DemoBook>(_entities[0].properties[13]);
 }
 
 /// [DemoCollectionBook] entity fields to define ObjectBox queries.
 class DemoCollectionBook_ {
   /// See [DemoCollectionBook.id].
-  static final id = obx.QueryIntegerProperty<DemoCollectionBook>(
-    _entities[1].properties[0],
-  );
+  static final id = obx.QueryIntegerProperty<DemoCollectionBook>(_entities[1].properties[0]);
 
   /// See [DemoCollectionBook.collectionName].
   static final collectionName = obx.QueryStringProperty<DemoCollectionBook>(
@@ -715,22 +645,16 @@ class DemoCollectionBook_ {
   );
 
   /// See [DemoCollectionBook.bookId].
-  static final bookId = obx.QueryStringProperty<DemoCollectionBook>(
-    _entities[1].properties[2],
-  );
+  static final bookId = obx.QueryStringProperty<DemoCollectionBook>(_entities[1].properties[2]);
 }
 
 /// [DemoCollectionEntry] entity fields to define ObjectBox queries.
 class DemoCollectionEntry_ {
   /// See [DemoCollectionEntry.id].
-  static final id = obx.QueryIntegerProperty<DemoCollectionEntry>(
-    _entities[2].properties[0],
-  );
+  static final id = obx.QueryIntegerProperty<DemoCollectionEntry>(_entities[2].properties[0]);
 
   /// See [DemoCollectionEntry.name].
-  static final name = obx.QueryStringProperty<DemoCollectionEntry>(
-    _entities[2].properties[1],
-  );
+  static final name = obx.QueryStringProperty<DemoCollectionEntry>(_entities[2].properties[1]);
 
   /// See [DemoCollectionEntry.createdAt].
   static final createdAt = obx.QueryIntegerProperty<DemoCollectionEntry>(
@@ -741,65 +665,41 @@ class DemoCollectionEntry_ {
 /// [DemoSettings] entity fields to define ObjectBox queries.
 class DemoSettings_ {
   /// See [DemoSettings.id].
-  static final id = obx.QueryIntegerProperty<DemoSettings>(
-    _entities[3].properties[0],
-  );
+  static final id = obx.QueryIntegerProperty<DemoSettings>(_entities[3].properties[0]);
 
   /// See [DemoSettings.themeName].
-  static final themeName = obx.QueryStringProperty<DemoSettings>(
-    _entities[3].properties[1],
-  );
+  static final themeName = obx.QueryStringProperty<DemoSettings>(_entities[3].properties[1]);
 
   /// See [DemoSettings.modeName].
-  static final modeName = obx.QueryStringProperty<DemoSettings>(
-    _entities[3].properties[2],
-  );
+  static final modeName = obx.QueryStringProperty<DemoSettings>(_entities[3].properties[2]);
 
   /// See [DemoSettings.fontSize].
-  static final fontSize = obx.QueryIntegerProperty<DemoSettings>(
-    _entities[3].properties[3],
-  );
+  static final fontSize = obx.QueryIntegerProperty<DemoSettings>(_entities[3].properties[3]);
 }
 
 /// [DemoBookMeta] entity fields to define ObjectBox queries.
 class DemoBookMeta_ {
   /// See [DemoBookMeta.id].
-  static final id = obx.QueryIntegerProperty<DemoBookMeta>(
-    _entities[4].properties[0],
-  );
+  static final id = obx.QueryIntegerProperty<DemoBookMeta>(_entities[4].properties[0]);
 
   /// See [DemoBookMeta.bookId].
-  static final bookId = obx.QueryStringProperty<DemoBookMeta>(
-    _entities[4].properties[1],
-  );
+  static final bookId = obx.QueryStringProperty<DemoBookMeta>(_entities[4].properties[1]);
 
   /// See [DemoBookMeta.title].
-  static final title = obx.QueryStringProperty<DemoBookMeta>(
-    _entities[4].properties[2],
-  );
+  static final title = obx.QueryStringProperty<DemoBookMeta>(_entities[4].properties[2]);
 
   /// See [DemoBookMeta.author].
-  static final author = obx.QueryStringProperty<DemoBookMeta>(
-    _entities[4].properties[3],
-  );
+  static final author = obx.QueryStringProperty<DemoBookMeta>(_entities[4].properties[3]);
 
   /// See [DemoBookMeta.formatLabel].
-  static final formatLabel = obx.QueryStringProperty<DemoBookMeta>(
-    _entities[4].properties[4],
-  );
+  static final formatLabel = obx.QueryStringProperty<DemoBookMeta>(_entities[4].properties[4]);
 
   /// See [DemoBookMeta.formatName].
-  static final formatName = obx.QueryStringProperty<DemoBookMeta>(
-    _entities[4].properties[5],
-  );
+  static final formatName = obx.QueryStringProperty<DemoBookMeta>(_entities[4].properties[5]);
 
   /// See [DemoBookMeta.description].
-  static final description = obx.QueryStringProperty<DemoBookMeta>(
-    _entities[4].properties[6],
-  );
+  static final description = obx.QueryStringProperty<DemoBookMeta>(_entities[4].properties[6]);
 
   /// See [DemoBookMeta.coverBytes].
-  static final coverBytes = obx.QueryByteVectorProperty<DemoBookMeta>(
-    _entities[4].properties[7],
-  );
+  static final coverBytes = obx.QueryByteVectorProperty<DemoBookMeta>(_entities[4].properties[7]);
 }
