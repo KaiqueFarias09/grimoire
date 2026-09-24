@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire_example/grimoire_example_app.dart';
+import 'package:grimoire_example/src/di/providers.dart';
 import 'package:grimoire_example/src/features/library/data/demo_shelf.dart';
 import 'package:unseal/unseal.dart';
 
@@ -16,8 +18,8 @@ void main() {
 
     expect(find.text('Ler agora'), findsWidgets);
     expect(find.text("Alice's Adventures in Wonderland"), findsWidgets);
+    expect(find.text('Continuar lendo'), findsWidgets);
     expect(find.text('Na sua biblioteca'), findsOneWidget);
-    expect(find.text('Adicionados recentemente'), findsOneWidget);
   });
 
   testWidgets('reader screen opens the selected book from parsed metadata', (
@@ -62,7 +64,8 @@ void main() {
       find.text('Escolha uma amostra ou selecione um arquivo do seu dispositivo.'),
       findsOneWidget,
     );
-    expect(find.text('Formatos aceitos'), findsOneWidget);
+    expect(find.text('EPUB'), findsOneWidget);
+    expect(find.text('PDF'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.textContaining('A cidade depois da chuva'));
@@ -103,7 +106,9 @@ void main() {
   });
 
   testWidgets('reader settings opens as a bottom sheet', (final WidgetTester tester) async {
-    await _pumpApp(tester, size: const Size(390, 844));
+    // Navigate at desktop width, where the derived shelf order keeps
+    // Frankenstein's card on screen, then shrink to a phone.
+    await _pumpApp(tester);
 
     await tester.tap(find.textContaining('Frankenstein').first);
     await tester.pumpAndSettle();
@@ -112,6 +117,9 @@ void main() {
     // loading spinner keeps animating: pump fixed frames, not settle.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
+
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pump();
 
     await tester.tap(find.byTooltip('Temas e ajustes'));
     await tester.pump(const Duration(milliseconds: 400));
@@ -166,13 +174,18 @@ void main() {
 
 /// Pumps the app with the shelf preloaded under real async: asset IO
 /// started by the widget in the fake clock zone never completes, so
-/// tests hand the parsed books in through [GrimoireExampleApp.shelfLoader].
+/// tests override the [demoShelfLoaderProvider] with the parsed books.
 Future<void> _pumpApp(final WidgetTester tester, {final Size size = const Size(1600, 2800)}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   final List<LoadedBook>? books = await tester.runAsync(loadDemoShelf);
-  await tester.pumpWidget(GrimoireExampleApp(shelfLoader: () async => books!));
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [demoShelfLoaderProvider.overrideWithValue(() async => books!)],
+      child: const GrimoireExampleApp(),
+    ),
+  );
   await tester.pump();
 }
 

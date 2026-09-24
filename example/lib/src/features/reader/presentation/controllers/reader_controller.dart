@@ -63,6 +63,7 @@ class ReaderState {
   ReaderState copyWith({
     ReaderPhase? phase,
     String? error,
+    ViewerController? viewer,
     double? progress,
     String? chapterLabel,
     bool? chromeVisible,
@@ -77,7 +78,7 @@ class ReaderState {
     return ReaderState(
       phase: phase ?? this.phase,
       error: clearError ? null : (error ?? this.error),
-      viewer: viewer,
+      viewer: viewer ?? this.viewer,
       progress: progress ?? this.progress,
       chapterLabel: clearChapter ? null : (chapterLabel ?? this.chapterLabel),
       chromeVisible: chromeVisible ?? this.chromeVisible,
@@ -208,6 +209,7 @@ class ReaderController extends Notifier<ReaderState> {
       }
       state = state.copyWith(
         phase: ReaderPhase.ready,
+        viewer: viewer,
         progress: (shelf.percentFor(entry)) / 100,
         chapterLabel: shelf.chapterFor(entry),
       );

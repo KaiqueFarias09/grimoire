@@ -80,9 +80,15 @@ class OverlaysController extends Notifier<OverlaysState> {
   );
 
   /// Opens the note editor over the passage the reader selection
-  /// returned; an empty quote means there was no selection.
-  void openNoteModal(final String quote) =>
-      state = state.copyWith(modal: ModalKind.note, noteQuote: quote, clearSheet: true);
+  /// returned; an empty quote means there was no selection. [bookId]
+  /// pins the reader the note belongs to.
+  void openNoteModal(final String quote, {final String? bookId}) => state = state.copyWith(
+    modal: ModalKind.note,
+    noteQuote: quote,
+    sheetBookId: bookId,
+    clearSheet: true,
+    clearBookId: bookId == null,
+  );
 
   void openModal(final ModalKind kind) => state = state.copyWith(modal: kind, clearSheet: true);
 
