@@ -50,7 +50,6 @@ class _ReaderSettingsSheet extends StatelessWidget {
               activeValue: state.readerMode.name,
               onSelect: (final value) => host.dispatch('reader-mode', data: value),
             ),
-          const _HostNote(),
         ],
       ),
     );

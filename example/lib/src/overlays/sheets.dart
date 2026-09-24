@@ -4,36 +4,35 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:unseal/unseal.dart' show ComicBook, NavPoint, PdfBook;
 
 import '../app/app_state.dart';
 import '../demo_data.dart';
-import '../ub_icon.dart';
 import '../pages/reader_screen.dart' show ReaderHooks;
-import 'package:unseal/unseal.dart' show ComicBook, NavPoint, PdfBook;
+import '../ub_icon.dart';
 import '../ub_theme.dart';
 import '../ub_widgets.dart';
 import 'shared.dart';
 
-part 'sheets/sheet_frame.dart';
-part 'sheets/sheet_close_button.dart';
-part 'sheets/sheet_search_box.dart';
-part 'sheets/sheet_list.dart';
-part 'sheets/sheet_list_row.dart';
+part 'sheets/collections_sheet.dart';
 part 'sheets/global_search_sheet.dart';
-part 'sheets/import_sheet.dart';
-part 'sheets/import_picker.dart';
-part 'sheets/import_option.dart';
-part 'sheets/import_preview.dart';
 part 'sheets/import_confirm.dart';
+part 'sheets/import_option.dart';
+part 'sheets/import_picker.dart';
+part 'sheets/import_preview.dart';
+part 'sheets/import_sheet.dart';
 part 'sheets/pdf_password_step.dart';
 part 'sheets/reader_search_sheet.dart';
 part 'sheets/reader_settings_sheet.dart';
-part 'sheets/setting_row.dart';
 part 'sheets/setting_option.dart';
-part 'sheets/host_note.dart';
-part 'sheets/summary_sheet.dart';
-part 'sheets/collections_sheet.dart';
+part 'sheets/setting_row.dart';
+part 'sheets/sheet_close_button.dart';
 part 'sheets/sheet_empty.dart';
+part 'sheets/sheet_frame.dart';
+part 'sheets/sheet_list.dart';
+part 'sheets/sheet_list_row.dart';
+part 'sheets/sheet_search_box.dart';
+part 'sheets/summary_sheet.dart';
 
 class UbSheetHost extends StatefulWidget {
   const UbSheetHost({required this.host, required this.sheet, required this.onDismiss, super.key});
