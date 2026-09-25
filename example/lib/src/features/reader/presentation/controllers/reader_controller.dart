@@ -104,6 +104,9 @@ class ReaderController extends Notifier<ReaderState> {
   bool _restoreDone = false;
   bool _started = false;
 
+  /// Demo-only timing: controller creation → first displayed page.
+  final Stopwatch _openTiming = Stopwatch()..start();
+
   @override
   ReaderState build() {
     ref.onDispose(_teardown);
@@ -160,9 +163,15 @@ class ReaderController extends Notifier<ReaderState> {
       }
       // The shelf holds metadata only: the full parse happens here,
       // once per session, when the book is actually opened.
+      final hadParsedBook = entry.book != null;
+      final parseWatch = Stopwatch()..start();
       final book = entry.book ??= await parseForReading(
         entry,
         password: repository.passwordOf(bookId) ?? '',
+      );
+      debugPrint(
+        'example-timing: parse${hadParsedBook ? ' (cached)' : ''} '
+        '${parseWatch.elapsedMilliseconds}ms',
       );
       if (!ref.mounted) {
         return;
@@ -180,6 +189,13 @@ class ReaderController extends Notifier<ReaderState> {
       _pageSub = viewer.pageChanges.listen((final change) {
         if (!ref.mounted) {
           return;
+        }
+        if (_openTiming.isRunning) {
+          debugPrint(
+            'example-timing: open→first page ${_openTiming.elapsedMilliseconds}ms '
+            '(${change.chapterTitle})',
+          );
+          _openTiming.stop();
         }
         state = state.copyWith(progress: change.progress, chapterLabel: change.chapterTitle);
         unawaited(_persistProgress(change));
