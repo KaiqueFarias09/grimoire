@@ -19,10 +19,9 @@ import 'package:grimoire_example/src/presentation/controllers/overlays_controlle
 void main() {
   group('ShelfController', () {
     test('merges the loader result and derives percent and hero', () async {
-      final container = _container(loader: () async => <LoadedBook>[
-        _book('alpha', progress: 40),
-        _book('beta', progress: 0),
-      ]);
+      final container = _container(
+        loader: () async => <LoadedBook>[_book('alpha', progress: 40), _book('beta', progress: 0)],
+      );
       addTearDown(container.dispose);
 
       container.read(shelfControllerProvider);
@@ -39,10 +38,7 @@ void main() {
     });
 
     test('heroBook prefers the most recently opened book', () async {
-      final container = _container(loader: () async => <LoadedBook>[
-        _book('alpha'),
-        _book('beta'),
-      ]);
+      final container = _container(loader: () async => <LoadedBook>[_book('alpha'), _book('beta')]);
       addTearDown(container.dispose);
       container.read(shelfControllerProvider);
       await Future<void>.delayed(Duration.zero);
@@ -67,10 +63,11 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final collections = container.read(collectionsControllerProvider);
-      expect(
-        collections.smart.map((final c) => c.name),
-        <String>['Todos os livros', 'Lendo agora', 'Concluídos'],
-      );
+      expect(collections.smart.map((final c) => c.name), <String>[
+        'Todos os livros',
+        'Lendo agora',
+        'Concluídos',
+      ]);
       expect(collections.smart[0].count, 3);
       expect(collections.smart[1].count, 1);
       expect(collections.smart[2].count, 1);
@@ -116,12 +113,16 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final shelf = container.read(shelfControllerProvider);
-      final collections = container.read(collectionsControllerProvider).copyWith(
-        custom: const <BookCollection>[BookCollection(name: 'Favoritos', count: 1, isCustom: true)],
-        membershipIds: <String, Set<String>>{
-          'Favoritos': <String>{'beta'},
-        },
-      );
+      final collections = container
+          .read(collectionsControllerProvider)
+          .copyWith(
+            custom: const <BookCollection>[
+              BookCollection(name: 'Favoritos', count: 1, isCustom: true),
+            ],
+            membershipIds: <String, Set<String>>{
+              'Favoritos': <String>{'beta'},
+            },
+          );
       final filtered = booksInCollection('Favoritos', shelf, collections);
 
       expect(filtered.map((final b) => b.fixture.id), <String>['beta']);
@@ -172,10 +173,7 @@ void main() {
       final container = _container(loader: () async => const <LoadedBook>[]);
       addTearDown(container.dispose);
 
-      expect(
-        container.read(readerSettingsControllerProvider).theme,
-        ReaderThemeMode.day,
-      );
+      expect(container.read(readerSettingsControllerProvider).theme, ReaderThemeMode.day);
 
       final notifier = container.read(readerSettingsControllerProvider.notifier);
       notifier.setTheme(ReaderThemeMode.night);
