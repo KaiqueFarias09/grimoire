@@ -5,6 +5,12 @@ books, opens them through Unseal, and shows the reader with navigation,
 search, themes, annotations, and PDF modes. The app owns its demo shelf and
 persistence; those are not part of the Grimoire package.
 
+The app is structured as the reference consumer: feature-first folders
+(`lib/src/features/<feature>/{data,presentation}`), a hand-written Riverpod
+DI root (`lib/src/di/providers.dart`), repositories over ObjectBox in
+`lib/src/infrastructure/database`, and shared theme/widget primitives. See
+[AGENTS.md](AGENTS.md) for the conventions and the file map.
+
 From this directory, run `flutter pub get`, then `flutter run` on a supported
 device. Run `flutter analyze` and `flutter test` to check the example without a
 device. The widget tests use a fake rendering engine; they do not exercise a
