@@ -252,12 +252,14 @@ class ShelfController extends Notifier<ShelfState> {
   Future<void> _renderPdfCovers(final BookRepository repository) async {
     final store = ref.read(demoStoreProvider);
     final renderer = ref.read(pageRendererProvider);
-    final cachePath = kIsWeb ? null : (await getTemporaryDirectory()).path;
     for (final entry in List<LoadedBook>.of(state.books)) {
       if (entry.hasCover || !entry.isPdf) {
         continue;
       }
       try {
+        // Computed per book inside the guard: without the platform
+        // plugin (tests) the failure degrades to a skipped cover.
+        final cachePath = kIsWeb ? null : (await getTemporaryDirectory()).path;
         final book = entry.book ??= await parseForReading(
           entry,
           password: repository.passwordOf(entry.fixture.id) ?? '',
