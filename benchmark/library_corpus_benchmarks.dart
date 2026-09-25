@@ -168,18 +168,11 @@ Future<void> _runPick(
 
   if (pick.cfi) {
     final lastHtml = book.files.html.last.content;
-    final String cfi;
-    try {
-      // Messy real-world HTML can defeat the CFI document parser;
-      // skip this benchmark rather than discard the pick.
-      final doc = EpubCfiDocument.parse(lastHtml);
-      cfi = doc.cfiForOffset(lastHtml.length ~/ 2).encode();
-    } on Object catch (error) {
-      stdout.writeln('[Real library corpus] $label CFI document unparsable — skipped ($error).');
-      controller.dispose();
-
-      return;
-    }
+    // cfiForOffset addresses the document text space (text nodes only),
+    // not the raw HTML source: mid-source offsets can exceed the text
+    // length on markup-heavy books and the API rejects them loudly.
+    final doc = EpubCfiDocument.parse(lastHtml);
+    final cfi = doc.cfiForOffset(doc.text.length ~/ 2).encode();
     final coldRuns = 3; // Books here are big; keep the sample small.
     final freshControllers = List.generate(
       coldRuns + 1, // One extra for runAsyncBenchmark's warm-up.

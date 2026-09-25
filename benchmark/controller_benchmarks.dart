@@ -134,10 +134,11 @@ Future<void> _pagesAndCfiGroup() async {
   // CFI pointing into the last file: a cold resolution parses the CFI
   // document of every file before it. Controllers are built up front
   // (untimed) so each timed run pays only the scan; one extra covers
-  // runAsyncBenchmark's warm-up.
+  // runAsyncBenchmark's warm-up. cfiForOffset addresses the document
+  // text space, so the mid-point comes from doc.text, not the raw HTML.
   final lastHtml = many.book.files.html.last.content;
   final lastDoc = EpubCfiDocument.parse(lastHtml);
-  final lastCfi = lastDoc.cfiForOffset(lastHtml.length ~/ 2).encode();
+  final lastCfi = lastDoc.cfiForOffset(lastDoc.text.length ~/ 2).encode();
   final coldRuns = quickMode ? 3 : 5;
   final freshControllers = List.generate(coldRuns + 1, (_) => _controller(many.book));
   var coldIndex = 0;
