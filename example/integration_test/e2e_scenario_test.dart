@@ -1,22 +1,14 @@
-// Reproducible end-to-end reader scenario: real asset bytes → parse →
+// Reproducible end-to-end scenario: real asset bytes → parse →
 // controller ready → chapter transitions → search, driven through the
 // same ViewerController stack the example app uses (the pure-Dart fake
 // engine replaces the WebView bridge so the scenario runs on every
-// platform: macOS, Chrome, Android — the same await discipline as the
-// controller benchmarks, which start/await `nextChapter` directly).
+// platform — the same await discipline as the controller benchmarks,
+// which start/await `nextChapter` directly).
 //
-// Run on a device/platform in profile mode:
+// Parameters carry no `final`: the web compiler rejects the modifier
+// on parameters in current language versions.
 //
-//     flutter drive --profile -d macos \
-//       --driver=test_driver/e2e_scenario_driver.dart \
-//       --target=integration_test/e2e_scenario_test.dart
-//     flutter drive --profile -d chrome \
-//       --driver=test_driver/e2e_scenario_driver.dart \
-//       --target=integration_test/e2e_scenario_test.dart
-//     flutter test integration_test --profile -d <adb serial>
-//
-// Milestones print as `e2e-scenario:` lines, which the measurement
-// notes capture verbatim.
+// Milestones print as `e2e-scenario:` lines.
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
@@ -31,7 +23,7 @@ const _pageTurns = 10;
 Future<void> main() async {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('open → controller ready → chapter transitions → search', (final tester) async {
+  testWidgets('open → controller ready → chapter transitions → search', (tester) async {
     final bytes = (await rootBundle.load(_asset)).buffer.asUint8List();
 
     final openWatch = Stopwatch()..start();
