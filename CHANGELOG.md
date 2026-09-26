@@ -1,3 +1,27 @@
+## Unreleased
+
+### Added
+
+- **Fixed-layout EPUB pages (FXL-02)**: EPUB 3 spine items whose effective
+  rendition layout is `pre-paginated` present as full pages instead of
+  reflowed columns. The serving pipeline marks them (`elv-fixed` body class
+  plus `data-elv-page="W×H"` from the book's declared viewports, book
+  viewport metas dropped so they cannot fight the stage) and `viewer.js`
+  sizes the page as a stage scaled with `min(vw/W, vh/H)` — no pagination,
+  no DOM wrapping, declared geometry and book selectors intact. Text
+  selection, highlights, search marks, narration marks and fragment lookup
+  keep working over the canonical text; pages without a declared viewport
+  fall back to fit-width. Horizontal swipes, arrow keys, PageUp/PageDown,
+  the wheel and tap zones turn fixed pages through the existing
+  `PageTurnEvent` (RTL progression mirrored in JS); typography, margin,
+  column, font, stylesheet and color-override settings never touch a fixed
+  page's content; fixed items count exactly one page each (a fully fixed
+  book needs no measurement pass). `ViewerController.isFixedLayoutEpub` and
+  `isFixedLayoutPage(fileIndex)` let hosts branch on the mode; progress
+  advances one page per reading-order item. Synthetic spreads, orientation
+  locks and stage zoom (pinch/pan/double-tap) are not honored yet (FXL-03).
+  Depends on `unseal: ^1.2.0` for the fixed-layout rendition model.
+
 ## 1.0.0 - September 23, 2026
 
 ### Added
