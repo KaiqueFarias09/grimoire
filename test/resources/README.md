@@ -26,6 +26,29 @@ second hand-written version of the parser fixtures.
 | CB7 | `books/comic/synthetic-pages.cb7` | 306 | `dc22487dfe022c416fa387f5ee30e03c4d92d64006eb5410790f8d167fcb1beb` |
 | CBC | `books/comic/synthetic-collection.cbc` | 911 | `747f1ccb4015ba608f919755d4dde56c2e7daf050b381921f1e80519b1db93cb` |
 | ODT | `books/odt/synthetic.odt` | 783 | `f98fad84d827126788c712c4ee606e75204d809edcbb65f0f22a547e9e559ac3` |
+| EPUB (fixed) | `books/epub/page-blanche.epub` | 3,136,922 | `d2efb562f17d43cef50578d4d67dd7fd991f8f254b6f5a7c28bde7461ea783eb` |
+| EPUB (fixed) | `books/epub/fxl-xhtml-viewport.epub` | 2,625 | `d9a4e4f04a2d4b876a716101df517f1e5b6a8b571e1c3f656278a26716e69372` |
+| EPUB (fixed) | `books/epub/fxl-spread-hints.epub` | 3,541 | `a836ec02ea0ab3d46bc8fed6884ed827c03b13ee2b5b3df2a547f5d84bdd4ac7` |
+| EPUB (fixed) | `books/epub/fxl-spread-portrait.epub` | 3,067 | `7c519a964022b921e22390f5fa22bba075ff4f27eb9cf3aee5aafe9ff9962235` |
+| EPUB (fixed) | `books/epub/fxl-rtl.epub` | 3,119 | `be96d64f7d99b10c53ac9f14b2f8b4f651bc72a80a18213e7654ad32f2135128` |
+| EPUB (fixed) | `books/epub/fxl-orientation.epub` | 2,641 | `a40d17e3d0821bbdfce3db0c0ad21dfee964bffcfc2d23d0cef9a3d84497fac4` |
+| EPUB (fixed) | `books/epub/fxl-mixed-fixed-override.epub` | 2,968 | `b67f0bf41d948c99b7b1017d16b6252f817a03082f5b87105c3c9215cc9e2bdb` |
+| EPUB (fixed) | `books/epub/fxl-mixed-reflow-override.epub` | 2,575 | `372fae0ef73cc145b17e455a5724f94c3a27ed95fc4e9b20cde45a1766d07d5b` |
+| EPUB (fixed) | `books/epub/fxl-svg.epub` | 2,467 | `e5462066150a84e92ba2d41811a9387c4feb6955c3f484f59fd3a2402ccc862b` |
+| EPUB (fixed) | `books/epub/fxl-nonlinear.epub` | 2,683 | `da488011b110a51fa74fad68f5ad52132fdf86949f66a0d06d196d47d554388e` |
+| EPUB (fixed) | `books/epub/fxl-repeated-spine.epub` | 2,178 | `65ee0ebb92d99e153d1b719027ea7598620da8d7393ac5b5c35a6adde8252bfa` |
+| EPUB (fixed) | `books/epub/fxl-overlays.epub` | 2,889 | `f0b0796ce6d6d8fefb129d0345248ad1202249069692cba49ae782c419cfcd26` |
+| EPUB (fixed) | `books/epub/fxl-scripted.epub` | 2,230 | `6df28c3db450049a43b2449434ba855e9fa01856f590ac8f937ff4a803e0c289` |
+| EPUB (fixed) | `books/epub/fxl-viewport-quirks.epub` | 3,093 | `fdb2fece59122cb49ac8aa179e1a2d059ffa97d59097935aaebccbd560ced77` |
+
+`page-blanche.epub` is the committed Unseal fixture: bitmap XHTML pages declaring a
+`1200×1577` viewport. The `fxl-*.epub` fixtures are produced by Unseal's deterministic
+generator (`buildFxlEpubFixtures`) and cover the EPUB 3 fixed-layout rendition surface:
+declared viewports, spread/orientation hints, RTL page progression, per-spine layout
+overrides in both directions, standalone SVG pages, non-linear spine items, repeated
+spine references, media overlays, scripted pages, and malformed/missing/oversized
+viewport declarations. `fixed_layout_test.dart` opens them through the viewer serving
+pipeline.
 
 `format_viewer_integration_test.dart` opens every fixture through `Unseal`, starts the
 viewer server, checks the reading-order URL and exercises text/search/position/progress,
