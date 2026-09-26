@@ -165,6 +165,32 @@ Future<void> _pagesAndCfiGroup() async {
     note: many.label,
   );
   warmController.dispose();
+
+  // Book-level deep-link CFI (epubcfi(/6/N!/…)): the spine step names
+  // its file, so a cold jump should parse only the target document.
+  final lastHtmlIndex = many.book.readingOrder.indexWhere(
+    (final section) => section.name == many.book.files.html.last.path,
+  );
+  final bookCfi = many.book.buildEpubCfi(
+    contentIndex: lastHtmlIndex,
+    offsetInText: lastDoc.text.length ~/ 2,
+  );
+  final bookLevelControllers = List.generate(coldRuns + 1, (_) => _controller(many.book));
+  var bookLevelIndex = 0;
+  await group.addAsync(
+    'goToCfi book-level cold (deep link)',
+    () async {
+      final controller = bookLevelControllers[bookLevelIndex++];
+      final resolved = await controller.goToCfi(bookCfi);
+
+      return resolved;
+    },
+    iterations: coldRuns,
+    note: '${many.label} · spine step addresses file 150',
+  );
+  for (final controller in bookLevelControllers) {
+    controller.dispose();
+  }
 }
 
 /// Spy helpers: the fake engine records every evaluated script, so a

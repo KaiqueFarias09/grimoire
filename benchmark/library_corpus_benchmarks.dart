@@ -192,6 +192,36 @@ Future<void> _runPick(
     for (final cold in freshControllers) {
       cold.dispose();
     }
+    // Book-level deep-link form (epubcfi(/6/N!/…)): the spine step
+    // names its file, so a cold jump parses only the target document
+    // instead of trialing every file's text space.
+    final lastHtmlIndex = book.readingOrder.indexWhere(
+      (final section) => section.name == book.files.html.last.path,
+    );
+    if (lastHtmlIndex >= 0 && book is EpubBook) {
+      final bookCfi = book.buildEpubCfi(
+        contentIndex: lastHtmlIndex,
+        offsetInText: doc.text.length ~/ 2,
+      );
+      final bookLevelControllers = List.generate(
+        coldRuns + 1,
+        (_) => ViewerController(book, engineFactory: FakeViewerEngineFactory()),
+      );
+      var bookLevelIndex = 0;
+      await group.addAsync(
+        'goToCfi book-level cold (deep link)',
+        () {
+          final cold = bookLevelControllers[bookLevelIndex++];
+
+          return cold.goToCfi(bookCfi);
+        },
+        iterations: coldRuns,
+        note: label,
+      );
+      for (final cold in bookLevelControllers) {
+        cold.dispose();
+      }
+    }
   }
   controller.dispose();
 }
