@@ -28,13 +28,23 @@ abstract interface class PageMeasurementHost {
 /// Owns book-wide column measurement, cache persistence, and pacing.
 final class PageMeasurementController {
   /// Creates a scheduler for [book] backed by the narrow runtime [host].
-  PageMeasurementController({required this.book, required this.host});
+  ///
+  /// [isFixedPage] marks reading-order items whose page count is known
+  /// without measurement (fixed-layout EPUB pages count exactly one);
+  /// they are pre-seeded and never loaded into the measurer.
+  PageMeasurementController({
+    required this.book,
+    required this.host,
+    final bool Function(int fileIndex)? isFixedPage,
+  }) : _isFixedPage = isFixedPage ?? ((final _) => false);
 
   /// The book whose reading-order items are measured.
   final Book book;
 
   /// The only runtime capabilities the scheduler may use.
   final PageMeasurementHost host;
+
+  final bool Function(int fileIndex) _isFixedPage;
 
   /// Determines whether measurement is disabled, forward-only, or complete.
   BookPageCountMode pageCountMode = BookPageCountMode.measureAhead;
@@ -93,6 +103,7 @@ final class PageMeasurementController {
     _measuredColumns = cached != null
         ? [...cached]
         : <int?>[for (var index = 0; index < book.readingOrder.length; index++) null];
+    _seedFixedPages();
     _pageCacheLoaded = true;
     // The host can refresh during layout. Preserve the original
     // microtask boundary before notifications and queue work.
@@ -130,6 +141,7 @@ final class PageMeasurementController {
               while (_measuredColumns.length < book.readingOrder.length) {
                 _measuredColumns.add(null);
               }
+              _seedFixedPages();
               host.pageMeasurementDidChange();
             }
           }
@@ -183,6 +195,19 @@ final class PageMeasurementController {
     }
 
     return null;
+  }
+
+  /// Fixed-layout pages count exactly one page, known without loading
+  /// the item into the measurer engine. Stale cache entries (null or
+  /// otherwise) never override that.
+  void _seedFixedPages() {
+    for (
+      var index = 0;
+      index < _measuredColumns.length && index < book.readingOrder.length;
+      index++
+    ) {
+      if (_isFixedPage(index)) _measuredColumns[index] = 1;
+    }
   }
 
   Future<void> _persistCache() async {

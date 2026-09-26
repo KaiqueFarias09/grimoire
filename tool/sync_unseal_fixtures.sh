@@ -38,6 +38,24 @@ sync_file books/comic/synthetic-pages.cb7 test/resources/books/comic/synthetic-p
 sync_file books/comic/synthetic-collection.cbc test/resources/books/comic/synthetic-collection.cbc
 sync_file books/odt/synthetic.odt test/resources/books/odt/synthetic.odt
 
+# Fixed-layout EPUB fixtures. page-blanche is a committed Unseal
+# fixture (bitmap XHTML pages with a 1200x1577 viewport); the fxl-*
+# set is produced by the generator above.
+sync_file books/epub/page-blanche.epub test/resources/books/epub/page-blanche.epub
+sync_file books/epub/fxl-xhtml-viewport.epub test/resources/books/epub/fxl-xhtml-viewport.epub
+sync_file books/epub/fxl-spread-hints.epub test/resources/books/epub/fxl-spread-hints.epub
+sync_file books/epub/fxl-spread-portrait.epub test/resources/books/epub/fxl-spread-portrait.epub
+sync_file books/epub/fxl-rtl.epub test/resources/books/epub/fxl-rtl.epub
+sync_file books/epub/fxl-orientation.epub test/resources/books/epub/fxl-orientation.epub
+sync_file books/epub/fxl-mixed-fixed-override.epub test/resources/books/epub/fxl-mixed-fixed-override.epub
+sync_file books/epub/fxl-mixed-reflow-override.epub test/resources/books/epub/fxl-mixed-reflow-override.epub
+sync_file books/epub/fxl-svg.epub test/resources/books/epub/fxl-svg.epub
+sync_file books/epub/fxl-nonlinear.epub test/resources/books/epub/fxl-nonlinear.epub
+sync_file books/epub/fxl-repeated-spine.epub test/resources/books/epub/fxl-repeated-spine.epub
+sync_file books/epub/fxl-overlays.epub test/resources/books/epub/fxl-overlays.epub
+sync_file books/epub/fxl-scripted.epub test/resources/books/epub/fxl-scripted.epub
+sync_file books/epub/fxl-viewport-quirks.epub test/resources/books/epub/fxl-viewport-quirks.epub
+
 # The example intentionally carries only the small text/HTML fixtures.
 sync_file books/txt/synthetic.txt example/assets/books/synthetic.txt
 sync_file books/html/synthetic.html example/assets/books/synthetic.html

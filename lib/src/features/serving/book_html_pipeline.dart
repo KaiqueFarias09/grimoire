@@ -2,6 +2,7 @@ import 'package:unseal/unseal.dart' show Book;
 
 import 'book_javascript_policy.dart';
 import 'book_resource_resolution.dart';
+import 'fixed_layout.dart';
 
 /// Whether [content] is a MathML document (Calibre's sniff).
 bool containsMath(final String content) => content.toLowerCase().contains('<math');
@@ -527,4 +528,98 @@ String injectIntoHead(final String html, final String injection) {
 
   return '<!DOCTYPE html><html><head>$injection</head>'
       '<body>$html</body></html>';
+}
+
+/// Marks [html] as a fixed-layout page for the viewer stage.
+///
+/// Adds the `elv-fixed` body class (viewer.js switches to the fixed
+/// path) and, when the page declares its dimensions, the
+/// `data-elv-page="W×H"` attribute the stage sizes itself from.
+/// Everything else about the book's markup is preserved, with one
+/// deliberate exception: the book's own `<meta name="viewport">` is
+/// removed from fixed pages. The stage is scaled against the
+/// host-reported logical viewport (see `ViewerController
+/// setLogicalViewport`), and a book-authored viewport meta would
+/// rescale the CSS viewport under the stage transform on mobile
+/// webviews, double-shrinking the page. The injected
+/// `width=device-width` meta from [injectViewerAssets] stays: it is
+/// what keeps `clientWidth`/`innerHeight` predictable (equal to the
+/// hosting widget) for the fit math, and its `user-scalable=no` keeps
+/// browser pinch zoom from fighting the stage transform.
+String injectFixedPageMarkers(
+  final String html, {
+  required final FixedPagePresentation presentation,
+}) {
+  // Strip the book's own viewport meta BEFORE the pipeline injects
+  // the viewer device-width one (both carry name="viewport"); the
+  // caller therefore runs this step before [injectViewerAssets].
+  final result = _removeViewportMeta(html);
+
+  var bodyOpen = RegExp(r'<body\b[^>]*>', caseSensitive: false).firstMatch(result);
+  String marked;
+  if (bodyOpen == null) {
+    // Pathological book markup without a body element: synthesize the
+    // document shell so the stage marker still lands, like
+    // [injectIntoHead] does for the viewer assets.
+    final synthesized = injectIntoHead(result, '');
+    bodyOpen = RegExp(r'<body\b[^>]*>', caseSensitive: false).firstMatch(synthesized);
+    if (bodyOpen == null) {
+      return synthesized;
+    }
+    marked = synthesized;
+  } else {
+    marked = result;
+  }
+
+  final viewport = presentation.declaredViewport;
+  final updatedTag = _appendBodyAttributes(
+    bodyOpen.group(0)!,
+    className: 'elv-fixed',
+    extraAttribute: viewport == null
+        ? null
+        : 'data-elv-page="${viewport.width}×${viewport.height}"',
+  );
+
+  return marked.replaceRange(bodyOpen.start, bodyOpen.end, updatedTag);
+}
+
+/// Matches a `<meta>` tag carrying `name="viewport"` in any attribute
+/// order, quoted or bare.
+final RegExp _viewportMetaPattern = RegExp(
+  r'''<meta\b[^>]*?\bname\s*=\s*(?:"viewport"|'viewport'|viewport)[^>]*>\s*''',
+  caseSensitive: false,
+);
+
+String _removeViewportMeta(final String html) => html.replaceAll(_viewportMetaPattern, '');
+
+/// Adds [className] (merging with an existing class attribute) and
+/// [extraAttribute] to a `<body ...>` open tag.
+String _appendBodyAttributes(
+  final String tag, {
+  required final String className,
+  required final String? extraAttribute,
+}) {
+  final withoutClose = tag.endsWith('/>')
+      ? tag.substring(0, tag.length - 2)
+      : tag.substring(0, tag.length - 1);
+  final classPattern = RegExp(
+    r'''\sclass\s*=\s*("([^"]*)"|'([^']*)'|[^\s>]+)''',
+    caseSensitive: false,
+  );
+  final classMatch = classPattern.firstMatch(withoutClose);
+  String attributes;
+  if (classMatch == null) {
+    attributes = '$withoutClose class="$className"';
+  } else {
+    final existing = classMatch.group(2) ?? classMatch.group(3) ?? classMatch.group(1)!;
+    final merged = '$existing $className'.trim();
+    final start = classMatch.start;
+    final end = classMatch.end;
+
+    attributes =
+        '${withoutClose.substring(0, start)} class="$merged"'
+        '${withoutClose.substring(end)}';
+  }
+
+  return '$attributes${extraAttribute == null ? '' : ' $extraAttribute'}>';
 }

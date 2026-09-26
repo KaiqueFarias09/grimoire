@@ -45,6 +45,7 @@ external actions, and playback. `grimoire_narration` is a downstream package.
 | Annotation filtering and export | `AnnotationQuery`, `ViewerExportModel`, `ViewerExportRendering` | `features/annotations/` | `export_test.dart`, `annotations_sheet_test.dart` | README: exporting annotations |
 | Appearance, profiles, RTL and accessibility | `ViewerTheme`, `ViewerMargins`, settings methods | `features/settings/`, `widgets/`, viewer assets | `viewer_theme_test.dart`, `value_types_gaps_test.dart`, `reader_shell_chrome_test.dart` | README: controller example |
 | PDF reflow, facsimile and passwords | `PdfReadingMode`, `PdfPasswordRequestEvent`, controller PDF hooks | `features/pdf/`, `features/pdfjs/`, serving, viewer assets | `real_pdf_integration_test.dart`, `pdf_password_test.dart`, `pdfjs_loader_test.dart` | README: PDF usage |
+| Fixed-layout EPUB pages | `ViewerController.isFixedLayoutEpub`, `isFixedLayoutPage` | `features/serving/fixed_layout.dart`, `book_html_pipeline.dart`, `assets/viewer/`, `controller/` | `fixed_layout_test.dart` | README: fixed-layout EPUB |
 | MathJax loading | `MathJaxLoader` | `features/mathjax/`, serving | `mathjax_loader_test.dart` | README: optional assets |
 | Narration-facing text and marks | `segmentText`, `TextSegment`, controller narration marks | `features/narration/`, bridge, viewer assets | `narration_segmentation_test.dart` | README: narration hooks |
 | Built-in chrome and host hooks | `GrimoireView`, `ViewerController`, events | `widgets/`, bridge | `grimoire_view_hooks_test.dart`, `reader_shell_chrome_test.dart` | README: usage and host ownership |
@@ -91,11 +92,34 @@ through Unseal's `locatorToJson` and `locatorFromJson`.
 | `src/features/serving/book_html_pipeline.dart` | Rewrites book HTML, applies the selected script policy, and injects Grimoire assets. |
 | `src/features/serving/book_resource_resolution.dart` | Resolves and classifies book resource paths. |
 | `src/features/serving/synthetic_pages.dart` | Builds HTML for image-first or facsimile reading items. |
+| `src/features/serving/fixed_layout.dart` | Derives per-file fixed-page presentation (declared viewports) from an EPUB 3 book's rendition settings. |
 | `assets/viewer/viewer.js` | Measures pages, manages input and selection, and communicates with the Dart bridge. |
 | `assets/viewer/viewer.css` | Reader layout and appearance rules. |
 
 Keep the default script policy for arbitrary books. The opt-in mode lets the
 host run book-authored JavaScript; it does not make book HTML generally safe.
+
+
+### Fixed-layout EPUB pages
+
+EPUB 3 spine items whose effective rendition layout is `pre-paginated` render
+as one full page per reading-order item. The serving layer computes each file's
+presentation with `fixedPagePresentationOf` (`features/serving/fixed_layout.dart`)
+and `book_html_pipeline.dart`'s `injectFixedPageMarkers` adds the `elv-fixed`
+body class plus `data-elv-page="W×H"` from the book's declared viewports,
+removing the book's own viewport meta so it cannot rescale the CSS viewport
+under the stage. `viewer.js` skips column pagination for `body.elv-fixed`, sizes
+the body itself as the stage (`elv-stage` class, no DOM wrapping, so book
+selectors and the canonical text-node model stay intact) and fits it with
+`transform: scale(min(vw/W, vh/H))`, recomputed on resize; pages without a
+declaration fall back to fit-width. Page turns post the comic-mode
+`pageTurn` event (RTL resolved in JS), keyboard and tap zones route through the
+same guard, typography/column/stylesheet/color-override actions are no-ops on
+fixed pages (Dart skips them per engine file too), fixed items seed exactly one
+page in `page_measurement_controller.dart`, and `ViewerController` reports
+`isFixedLayoutEpub` / `isFixedLayoutPage(fileIndex)` with page-per-item
+progress. FXL-03 will add pinch/pan/double-tap zoom on the stage, synthetic
+spreads and orientation locks.
 
 ## Rendering and platform selection
 

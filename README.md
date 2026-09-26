@@ -30,7 +30,7 @@ fixed-layout path where applicable.
 
 | Format | Viewer behavior | Limitations |
 | --- | --- | --- |
-| EPUB 2 and 3 | Reflowed HTML with CSS, images, fonts, navigation, links, search and selection. | Output is reading-oriented reflow, not a pixel-perfect copy of every EPUB renderer; DRM/encrypted assets follow Unseal's boundaries. |
+| EPUB 2 and 3 | Reflowed HTML with CSS, images, fonts, navigation, links, search and selection. EPUB 3 fixed-layout (pre-paginated) spine items present as full pages instead — see [Fixed-layout EPUB](#fixed-layout-epub). | Output is reading-oriented reflow for reflowable items, not a pixel-perfect copy of every EPUB renderer; DRM/encrypted assets follow Unseal's boundaries. |
 | MOBI 6 and AZW3 (KF8) | Extracted content, styles, images, fonts and navigation are rendered by the same reader. | DRM-protected books and unsupported or malformed Kindle structures are rejected or may lose unsupported features. |
 | FB2 and FBZ | XML metadata, sections, styles, notes and internal links become reflowable HTML. | Semantic document structure is preserved; original page layout is not. |
 | TXT and TXTZ | UTF-8/UTF-16 text becomes safe XHTML; TXTZ can include multiple text sections, an OPF sidecar, CSS, images and fonts. | Markdown/Textile support is basic, not a full extension engine; plain TXT metadata is limited without a recognized header or OPF. |
@@ -175,6 +175,28 @@ pdf.js and MathJax are loaded only when needed. Native hosts can supply
 `pdfJsCachePath` and `mathJaxCachePath` on the controller to retain downloads,
 or inject loaders configured for their own mirror. A PDF text layer can remain
 usable when a facsimile script or password is unavailable.
+
+### Fixed-layout EPUB
+
+EPUB 3 spine items whose effective rendition layout is `pre-paginated`
+(publication default or a `rendition:layout-pre-paginated` spine override)
+present as full pages: one reading-order item is one page that keeps the
+dimensions its document declares (`<meta name="viewport">`, or the SVG root
+size). The viewer wraps nothing and repaginates nothing — the page box is
+scaled to the screen, text stays selectable, and highlights, search marks,
+narration marks and fragment lookup keep working over the canonical text.
+Pages without a usable viewport declaration fall back to fit-width.
+
+Page turns come from horizontal swipes (RTL progression mirrors them),
+arrow keys and PageUp/PageDown. Typography, margin, column, font and
+user-stylesheet settings never touch a fixed page's content; theme colors
+around the page still apply. Fixed items count exactly one page each, so a
+fully fixed book needs no measurement pass, and `isFixedLayoutEpub` /
+`isFixedLayoutPage(fileIndex)` let hosts branch on the mode.
+
+Not honored yet (FXL-03): pinch/pan/double-tap zoom on the fixed stage,
+synthetic spreads (`rendition:spread`, `page-spread-*`) and orientation
+locks. Non-linear spine items stay reachable in the reading order.
 
 ### Exporting annotations
 

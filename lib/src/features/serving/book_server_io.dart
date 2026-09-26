@@ -51,6 +51,7 @@ class BookServer {
   final Map<String, Uint8List> _mathJaxBytes = <String, Uint8List>{};
   List<ReadingOrderItem> _order = const <ReadingOrderItem>[];
   PdfBook? _pdfBook;
+  Map<String, FixedPagePresentation> _fixedPages = const <String, FixedPagePresentation>{};
 
   /// The PDF reading mode the item URLs resolve under. The
   /// controller updates it when the user switches modes.
@@ -89,6 +90,7 @@ class BookServer {
 
     _order = book.readingOrder;
     _pdfBook = book is PdfBook ? book : null;
+    _fixedPages = fixedPagePresentationOf(book);
     _files
       ..clear()
       ..addAll({
@@ -255,6 +257,14 @@ class BookServer {
   String _rewrittenPage(final String key, final String content) =>
       _rewrittenPages.putIfAbsent(key, () {
         var html = sanitizeBookHtml(content, policy: bookJavaScriptPolicy);
+        // Fixed-layout EPUB pages carry their presentation marker so
+        // the viewer stages them instead of paginating. Runs before
+        // injectViewerAssets so the book's own viewport meta is
+        // stripped before the viewer device-width meta is injected.
+        final fixed = _fixedPages[key];
+        if (fixed != null) {
+          html = injectFixedPageMarkers(html, presentation: fixed);
+        }
         html = injectViewerAssets(
           html,
           cssUrl: '/__viewer__/viewer.css',

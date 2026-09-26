@@ -42,6 +42,8 @@
     batchRelayoutPending: false,
     searchMatches: null, // last applied [start, end] pairs — see applySearchMatches
     wordMarks: null, // last applied [start, end, state] triples — see applyWordMarks
+    fixedViewport: null, // {w, h} declared page size of a fixed page, null = fit-width
+    fixedScale: 1, // current fit scale of the fixed stage
   };
 
   function post(message) {
@@ -100,6 +102,14 @@
       document.body.classList.contains('elv-comic') ||
       document.body.classList.contains('elv-facsimile')
     );
+  }
+
+  // Fixed-layout EPUB pages (EPUB3 pre-paginated spine items): the
+  // host serving pipeline marks them with the elv-fixed body class.
+  // One reading-order item is one full page that keeps its declared
+  // dimensions; the viewer never paginates them.
+  function isFixedPage() {
+    return document.body.classList.contains('elv-fixed');
   }
 
   // Parity: calibre viewport.pyj — RTL page progression negates X at
@@ -311,6 +321,10 @@
       layoutScroll();
       return;
     }
+    if (isFixedPage()) {
+      layoutFixed();
+      return;
+    }
     remSize(true);
     lineHeight(true);
     initializeWritingMode();
@@ -459,9 +473,99 @@
     markTextNodesDirty();
   }
 
+  // --- fixed-layout pages (EPUB3 pre-paginated, body.elv-fixed) ---
+
+  // The declared page size served as data-elv-page="W×H" on <body>.
+  // Null when the page declares no viewport: the stage then falls
+  // back to fit-width (100% viewport width, natural height, scroll
+  // if taller).
+  function fixedDeclaredViewport() {
+    var raw = document.body.getAttribute('data-elv-page') || '';
+    var match = raw.match(/^\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*$/i);
+    if (!match) {
+      return null;
+    }
+    var w = parseFloat(match[1]);
+    var h = parseFloat(match[2]);
+
+    return w > 0 && h > 0 ? { w: w, h: h } : null;
+  }
+
+  // The body element itself is the stage (class elv-stage): no DOM
+  // wrapping, so book selectors like `body > div` and the canonical
+  // text-node offset model stay untouched. The stage is sized to the
+  // declared page and scaled to the viewport with a transform.
+  function layoutFixed() {
+    var style = document.getElementById('elv-paged-style');
+    if (style) {
+      style.textContent = '';
+    }
+    document.body.classList.remove('elv-paged');
+    document.body.classList.add('elv-stage');
+    state.colSize = inlineSize();
+    state.colGap = 0;
+    state.colCount = 1;
+    state.isFullScreenLayout = false;
+    state.fixedViewport = fixedDeclaredViewport();
+    if (state.fixedViewport) {
+      // The stage's unscaled layout box is the declared page size and
+      // would create scrollbars; the transform does the fitting, so
+      // the scroller is clipped. Body margins are pinned so the stage
+      // box sits exactly at the viewport origin (viewer.css already
+      // defaults them to 0; book CSS could override).
+      document.body.style.setProperty('margin', '0', 'important');
+      document.body.style.width = state.fixedViewport.w + 'px';
+      document.body.style.height = state.fixedViewport.h + 'px';
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.removeProperty('width');
+      document.body.style.removeProperty('height');
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    }
+    applyFixedTransform();
+    markTextNodesDirty();
+  }
+
+  // Fit-page scale s = min(vw/W, vh/H) with top-left transform origin
+  // and computed centering offsets, so the scaled page never clips.
+  function applyFixedTransform() {
+    var vp = state.fixedViewport;
+    if (!vp) {
+      document.body.classList.remove('elv-stage-scaled');
+      document.body.style.removeProperty('transform');
+      document.body.style.removeProperty('transform-origin');
+      state.fixedScale = 1;
+
+      return;
+    }
+    var vw = inlineSize();
+    var vh = blockSize();
+    var scale = Math.min(vw / vp.w, vh / vp.h);
+    if (!isFinite(scale) || scale <= 0) {
+      scale = 1;
+    }
+    state.fixedScale = scale;
+    var offsetX = Math.max(0, (vw - vp.w * scale) / 2);
+    var offsetY = Math.max(0, (vh - vp.h * scale) / 2);
+    document.body.classList.add('elv-stage-scaled');
+    document.body.style.transformOrigin = '0 0';
+    document.body.style.transform =
+      'translate(' + offsetX + 'px, ' + offsetY + 'px) scale(' + scale + ')';
+  }
+
+  // Fixed pages turn as whole units: the host maps the request onto
+  // the next/previous reading-order item (PageTurnEvent). Every caller
+  // of the column actions (swipes, keys, wheel, tap zones) has already
+  // resolved the RTL progression, so this must not flip again.
+  function fixedPageTurn(forward) {
+    post({ type: 'pageTurn', forward: !!forward });
+  }
+
   function fitImages() {
-    if (isComic()) {
-      return; // comics manage their own sizing
+    if (isComic() || isFixedPage()) {
+      return; // comics and fixed pages manage their own sizing
     }
     if (isScrollMode()) {
       fitImagesScroll();
@@ -726,6 +830,10 @@
   }
 
   function nextColumn() {
+    if (isFixedPage()) {
+      fixedPageTurn(true);
+      return;
+    }
     if (isScrollMode()) {
       var scroller = scrollElement();
       var step = blockSize() - 10;
@@ -749,6 +857,10 @@
   }
 
   function previousColumn() {
+    if (isFixedPage()) {
+      fixedPageTurn(false);
+      return;
+    }
     if (isScrollMode()) {
       var scroller = scrollElement();
       if (scroller.scrollTop <= 2) {
@@ -770,6 +882,10 @@
 
   // Screen turns (PageUp/PageDown): multiple columns at once.
   function nextScreen() {
+    if (isFixedPage()) {
+      fixedPageTurn(true);
+      return;
+    }
     if (isScrollMode()) {
       nextColumn();
       return;
@@ -784,6 +900,10 @@
   }
 
   function previousScreen() {
+    if (isFixedPage()) {
+      fixedPageTurn(false);
+      return;
+    }
     if (isScrollMode()) {
       previousColumn();
       return;
@@ -880,6 +1000,12 @@
   }
 
   function currentOffset() {
+    if (isFixedPage()) {
+      // One page per item: the reading position is the page start.
+      // Selection and highlight offsets use offsetOfBoundary and stay
+      // exact regardless.
+      return 0;
+    }
     var cache = getTextNodes();
     var nodes = cache.nodes;
     var range = document.createRange();
@@ -987,6 +1113,14 @@
   }
 
   function goToOffset(target) {
+    if (isFixedPage()) {
+      // Offsets are irrelevant on a fixed page: the whole page is the
+      // unit, so every offset intent resolves to the page start.
+      // Narration marks and selection restores wrap their spans
+      // elsewhere; nothing scrolls.
+      reportPosition();
+      return;
+    }
     var nodes = getTextNodes().nodes;
     var consumed = 0;
     for (var i = 0; i < nodes.length; i++) {
@@ -1017,6 +1151,11 @@
       reportPosition();
       return;
     }
+    if (isFixedPage()) {
+      // The whole page is visible: anchors resolve without scrolling.
+      reportPosition();
+      return;
+    }
     element.scrollIntoView();
     if (isScrollMode()) {
       reportPosition();
@@ -1027,6 +1166,20 @@
   }
 
   function reportPosition() {
+    if (isFixedPage()) {
+      // One reading-order item = one page: columns never advance and
+      // the canonical offset of the page start is 0. Selection events
+      // carry their own exact offsets.
+      post({
+        type: 'positionChanged',
+        column: 0,
+        columns: 1,
+        offset: 0,
+        chars: totalChars(),
+        frac: 0,
+      });
+      return;
+    }
     var scroller = scrollElement();
     var column;
     var columns;
@@ -1902,6 +2055,12 @@
       clearTimeout(state.resizeTimer);
     }
     state.resizeTimer = setTimeout(function () {
+      if (isFixedPage()) {
+        // Refit the stage; there is no column to preserve.
+        layout();
+        reportPosition();
+        return;
+      }
       // Parity: calibre paged_mode.pyj:901-933 (ResizeManager) — the
       // column, not the raw offset, survives a layout change.
       var savedColumn = columnAt(currentScrollOffset() + 10);
@@ -1995,10 +2154,12 @@
         }
         break;
       case 'setFontFamily':
+        if (isFixedPage()) break; // the stage's book content owns its type
         applyFontFamily(message.font || '');
         relayoutKeepingPosition();
         break;
       case 'setTextJustify':
+        if (isFixedPage()) break;
         document.body.classList.toggle(
           'elv-justify',
           !!message.enabled
@@ -2006,6 +2167,7 @@
         relayoutKeepingPosition();
         break;
       case 'setHyphenation':
+        if (isFixedPage()) break;
         document.body.classList.toggle(
           'elv-hyphenate',
           !!message.enabled
@@ -2018,6 +2180,11 @@
       case 'goToFraction':
         if (state.ready) {
           layout();
+          if (isFixedPage()) {
+            // The page is the whole unit; there is nothing to scroll.
+            reportPosition();
+            break;
+          }
           var frac = Math.min(1, Math.max(0, Number(message.frac) || 0));
           var se2 = scrollElement();
           if (isScrollMode()) {
@@ -2031,7 +2198,9 @@
       case 'goToColumn':
         if (state.ready) {
           layout();
-          scrollToColumn(Math.max(0, message.column | 0));
+          if (!isFixedPage()) {
+            scrollToColumn(Math.max(0, message.column | 0));
+          }
           reportPosition();
         } else {
           state.pendingPosition = {
@@ -2044,11 +2213,13 @@
         applyVars(message.vars || {});
         break;
       case 'setFontSize':
+        if (isFixedPage()) break; // the page keeps its declared geometry
         state.fontSize = message.px || 17;
         document.documentElement.style.fontSize = state.fontSize + 'px';
         relayoutKeepingPosition();
         break;
       case 'setMargins':
+        if (isFixedPage()) break;
         state.margins = {
           left: Math.max(0, message.left | 0),
           top: Math.max(0, message.top | 0),
@@ -2058,6 +2229,7 @@
         relayoutKeepingPosition();
         break;
       case 'setLayoutMode':
+        if (isFixedPage()) break; // a fixed page is inherently one page
         state.layoutMode = message.scroll ? 'scroll' : 'paged';
         // User-stylesheet hooks (Calibre ships the same class pair).
         document.body.classList.toggle('elv-scrolling', !!message.scroll);
@@ -2071,6 +2243,7 @@
         relayoutKeepingPosition();
         break;
       case 'setStylesheet': {
+        if (isFixedPage()) break;
         // Parity: calibre settings.pyj apply_stylesheet — a style
         // element separate from the theme sheet, so theme changes
         // never clobber user CSS.
@@ -2087,6 +2260,7 @@
         break;
       }
       case 'setColumns':
+        if (isFixedPage()) break;
         state.columns = Math.max(0, Math.min(20, message.n || 0));
         relayoutKeepingPosition();
         break;
@@ -2098,6 +2272,7 @@
         relayoutKeepingPosition();
         break;
       case 'setOverrideColors':
+        if (isFixedPage()) break; // never repaint the page's own content
         if (message.enabled) {
           document.body.classList.add('elv-override-colors');
         } else {
@@ -2270,6 +2445,11 @@
 
   function goToEnd() {
     layout();
+    if (isFixedPage()) {
+      // The page start is also the page end.
+      reportPosition();
+      return;
+    }
     if (isScrollMode()) {
       scrollElement().scrollTop = scrollElement().scrollHeight;
     } else {
@@ -2315,7 +2495,11 @@
     if (Math.abs(dx) > Math.abs(dy)) {
       // Horizontal wheel = section (file) jump.
       var dir = state.pageProgression.rtl ? (dx < 0 ? 1 : -1) : dx < 0 ? -1 : 1;
-      postBoundary(dir);
+      if (isFixedPage()) {
+        fixedPageTurn(dir > 0);
+      } else {
+        postBoundary(dir);
+      }
       return;
     }
     var delta = state.pageProgression.rtl ? -dy : dy;
@@ -2523,8 +2707,12 @@
   }
 
   function boot() {
-    document.documentElement.style.fontSize = state.fontSize + 'px';
-    fixFullscreenSvgImages();
+    if (!isFixedPage()) {
+      // A fixed page keeps the type scale its markup declares; the
+      // root font size is a reflow-only control.
+      document.documentElement.style.fontSize = state.fontSize + 'px';
+      fixFullscreenSvgImages();
+    }
     markFootnoteLinks();
     layout();
     // Clicks land on the document element (not the body) whenever they

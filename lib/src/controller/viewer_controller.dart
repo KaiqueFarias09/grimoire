@@ -63,7 +63,11 @@ class ViewerController extends ChangeNotifier
        _mathJaxLoader = mathJaxLoader ?? MathJaxLoader(),
        _pdfJsLoader = pdfJsLoader ?? PdfJsLoader(),
        _engineFactory = engineFactory ?? selectViewerEngineFactory() {
-    _pageMeasurement = PageMeasurementController(book: book, host: this);
+    _pageMeasurement = PageMeasurementController(
+      book: book,
+      host: this,
+      isFixedPage: isFixedLayoutPage,
+    );
     _navigation = NavigationCoordinator(
       readingOrderPaths: <String>[for (final item in book.readingOrder) item.name],
       host: this,
@@ -214,11 +218,23 @@ class ViewerController extends ChangeNotifier
   /// The current reading position.
   ViewerPosition get position => _position;
 
-  /// Book-wide progress `0..1` for the current position.
-  double get progress => readingProgression.fractionOf(
-    sectionIndex: _position.fileIndex,
-    charOffset: _position.charOffset,
-  );
+  /// Book-wide progress `0..1` for the current position. Fixed-layout
+  /// books progress one page per reading-order item (fileIndex over
+  /// the page count); every other book uses the character-based
+  /// [BookProgression].
+  double get progress {
+    if (isFixedLayoutEpub) {
+      final count = book.readingOrder.length;
+      if (count == 0) return 0;
+
+      return (_position.fileIndex / count).clamp(0.0, 1.0).toDouble();
+    }
+
+    return readingProgression.fractionOf(
+      sectionIndex: _position.fileIndex,
+      charOffset: _position.charOffset,
+    );
+  }
 
   double _fileFraction = 0;
 
@@ -327,6 +343,23 @@ class ViewerController extends ChangeNotifier
 
   /// Whether the book renders as comic pages (image-only items).
   bool get isComicMode => book.readingOrder.any((final item) => !item.isHtml);
+
+  /// Per reading-order item: whether it presents as one fixed-layout
+  /// page (EPUB 3 `pre-paginated` spine item). Comic and PDF modes are
+  /// separate predicates and stay untouched by fixed layout.
+  late final List<bool> _fixedLayoutByFile = <bool>[
+    for (var index = 0; index < book.readingOrder.length; index++) isFixedLayoutFile(book, index),
+  ];
+
+  /// Whether the book presents any fixed-layout EPUB pages (EPUB 3
+  /// rendition `pre-paginated` layout, publication-wide or per spine
+  /// item). False for every other format.
+  bool get isFixedLayoutEpub => _fixedLayoutByFile.any((final fixed) => fixed);
+
+  /// Whether the reading-order item at [fileIndex] presents as one
+  /// fixed-layout page that keeps its declared dimensions.
+  bool isFixedLayoutPage(final int fileIndex) =>
+      fileIndex >= 0 && fileIndex < _fixedLayoutByFile.length && _fixedLayoutByFile[fileIndex];
 
   /// Whether this book is a PDF (either reading mode).
   bool get isPdfMode => book is PdfBook;
@@ -1748,33 +1781,44 @@ class ViewerController extends ChangeNotifier
     // One round trip instead of twelve: the page side applies each
     // entry in order through the existing switch (the 'batch' case in
     // window.__grimoire). Message shapes are unchanged.
+    //
+    // Fixed-layout pages own their geometry: typography, margin,
+    // column, stylesheet and color-override settings never reach them
+    // (the page side ignores them too). Theme colors around the
+    // stage, the logical viewport and the page progression still
+    // apply — the stage fit and RTL page turns depend on them.
+    final loadedFile = _navigation.loadedFileAt(slot);
+    final fixed = loadedFile != null && isFixedLayoutPage(loadedFile);
     await _sendTo(slot, <String, Object?>{
       'action': 'batch',
       'messages': [
         <String, Object?>{'action': 'setVars', 'vars': _theme.cssVars()},
-        <String, Object?>{'action': 'setOverrideColors', 'enabled': _theme.overrideBookColors},
+        if (!fixed)
+          <String, Object?>{'action': 'setOverrideColors', 'enabled': _theme.overrideBookColors},
         <String, Object?>{
           'action': 'setViewport',
           'width': _logicalViewportWidth,
           'height': _logicalViewportHeight,
         },
-        <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx},
-        <String, Object?>{
-          'action': 'setMargins',
-          'left': _margins.left,
-          'top': _margins.top,
-          'right': _margins.right,
-          'bottom': _margins.bottom,
-        },
-        <String, Object?>{
-          'action': 'setLayoutMode',
-          'scroll': _layoutMode == ViewerLayoutMode.scroll,
-        },
-        <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen},
-        <String, Object?>{'action': 'setFontFamily', 'font': _fontFamily ?? ''},
-        <String, Object?>{'action': 'setTextJustify', 'enabled': _justify},
-        <String, Object?>{'action': 'setHyphenation', 'enabled': _hyphenate},
-        <String, Object?>{'action': 'setStylesheet', 'css': _userStylesheet ?? ''},
+        if (!fixed) ...[
+          <String, Object?>{'action': 'setFontSize', 'px': _fontSizePx},
+          <String, Object?>{
+            'action': 'setMargins',
+            'left': _margins.left,
+            'top': _margins.top,
+            'right': _margins.right,
+            'bottom': _margins.bottom,
+          },
+          <String, Object?>{
+            'action': 'setLayoutMode',
+            'scroll': _layoutMode == ViewerLayoutMode.scroll,
+          },
+          <String, Object?>{'action': 'setColumns', 'n': _columnsPerScreen},
+          <String, Object?>{'action': 'setFontFamily', 'font': _fontFamily ?? ''},
+          <String, Object?>{'action': 'setTextJustify', 'enabled': _justify},
+          <String, Object?>{'action': 'setHyphenation', 'enabled': _hyphenate},
+          <String, Object?>{'action': 'setStylesheet', 'css': _userStylesheet ?? ''},
+        ],
         <String, Object?>{
           'action': 'setPageProgression',
           'rtl': rtlPageProgression,
