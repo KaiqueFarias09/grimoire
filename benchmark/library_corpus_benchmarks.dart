@@ -194,7 +194,9 @@ Future<void> _runPick(
     }
     // Book-level deep-link form (epubcfi(/6/N!/…)): the spine step
     // names its file, so a cold jump parses only the target document
-    // instead of trialing every file's text space.
+    // instead of trialing every file's text space. Result check
+    // (untimed): the row must measure a successful jump — the
+    // pre-dispatch baseline paid the scan and returned false.
     final lastHtmlIndex = book.readingOrder.indexWhere(
       (final section) => section.name == book.files.html.last.path,
     );
@@ -203,6 +205,17 @@ Future<void> _runPick(
         contentIndex: lastHtmlIndex,
         offsetInText: doc.text.length ~/ 2,
       );
+      final verifyController = ViewerController(book, engineFactory: FakeViewerEngineFactory());
+      await verifyController.start();
+      final resolvedBookLevel = await verifyController.goToCfi(bookCfi);
+      final landedOn = verifyController.position.fileIndex;
+      verifyController.dispose();
+      if (!resolvedBookLevel || landedOn != lastHtmlIndex) {
+        throw StateError(
+          'book-level CFI resolved=$resolvedBookLevel on file $landedOn '
+          '(expected true on $lastHtmlIndex) — not a valid benchmark row',
+        );
+      }
       final bookLevelControllers = List.generate(
         coldRuns + 1,
         (_) => ViewerController(book, engineFactory: FakeViewerEngineFactory()),
@@ -216,7 +229,7 @@ Future<void> _runPick(
           return cold.goToCfi(bookCfi);
         },
         iterations: coldRuns,
-        note: label,
+        note: '$label · result checked',
       );
       for (final cold in bookLevelControllers) {
         cold.dispose();

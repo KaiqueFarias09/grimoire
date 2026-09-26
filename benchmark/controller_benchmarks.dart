@@ -168,6 +168,9 @@ Future<void> _pagesAndCfiGroup() async {
 
   // Book-level deep-link CFI (epubcfi(/6/N!/…)): the spine step names
   // its file, so a cold jump should parse only the target document.
+  // Result check (untimed): this row must measure a SUCCESSFUL jump —
+  // the pre-dispatch baseline paid the full scan and returned false,
+  // so the old number was a failing operation, not a slower success.
   final lastHtmlIndex = many.book.readingOrder.indexWhere(
     (final section) => section.name == many.book.files.html.last.path,
   );
@@ -175,6 +178,21 @@ Future<void> _pagesAndCfiGroup() async {
     contentIndex: lastHtmlIndex,
     offsetInText: lastDoc.text.length ~/ 2,
   );
+  final verifyController = _controller(many.book);
+  await verifyController.start();
+  final resolvedBookLevel = await verifyController.goToCfi(bookCfi);
+  if (!resolvedBookLevel) {
+    verifyController.dispose();
+    throw StateError('book-level CFI did not resolve — not a valid benchmark row');
+  }
+  if (verifyController.position.fileIndex != lastHtmlIndex) {
+    verifyController.dispose();
+    throw StateError(
+      'book-level CFI landed on file ${verifyController.position.fileIndex}, '
+      'expected $lastHtmlIndex',
+    );
+  }
+  verifyController.dispose();
   final bookLevelControllers = List.generate(coldRuns + 1, (_) => _controller(many.book));
   var bookLevelIndex = 0;
   await group.addAsync(
@@ -186,7 +204,7 @@ Future<void> _pagesAndCfiGroup() async {
       return resolved;
     },
     iterations: coldRuns,
-    note: '${many.label} · spine step addresses file 150',
+    note: '${many.label} · spine step addresses file $lastHtmlIndex · result checked',
   );
   for (final controller in bookLevelControllers) {
     controller.dispose();

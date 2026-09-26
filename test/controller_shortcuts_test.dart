@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
@@ -226,7 +228,11 @@ void main() {
       final html = epub.files.html.firstWhere((final f) => f.path == section.name);
       final doc = EpubCfiDocument.parse(html.content);
       final start = doc.indexOfText('Chapter one')!;
-      final cfi = epub.buildEpubCfiRange(contentIndex: 0, startOffset: start, endOffset: start + 11);
+      final cfi = epub.buildEpubCfiRange(
+        contentIndex: 0,
+        startOffset: start,
+        endOffset: start + 11,
+      );
 
       await controller.goToNavPoint(controller.book.navigation.navPoints.last);
       await pumpEventQueue();
@@ -235,6 +241,26 @@ void main() {
       expect(await controller.goToCfi(cfi), isTrue);
       await pumpEventQueue();
       expect(controller.position.fileIndex, 0);
+
+      // The selection reached the engine with its exact bounds: a
+      // setSelection command carrying [start, end) plus a jump to the
+      // range start — not just the right file index. Recorded scripts
+      // wrap the payload in a JS call, so decode the object literal.
+      Map<String, Object?> recordedPayload(final String action) {
+        final scripts = factory.engines
+            .expand((final engine) => engine.scripts)
+            .where((final script) => script.contains('"$action"'))
+            .toList();
+        expect(scripts, isNotEmpty, reason: 'the $action command must be sent');
+        final script = scripts.last;
+        final payload = script.substring(script.indexOf('{'), script.lastIndexOf('}') + 1);
+        return jsonDecode(payload) as Map<String, Object?>;
+      }
+
+      final selection = recordedPayload('setSelection');
+      expect(selection['start'], start);
+      expect(selection['end'], start + 11);
+      expect(recordedPayload('goToOffset')['offset'], start);
     });
 
     test('a reading-order entry with no matching HTML file resolves nothing', () async {
@@ -252,9 +278,7 @@ void main() {
           version: '2.0',
           metadata: (epub.package as Epub2Package).metadata,
           manifest: Manifest(
-            items: [
-              ManifestItem(path: 'ghost.html', id: 'g1', mediaType: 'application/xhtml+xml'),
-            ],
+            items: [ManifestItem(path: 'ghost.html', id: 'g1', mediaType: 'application/xhtml+xml')],
           ),
           spine: Spine(
             tocId: null,
