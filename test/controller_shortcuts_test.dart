@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:unseal/unseal.dart';
 
 import 'helpers/test_book.dart';
 
@@ -198,6 +199,79 @@ void main() {
 
       expect(await controller.goToCfi(cfi!), isTrue);
       expect(controller.position.fileIndex, 0);
+    });
+
+    test('a book-level deep-link CFI resolves via its spine step', () async {
+      await started();
+      final epub = controller.book as EpubBook;
+      final section = epub.readingOrder[1];
+      final html = epub.files.html.firstWhere((final f) => f.path == section.name);
+      final doc = EpubCfiDocument.parse(html.content);
+      final cfi = epub.buildEpubCfi(contentIndex: 1, offsetInText: doc.text.length ~/ 2);
+
+      expect(await controller.goToCfi(cfi), isTrue);
+      await pumpEventQueue();
+      expect(controller.position.fileIndex, 1);
+    });
+
+    test('a book-level CFI with an unknown spine step returns false', () async {
+      await started();
+      expect(await controller.goToCfi('epubcfi(/6/98!/4/2:1)'), isFalse);
+    });
+
+    test('a book-level range CFI resolves to its section selection', () async {
+      await started();
+      final epub = controller.book as EpubBook;
+      final section = epub.readingOrder[0];
+      final html = epub.files.html.firstWhere((final f) => f.path == section.name);
+      final doc = EpubCfiDocument.parse(html.content);
+      final start = doc.indexOfText('Chapter one')!;
+      final cfi = epub.buildEpubCfiRange(contentIndex: 0, startOffset: start, endOffset: start + 11);
+
+      await controller.goToNavPoint(controller.book.navigation.navPoints.last);
+      await pumpEventQueue();
+      expect(controller.position.fileIndex, 1);
+
+      expect(await controller.goToCfi(cfi), isTrue);
+      await pumpEventQueue();
+      expect(controller.position.fileIndex, 0);
+    });
+
+    test('a reading-order entry with no matching HTML file resolves nothing', () async {
+      // Regression: a missing file used to fall back to the FIRST html
+      // file's document, resolving CFIs against the wrong text.
+      await started();
+      final epub = controller.book as EpubBook;
+      final ghost = EpubBook(
+        navigation: epub.navigation,
+        files: epub.files,
+        cover: epub.cover,
+        package: Epub2Package(
+          xmlns: null,
+          uniqueIdentifier: 'uid',
+          version: '2.0',
+          metadata: (epub.package as Epub2Package).metadata,
+          manifest: Manifest(
+            items: [
+              ManifestItem(path: 'ghost.html', id: 'g1', mediaType: 'application/xhtml+xml'),
+            ],
+          ),
+          spine: Spine(
+            tocId: null,
+            items: const ['g1'],
+            pageProgressionDirection: PageProgressionDirection.unspecified,
+          ),
+          guide: null,
+        ),
+        spinePaths: const ['ghost.html'],
+      );
+      final ghostController = ViewerController(ghost, engineFactory: factory);
+      await ghostController.start();
+      await pumpEventQueue();
+
+      expect(ghostController.positionCfi, isNull);
+      expect(await ghostController.goToCfi('epubcfi(/6/2!/4/2:1)'), isFalse);
+      ghostController.dispose();
     });
   });
 

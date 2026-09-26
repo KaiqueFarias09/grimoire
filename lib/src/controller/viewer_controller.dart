@@ -1902,17 +1902,25 @@ class ViewerController extends ChangeNotifier
   /// Starts (or continues) the background measurement queue.
   void _scheduleMeasure() => _pageMeasurement.schedule();
 
-  final Map<int, EpubCfiDocument> _cfiDocs = <int, EpubCfiDocument>{};
+  final Map<int, EpubCfiDocument?> _cfiDocs = <int, EpubCfiDocument?>{};
 
   EpubCfiDocument? _cfiDocFor(final int fileIndex) {
     if (book is! EpubBook) return null;
-    return _cfiDocs.putIfAbsent(fileIndex, () {
-      final name = book.readingOrder[fileIndex].name;
-      final html = book.files.html
-          .firstWhere((final f) => f.path == name, orElse: () => book.files.html.first)
-          .content;
-      return EpubCfiDocument.parse(html);
-    });
+    if (_cfiDocs.containsKey(fileIndex)) return _cfiDocs[fileIndex];
+    final name = book.readingOrder[fileIndex].name;
+    TextFile? file;
+    for (final candidate in book.files.html) {
+      if (candidate.path == name) {
+        file = candidate;
+        break;
+      }
+    }
+    // A reading-order entry with no matching HTML file must not fall
+    // back to another file's content: that would resolve CFIs against
+    // the wrong text. Cache the miss.
+    final doc = file == null ? null : EpubCfiDocument.parse(file.content);
+    _cfiDocs[fileIndex] = doc;
+    return doc;
   }
 
   /// CFI of the current reading position (dual-write alongside
@@ -1927,14 +1935,37 @@ class ViewerController extends ChangeNotifier
     }
   }
 
-  /// Jumps to a CFI in the current book (single-file subset: no `!`
-  /// indirection). The current file is tried first, then the remaining
+  /// Jumps to a CFI in the current book. Book-level CFIs
+  /// (`epubcfi(/6/N!/…)`, the deep-link/interop form) carry their spine
+  /// item, so they resolve directly against the book and parse only the
+  /// target document. File-local CFIs (the viewer's own single-segment
+  /// output, no `!` step) try the current file first, then the remaining
   /// ones in reading order. Returns false when the CFI cannot be
   /// resolved.
   Future<bool> goToCfi(final String cfi) async {
     final parsed = EpubCfi.tryParse(cfi);
     if (parsed == null) {
       return false;
+    }
+    if (book is EpubBook && parsed.start.segments.length > 1) {
+      // The spine step names its file: one document parse, no scan. A
+      // range CFI resolves both boundaries inside the same section.
+      final location = (book as EpubBook).resolveCfi(parsed);
+      final startOffset = location?.charOffset;
+      if (location == null || startOffset == null) {
+        return false;
+      }
+      final endOffset = location.endCharOffset;
+      final intent = endOffset == null
+          ? NavigationIntent(offset: startOffset)
+          : NavigationIntent(selection: (startOffset, endOffset));
+      await _navigation.jumpTo(
+        currentFileIndex: _position.fileIndex,
+        currentOffset: _position.charOffset,
+        fileIndex: location.contentIndex,
+        intent: intent,
+      );
+      return true;
     }
     // Find the file whose text space contains it: the current file
     // first (a CFI usually targets where the reader is), then the
