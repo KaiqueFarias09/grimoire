@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -21,16 +20,6 @@ class WebviewFlutterEngine extends ViewerEngine {
         onMessageReceived: (final message) => onMessage(message.message, slot),
       ),
     );
-    // Forward the viewer's console outside release builds: the reader
-    // JS diagnoses itself through console messages, and hosts debugging
-    // navigation or rendering need to see them.
-    if (!kReleaseMode) {
-      unawaited(
-        controller.setOnConsoleMessage((final message) {
-          debugPrint('grimoire-webview[$slot]: ${message.message}');
-        }),
-      );
-    }
     unawaited(
       controller.setNavigationDelegate(
         NavigationDelegate(

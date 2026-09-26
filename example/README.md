@@ -25,6 +25,49 @@ refresh synthetic assets from an Unseal checkout, run
 `UNSEAL_CHECKOUT=/path/to/unseal tool/sync_unseal_fixtures.sh` at the package
 root.
 
+## Real-reader integration check
+
+`integration_test/e2e_real_reader_test.dart` mounts `GrimoireView` with its
+default platform engine and the bundled Dracula EPUB. Run it from this
+directory on macOS or an attached Android device:
+
+```sh
+flutter drive --profile -d macos \
+  --driver=test_driver/e2e_scenario_driver.dart \
+  --target=integration_test/e2e_real_reader_test.dart
+
+flutter drive --profile -d <adb-serial> \
+  --driver=test_driver/e2e_scenario_driver.dart \
+  --target=integration_test/e2e_real_reader_test.dart
+```
+
+The test waits for the first JavaScript position report after `viewer.js`
+finishes its layout. For each chapter turn, it checks that the expected
+reading-order item becomes active after the JavaScript ready event. After the
+timed turns, it asks the final active engine for a fresh position report.
+Keeping that extra layout outside the timed loop avoids changing the next
+transition's cost. Search is compared by every
+`(section, start, end)` range against Unseal's `BookSearch` results. The
+reported transition time ends at controller activation; it does not include
+the follow-up report and is not a screenshot or a pixel-paint measurement.
+
+For Chrome, use a ChromeDriver matching the installed browser version. Start
+it separately, then use Flutter's web-server device from this directory:
+
+```sh
+<path-to-chromedriver> --port=4444
+flutter drive --no-pub -d web-server --driver-port=4444 \
+  --browser-name=chrome --no-headless \
+  --driver=test_driver/e2e_scenario_driver.dart \
+  --target=integration_test/e2e_real_reader_test.dart
+```
+
+The driver writes the measurements to
+`build/integration_response_data.json`. Chrome runs in debug mode here; its
+timings are not directly comparable with native profile builds. `flutter test`
+and the example widget tests use a fake rendering engine and do not replace
+these platform checks.
+
 The example's `pubspec.yaml` temporarily overrides `flutter_inappwebview`
 with a beta version and its macOS provider with a pinned upstream commit for
 current Android and Xcode compatibility. These overrides apply to this demo

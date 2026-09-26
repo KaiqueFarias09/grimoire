@@ -20,6 +20,13 @@ import 'package:unseal/unseal.dart';
 const _asset = 'assets/books/dracula.epub';
 const _pageTurns = 10;
 
+int _nextHtmlIndex(Book book, int current) {
+  for (var index = current + 1; index < book.readingOrder.length; index++) {
+    if (book.readingOrder[index].isHtml) return index;
+  }
+  return -1;
+}
+
 Future<void> main() async {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -35,9 +42,11 @@ Future<void> main() async {
     );
 
     final controller = ViewerController(book, engineFactory: FakeViewerEngineFactory());
+    addTearDown(controller.dispose);
     final ready = Stopwatch()..start();
     await controller.start();
     await tester.pumpAndSettle();
+    expect(controller.position.fileIndex, 0);
     // ignore: avoid_print
     print(
       'e2e-scenario: open→controller ready ${ready.elapsedMilliseconds}ms '
@@ -46,6 +55,7 @@ Future<void> main() async {
 
     final turnMs = <int>[];
     final fileIndexes = <int>{};
+    final actualIndexes = <int>[];
     for (var turn = 0; turn < _pageTurns; turn++) {
       final watch = Stopwatch()..start();
       await controller.nextChapter();
@@ -53,7 +63,16 @@ Future<void> main() async {
       watch.stop();
       turnMs.add(watch.elapsedMilliseconds);
       fileIndexes.add(controller.position.fileIndex);
+      actualIndexes.add(controller.position.fileIndex);
     }
+    final expectedIndexes = <int>[];
+    var expected = 0;
+    for (var turn = 0; turn < _pageTurns; turn++) {
+      expected = _nextHtmlIndex(book, expected);
+      expect(expected, greaterThanOrEqualTo(0));
+      expectedIndexes.add(expected);
+    }
+    expect(actualIndexes, expectedIndexes);
     turnMs.sort();
     final median = turnMs[turnMs.length ~/ 2];
     final p95 = turnMs[(turnMs.length * 0.95).floor().clamp(0, turnMs.length - 1)];
@@ -66,12 +85,16 @@ Future<void> main() async {
     final searchWatch = Stopwatch()..start();
     final results = await controller.search('castle');
     searchWatch.stop();
+    final expectedResults = book.search('castle', maxMatches: 500).matches;
+    expect(results, isNotEmpty);
+    expect(
+      results.map((result) => (result.fileIndex, result.start, result.end)).toList(),
+      expectedResults.map((result) => (result.sectionIndex, result.start, result.end)).toList(),
+    );
     // ignore: avoid_print
     print(
       'e2e-scenario: search "castle" ${searchWatch.elapsedMilliseconds}ms · '
       '${results.length} hits',
     );
-
-    controller.dispose();
   });
 }

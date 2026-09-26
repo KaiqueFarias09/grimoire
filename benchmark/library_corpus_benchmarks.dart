@@ -183,8 +183,13 @@ Future<void> _runPick(
       'goToCfi cold scan (last file) · $label',
       () {
         final cold = freshControllers[coldIndex++];
+        return cold.goToCfi(cfi).then((final resolved) {
+          if (!resolved) {
+            throw StateError('file-local CFI did not resolve in the timed row');
+          }
 
-        return cold.goToCfi(cfi);
+          return resolved;
+        });
       },
       iterations: coldRuns,
       note: label,
@@ -193,10 +198,10 @@ Future<void> _runPick(
       cold.dispose();
     }
     // Book-level deep-link form (epubcfi(/6/N!/…)): the spine step
-    // names its file, so a cold jump parses only the target document
-    // instead of trialing every file's text space. Result check
-    // (untimed): the row must measure a successful jump — the
-    // pre-dispatch baseline paid the scan and returned false.
+    // names its file, so a cold resolver call parses only the target
+    // document instead of trialing every file's text space. This
+    // benchmark uses bare controllers and times resolution only; a
+    // started controller below verifies navigation separately.
     final lastHtmlIndex = book.readingOrder.indexWhere(
       (final section) => section.name == book.files.html.last.path,
     );
@@ -206,15 +211,25 @@ Future<void> _runPick(
         offsetInText: doc.text.length ~/ 2,
       );
       final verifyController = ViewerController(book, engineFactory: FakeViewerEngineFactory());
-      await verifyController.start();
-      final resolvedBookLevel = await verifyController.goToCfi(bookCfi);
-      final landedOn = verifyController.position.fileIndex;
-      verifyController.dispose();
-      if (!resolvedBookLevel || landedOn != lastHtmlIndex) {
-        throw StateError(
-          'book-level CFI resolved=$resolvedBookLevel on file $landedOn '
-          '(expected true on $lastHtmlIndex) — not a valid benchmark row',
-        );
+      try {
+        await verifyController.start();
+        await verifyController.ready;
+        final previousSlot = verifyController.activeEngineIndex;
+        final resolvedBookLevel = await verifyController.goToCfi(bookCfi);
+        if (!resolvedBookLevel) {
+          throw StateError('book-level CFI did not resolve');
+        }
+        await _waitForControllerFile(verifyController, lastHtmlIndex, previousSlot);
+        final landedOn = verifyController.position.fileIndex;
+        final landedSlot = verifyController.activeEngineIndex;
+        if (landedOn != lastHtmlIndex || landedSlot == previousSlot) {
+          throw StateError(
+            'book-level CFI landed on file $landedOn '
+            'engine $landedSlot (expected file $lastHtmlIndex on another engine)',
+          );
+        }
+      } finally {
+        verifyController.dispose();
       }
       final bookLevelControllers = List.generate(
         coldRuns + 1,
@@ -222,14 +237,19 @@ Future<void> _runPick(
       );
       var bookLevelIndex = 0;
       await group.addAsync(
-        'goToCfi book-level cold (deep link) · $label',
+        'goToCfi book-level resolve (cold) · $label',
         () {
           final cold = bookLevelControllers[bookLevelIndex++];
+          return cold.goToCfi(bookCfi).then((final resolved) {
+            if (!resolved) {
+              throw StateError('book-level CFI did not resolve in the timed row');
+            }
 
-          return cold.goToCfi(bookCfi);
+            return resolved;
+          });
         },
         iterations: coldRuns,
-        note: '$label · result checked',
+        note: '$label · bare controller; resolves to file $lastHtmlIndex',
       );
       for (final cold in bookLevelControllers) {
         cold.dispose();
@@ -237,6 +257,25 @@ Future<void> _runPick(
     }
   }
   controller.dispose();
+}
+
+Future<void> _waitForControllerFile(
+  final ViewerController controller,
+  final int expectedFileIndex,
+  final int previousSlot,
+) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (DateTime.now().isBefore(deadline)) {
+    if (controller.position.fileIndex == expectedFileIndex &&
+        controller.activeEngineIndex != previousSlot) {
+      return;
+    }
+    await Future<void>.delayed(Duration.zero);
+  }
+  throw StateError(
+    'CFI navigation did not activate file $expectedFileIndex '
+    '(position ${controller.position.fileIndex}, engine ${controller.activeEngineIndex})',
+  );
 }
 
 int _indexOfBiggest(final Book book, final TextFile biggest) {

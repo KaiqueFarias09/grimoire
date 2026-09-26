@@ -1,6 +1,5 @@
-// Driver for the e2e scenario integration test: forwards the
-// `e2e-scenario:` milestone prints to the drive console and exits
-// non-zero when the test fails.
+// Driver for the integration scenarios. Fails when an assertion fails and
+// writes `reportData` to build/integration_response_data.json on success.
 import 'package:integration_test/integration_test_driver.dart';
 
 Future<void> main() => integrationDriver();
