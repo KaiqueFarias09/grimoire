@@ -556,8 +556,11 @@ String syntheticSpreadPageHtml({
       'display: block; }'
       '.elv-spread-gap { flex: none; width: ${kSpreadGap.toStringAsFixed(0)}px; }'
       '</style>'
-      '<script>$boot</script></head>'
+      '</head>'
       '<body><div id="elv-spread" '
       'data-elv-width="$stageWidth" data-elv-height="$stageHeight">'
-      '${buffer.toString()}</div></body></html>';
+      '${buffer.toString()}</div>'
+      // The boot script lives at the end of the body: it needs the
+      // stage element present to size, scale and wire the relay.
+      '<script>$boot</script></body></html>';
 }
