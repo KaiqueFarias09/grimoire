@@ -613,6 +613,86 @@ void main() {
       expect(half, contains('__elvFrame'), reason: 'the frame guard reroutes the bridge');
     });
   });
+  group('FXL-04 interactions on fixed pages', () {
+    test('book-authored scripts stay inert on scripted fixed pages', () async {
+      final book = await Unseal.readFile('test/resources/books/epub/fxl-scripted.epub') as EpubBook;
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(book, engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      await controller.start();
+      await _settle();
+
+      // The default policy strips book scripts before the fixed-page
+      // markers are applied; the page presents, but its script never
+      // reaches the webview.
+      expect(controller.bookJavaScriptPolicy, BookJavaScriptPolicy.disabled);
+      final html = utf8.decode((await _fetch(factory.engines[0].loadedUrls.first)).bytes);
+      expect(html, contains('elv-fixed'));
+      expect(html, isNot(contains('data-script-ran')));
+      expect(RegExp(r'<script(?![^>]*elv)[^>]*src="(?!/__viewer__)').allMatches(html), isEmpty);
+      expect(html, isNot(contains('scriptRan')));
+    });
+
+    test('search finds matches inside fixed pages and marks them', () async {
+      final book = buildEpub3FixedLayoutTestBook();
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(book, engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      await controller.start();
+      await _settle();
+
+      final results = await controller.search('Fixed page one');
+      expect(results, isNotEmpty, reason: 'the canonical text of a fixed page is searchable');
+      final hit = results.firstWhere((final r) => r.fileIndex == 1);
+      expect(hit.start, greaterThanOrEqualTo(0));
+
+      // The marks reach the fixed page through the standard action.
+      await controller.goToLocator(const TextLocator(sectionIndex: 1, start: 0, end: 0));
+      await _settle();
+      await controller.showSearchMatches([(hit.start, hit.end)]);
+      await _settle();
+      final sent = factory.engines.map((final e) => e.scripts.join('\n')).join('\n');
+      expect(sent, contains('setSearchMatches'));
+    });
+
+    test('selection and highlights restore inside the fixed stage', () async {
+      final book = buildEpub3FixedLayoutTestBook();
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(book, engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      await controller.start();
+      await _settle();
+      await controller.goToLocator(const TextLocator(sectionIndex: 1, start: 0, end: 0));
+      await _settle();
+
+      // A selection inside the fixed stage produces canonical offsets.
+      factory.engines[1].postMessage(<String, Object?>{
+        'type': 'selectionChanged',
+        'text': 'Fixed page one text.',
+        'start': 0,
+        'end': 20,
+      });
+      await _settle();
+      expect(controller.hasSelection, isTrue);
+      expect(controller.lastSelection!.fileIndex, 1);
+      expect(controller.lastSelection!.start, 0);
+
+      // The annotation stores and renders against the same space.
+      final highlight = await controller.addHighlightFromSelection();
+      expect(highlight, isNotNull);
+      expect(highlight!.sectionIndex, 1);
+      expect(highlight.start, 0);
+      expect(controller.highlights.single.sectionIndex, 1);
+      final sent = factory.engines.map((final e) => e.scripts.join('\n')).join('\n');
+      expect(sent, contains('applyHighlights'));
+    });
+  });
 }
 
 /// The settings-batch scripts evaluated on [engine] (one per engine
