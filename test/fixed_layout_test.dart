@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:grimoire/src/features/serving/fixed_layout.dart';
 import 'package:unseal/unseal.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart' as wf;
 
@@ -387,6 +388,229 @@ void main() {
       await _settle();
       expect(controller.position.fileIndex, 1);
       expect(controller.progress, closeTo(1 / 3, 0.0001));
+    });
+  });
+
+  group('FXL-03 spread presentations and navigation', () {
+    EpubBook buildSpreadBook() => buildEpub3FixedLayoutTestBook(
+      items: const [
+        Epub3SpineItem(path: 'prose.html', body: '<p>Reflowable prose.</p>'),
+        Epub3SpineItem(
+          path: 'f1.html',
+          body: '<p>Fixed one.</p>',
+          fixed: true,
+          viewportWidth: 800,
+          viewportHeight: 1200,
+          pageSpread: EpubPageSpread.left,
+        ),
+        Epub3SpineItem(
+          path: 'f2.html',
+          body: '<p>Fixed two.</p>',
+          fixed: true,
+          viewportWidth: 800,
+          viewportHeight: 1200,
+          pageSpread: EpubPageSpread.right,
+        ),
+        Epub3SpineItem(
+          path: 'f3.html',
+          body: '<p>Fixed center.</p>',
+          fixed: true,
+          viewportWidth: 800,
+          viewportHeight: 1200,
+          pageSpread: EpubPageSpread.center,
+        ),
+        Epub3SpineItem(
+          path: 'f4.html',
+          body: '<p>Fixed four.</p>',
+          fixed: true,
+          viewportWidth: 800,
+          viewportHeight: 1200,
+        ),
+      ],
+    );
+
+    test('declared left/right pair, center stays alone (small viewport)', () {
+      final presentations = fixedPresentationsOf(
+        buildSpreadBook(),
+        viewport: (width: 700, height: 1300),
+      );
+      // No spread context (auto spread in a portrait viewport): even
+      // declared placements present alone.
+      expect(presentations[1]!.isSpread, isFalse, reason: 'declared left presents alone');
+      expect(presentations[2]!.isSpread, isFalse, reason: 'declared right presents alone');
+      expect(presentations[3]!.isSpread, isFalse, reason: 'center renders alone');
+      expect(presentations[4]!.isSpread, isFalse, reason: 'no auto pairing in a narrow viewport');
+      expect(presentations.containsKey(0), isFalse, reason: 'reflowable items never present');
+    });
+
+    test('wide viewport pairs the declared left+right pages', () {
+      final presentations = fixedPresentationsOf(
+        buildSpreadBook(),
+        viewport: (width: 2400, height: 1300),
+      );
+      expect(presentations[1], presentations[2], reason: 'left+right declarations pair');
+      expect(presentations[1]!.item, 1);
+      expect(presentations[1]!.pairItem, 2);
+      expect(presentations[3]!.isSpread, isFalse, reason: 'center still renders alone');
+    });
+
+    test('spreads turn as one unit', () async {
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(buildSpreadBook(), engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      controller.setLogicalViewport(2400, 1300);
+      await controller.start();
+      await _settle();
+
+      await controller.goToLocator(const TextLocator(sectionIndex: 1, start: 0, end: 0));
+      await _settle();
+      expect(
+        factory.engines.map((final e) => e.loadedUrls.last.path),
+        contains(contains('/__spread__/1/2')),
+      );
+
+      factory.engines[1].postMessage(<String, Object?>{'type': 'pageTurn', 'forward': true});
+      await _settle();
+      expect(controller.position.fileIndex, 3, reason: 'the turn lands past both halves');
+    });
+
+    test('nonlinear items are excluded from the flow but stay reachable', () async {
+      final book = buildEpub3FixedLayoutTestBook(
+        items: const [
+          Epub3SpineItem(
+            path: 'f1.html',
+            body: '<p>Fixed one.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+          ),
+          Epub3SpineItem(
+            path: 'f2.html',
+            body: '<p>Fixed two.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+            linear: false,
+          ),
+          Epub3SpineItem(
+            path: 'f3.html',
+            body: '<p>Fixed three.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+          ),
+        ],
+      );
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(book, engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      await controller.start();
+      await _settle();
+
+      await controller.nextChapter();
+      await _settle();
+      expect(controller.position.fileIndex, 2, reason: 'nextChapter steps over the nonlinear item');
+
+      await controller.goToLocator(const TextLocator(sectionIndex: 1, start: 0, end: 0));
+      await _settle();
+      expect(controller.position.fileIndex, 1, reason: 'locator navigation still reaches it');
+    });
+
+    test('resize re-pairs the current page and keeps its position', () async {
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(buildSpreadBook(), engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      await controller.start();
+      await _settle();
+      controller.setLogicalViewport(700, 1300);
+      await _settle();
+
+      await controller.goToLocator(const TextLocator(sectionIndex: 1, start: 0, end: 0));
+      await _settle();
+      expect(
+        factory.engines
+            .map((final e) => e.loadedUrls.last)
+            .any((final u) => u.path == '/book/f1.html'),
+        isTrue,
+        reason: 'narrow viewport shows the page alone',
+      );
+
+      controller.setLogicalViewport(2400, 1300);
+      await _settle();
+      expect(
+        factory.engines
+            .map((final e) => e.loadedUrls.last)
+            .any((final u) => u.path.contains('/__spread__/1/2')),
+        isTrue,
+        reason: 'widening re-pairs and reloads the spread',
+      );
+      expect(controller.position.fileIndex, 1, reason: 'position survives re-pairing');
+    });
+
+    test('zoom settings are clamped and pushed to the engines', () async {
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(buildEpub3FixedLayoutTestBook(), engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      await controller.start();
+      await _settle();
+
+      controller.setFixedLayoutSettings(
+        const ViewerFixedLayoutSettings(zoomMode: FixedPageZoomMode.custom, customScale: 9),
+      );
+      expect(controller.fixedLayoutSettings.customScale, 5, reason: 'custom scale clamps to 5');
+      await _settle();
+      final pushed = factory.engines[0].scripts.join('\n');
+      expect(pushed, contains('setFixedLayout'));
+      expect(pushed, contains('"customScale":5.0'));
+    });
+
+    test('orientation is reported per item for the host', () async {
+      final book =
+          await Unseal.readFile('test/resources/books/epub/fxl-orientation.epub') as EpubBook;
+      final controller = ViewerController(book, engineFactory: FakeViewerEngineFactory())
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+
+      expect(controller.fixedLayoutOrientationFor(0), EpubOrientation.landscape);
+      final overrideIndexes = [
+        for (var index = 0; index < book.readingOrder.length; index++)
+          if (book.orientationForSpineIndex(index) == EpubOrientation.portrait) index,
+      ];
+      expect(overrideIndexes, isNotEmpty, reason: 'the fixture declares a portrait override');
+      expect(controller.fixedLayoutOrientationFor(overrideIndexes.first), EpubOrientation.portrait);
+    });
+
+    test('spread wrapper serves guarded halves', () async {
+      final factory = FakeViewerEngineFactory();
+      final controller = ViewerController(buildSpreadBook(), engineFactory: factory)
+        ..mathJaxEnabled = false
+        ..pageCountMode = BookPageCountMode.estimate;
+      addTearDown(controller.dispose);
+      controller.setLogicalViewport(2400, 1300);
+      await controller.start();
+      await _settle();
+      await controller.goToLocator(const TextLocator(sectionIndex: 1, start: 0, end: 0));
+      await _settle();
+
+      final spreadUrl = factory.engines.map((final e) => e.loadedUrls.last).last;
+      final wrapper = utf8.decode((await _fetch(spreadUrl)).bytes);
+      expect(wrapper, contains('elv-spread'));
+      expect(wrapper, contains('data-elv-half="0"'));
+      expect(wrapper, contains('data-elv-half="1"'));
+
+      final halfUrl = spreadUrl.resolve(RegExp(r'src="([^"]+)"').firstMatch(wrapper)!.group(1)!);
+      final half = utf8.decode((await _fetch(halfUrl)).bytes);
+      expect(half, contains('elv-fixed'));
+      expect(half, contains('__elvFrame'), reason: 'the frame guard reroutes the bridge');
     });
   });
 }

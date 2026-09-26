@@ -583,6 +583,40 @@ String injectFixedPageMarkers(
   return marked.replaceRange(bodyOpen.start, bodyOpen.end, updatedTag);
 }
 
+/// Adds the spread-frame guard to [html]: inside a parent frame the
+/// page's bridge is rerouted through `window.parent.postMessage` and
+/// actions arriving from the wrapper are applied locally.
+///
+/// Subframe bridge channels are unreliable (`callHandler` from an
+/// iframe can silently drop messages depending on platform), so a
+/// spread half always posts upward through the wrapper instead of
+/// calling the host channel directly. Injected only into pages served
+/// as spread halves (the `elvframe` serving variant); standalone
+/// pages keep their direct channels.
+String injectSpreadFrameGuard(final String html) {
+  const guard =
+      '<script>(function () {'
+      'if (!window.parent || window.parent === window) { return; }'
+      'try { window.flutter_inappwebview = undefined; } catch (error) {}'
+      'try {'
+      'Object.defineProperty(window, "flutter_inappwebview", {'
+      'get: function () { return undefined; }, set: function () {},'
+      'configurable: true });'
+      '} catch (error) {}'
+      'window.GrimoireBridge = {'
+      'postMessage: function (message) {'
+      'window.parent.postMessage({ __elvFrame: 1, message: message }, "*");'
+      '}};'
+      'window.addEventListener("message", function (event) {'
+      'var data = event.data;'
+      'if (data && data.__elvFrameAction) {'
+      'if (window.__grimoire) { window.__grimoire(data.__elvFrameAction); }'
+      '}});'
+      '})();</script>';
+
+  return injectIntoHead(html, guard);
+}
+
 /// Matches a `<meta>` tag carrying `name="viewport"` in any attribute
 /// order, quoted or bare.
 final RegExp _viewportMetaPattern = RegExp(

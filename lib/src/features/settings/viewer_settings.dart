@@ -36,3 +36,55 @@ enum ViewerFootnoteMode {
   /// falls back to navigating when the body cannot be resolved.
   popup,
 }
+
+/// How a fixed-layout EPUB page fits the viewport before user zoom.
+enum FixedPageZoomMode {
+  /// Scale so the whole declared page fits (default).
+  fitPage,
+
+  /// Scale so the declared page width fills the viewport.
+  fitWidth,
+
+  /// One declared page pixel per viewport pixel.
+  oneToOne,
+
+  /// The base fit scaled by [ViewerFixedLayoutSettings.customScale].
+  custom,
+}
+
+/// Reader-side presentation overrides for fixed-layout EPUB pages.
+///
+/// The publisher's declared geometry stays the base; these settings
+/// scale on top of it. They never alter a page's declared dimensions.
+final class ViewerFixedLayoutSettings {
+  /// Creates fixed-layout presentation settings with fit-page zoom.
+  const ViewerFixedLayoutSettings({
+    this.zoomMode = FixedPageZoomMode.fitPage,
+    this.customScale = 1.0,
+  });
+
+  /// The zoom mode applied to fixed pages and spreads.
+  final FixedPageZoomMode zoomMode;
+
+  /// Multiplier over the base fit for [FixedPageZoomMode.custom],
+  /// clamped to `1..5`.
+  final double customScale;
+
+  /// Copy with the given replacements.
+  ViewerFixedLayoutSettings copyWith({
+    final FixedPageZoomMode? zoomMode,
+    final double? customScale,
+  }) => ViewerFixedLayoutSettings(
+    zoomMode: zoomMode ?? this.zoomMode,
+    customScale: customScale ?? this.customScale,
+  );
+
+  @override
+  bool operator ==(final Object other) =>
+      other is ViewerFixedLayoutSettings &&
+      other.zoomMode == zoomMode &&
+      other.customScale == customScale;
+
+  @override
+  int get hashCode => Object.hash(zoomMode, customScale);
+}

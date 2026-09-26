@@ -203,6 +203,16 @@ class ViewerController extends ChangeNotifier
     _logicalViewportWidth = width;
     _logicalViewportHeight = height;
     if (_started) {
+      final current = _position.fileIndex;
+      final before = _fixedPresentations[current];
+      _refreshFixedPresentations();
+      if (_fixedPresentations[current] != before &&
+          isFixedLayoutPage(current) &&
+          _fixedPresentations.containsKey(current)) {
+        // The viewport change re-paired the current page (spread
+        // formed or dissolved): reload it under the new presentation.
+        unawaited(_navigation.navigate(current, const NavigationIntent(offset: 0)));
+      }
       _refreshPageCacheKey();
     }
     if (!_started) {
@@ -360,6 +370,97 @@ class ViewerController extends ChangeNotifier
   /// fixed-layout page that keeps its declared dimensions.
   bool isFixedLayoutPage(final int fileIndex) =>
       fileIndex >= 0 && fileIndex < _fixedLayoutByFile.length && _fixedLayoutByFile[fileIndex];
+
+  /// Fixed-layout presentations under the current logical viewport,
+  /// keyed by reading-order index: single pages, synthetic spreads and
+  /// blank-filled placements. Empty for non-EPUB books and before the
+  /// first viewport report.
+  Map<int, FixedPresentation> _fixedPresentations = const <int, FixedPresentation>{};
+
+  /// The spread/single presentation of [fileIndex], or null when the
+  /// item is not a fixed-layout page or no viewport is known yet.
+  FixedPresentation? fixedPresentationFor(final int fileIndex) => _fixedPresentations[fileIndex];
+
+  /// Recomputes spread pairing for the reported logical viewport.
+  void _refreshFixedPresentations() {
+    final width = _logicalViewportWidth;
+    final height = _logicalViewportHeight;
+    _fixedPresentations = fixedPresentationsOf(
+      book,
+      viewport: width == null || height == null || width <= 0 || height <= 0
+          ? null
+          : (width: width, height: height),
+    );
+  }
+
+  /// The declared orientation preference for the fixed-layout page at
+  /// [fileIndex] (EPUB 3 `rendition:orientation`, publication-wide or
+  /// per spine item). Null for non-fixed items and non-EPUB books.
+  /// The library never locks the device orientation; the host decides.
+  EpubOrientation? fixedLayoutOrientationFor(final int fileIndex) {
+    final epub = book;
+    if (epub is! EpubBook || !isFixedLayoutPage(fileIndex)) return null;
+
+    return epub.orientationForSpineIndex(fileIndex);
+  }
+
+  /// Reader-side fixed-layout presentation overrides.
+  ViewerFixedLayoutSettings _fixedLayoutSettings = const ViewerFixedLayoutSettings();
+
+  /// The active fixed-layout presentation settings.
+  ViewerFixedLayoutSettings get fixedLayoutSettings => _fixedLayoutSettings;
+
+  /// Applies fixed-layout presentation settings (zoom mode and scale)
+  /// to the loaded engines. The publisher's declared geometry stays
+  /// the base these scale on.
+  void setFixedLayoutSettings(final ViewerFixedLayoutSettings settings) {
+    final clamped = settings.copyWith(customScale: settings.customScale.clamp(1.0, 5.0).toDouble());
+    if (clamped == _fixedLayoutSettings) return;
+    _fixedLayoutSettings = clamped;
+    for (var slot = 0; slot < _engines.length; slot++) {
+      unawaited(_sendTo(slot, _fixedLayoutMessage()));
+    }
+    notifyListeners();
+  }
+
+  Map<String, Object?> _fixedLayoutMessage() => <String, Object?>{
+    'action': 'setFixedLayout',
+    'mode': switch (_fixedLayoutSettings.zoomMode) {
+      FixedPageZoomMode.fitPage => 'fitPage',
+      FixedPageZoomMode.fitWidth => 'fitWidth',
+      FixedPageZoomMode.oneToOne => 'oneToOne',
+      FixedPageZoomMode.custom => 'custom',
+    },
+    'customScale': _fixedLayoutSettings.customScale,
+  };
+
+  /// The next/previous reading-order index the linear flow moves to
+  /// from [from]: a synthetic spread turns as one unit and EPUB
+  /// `linear="no"` items are stepped over (they stay reachable through
+  /// links, the contents sheet and locator navigation).
+  int _flowTarget(final int from, {required final bool forward}) {
+    final count = _server?.itemCount ?? book.readingOrder.length;
+    var target = from;
+    if (forward) {
+      target = (_fixedPresentations[from]?.pairItem ?? from) + 1;
+    } else {
+      target = from - 1;
+    }
+    final epub = book;
+    while (epub is EpubBook &&
+        target >= 0 &&
+        target < count &&
+        target != from &&
+        !epub.spineItemIsLinear(target)) {
+      if (forward) {
+        target++;
+      } else {
+        target--;
+      }
+    }
+
+    return target;
+  }
 
   /// Whether this book is a PDF (either reading mode).
   bool get isPdfMode => book is PdfBook;
@@ -763,9 +864,10 @@ class ViewerController extends ChangeNotifier
     );
 
     _navigation.prepareInitial(0);
+    _refreshFixedPresentations();
     final activeSlot = _navigation.activeSlot;
-    debugPrint('🔌 Loading URL: ${server.urlForItem(0)}');
-    await _engines[activeSlot].loadUrl(server.urlForItem(0));
+    debugPrint('🔌 Loading URL: ${_loadUriFor(server, 0)}');
+    await _engines[activeSlot].loadUrl(_loadUriFor(server, 0));
     debugPrint('🔌 URL loaded on engine $activeSlot');
   }
 
@@ -1591,7 +1693,25 @@ class ViewerController extends ChangeNotifier
     if (server == null || slot < 0 || slot >= _engines.length) {
       return;
     }
-    await _engines[slot].loadUrl(server.urlForItem(fileIndex));
+    await _engines[slot].loadUrl(_loadUriFor(server, fileIndex));
+  }
+
+  /// The URL presenting [fileIndex]: its spread wrapper when the item
+  /// pairs (or carries a declared side placement), otherwise the item
+  /// page. Both halves of a pair resolve to the same wrapper, so a
+  /// locator pointing into either half restores the whole spread.
+  Uri _loadUriFor(final BookServer server, final int fileIndex) {
+    final presentation = _fixedPresentations[fileIndex];
+    if (presentation == null || !presentation.isSpread) {
+      return server.urlForItem(fileIndex);
+    }
+    final pairItem = presentation.pairItem;
+    final int? left = presentation.blankLeft ? null : presentation.item;
+    final int? right = presentation.blankRight
+        ? null
+        : (pairItem ?? (presentation.blankLeft ? presentation.item : null));
+
+    return server.urlForSpread(left: left, right: right);
   }
 
   @override
@@ -1692,10 +1812,11 @@ class ViewerController extends ChangeNotifier
       case final PageTurnEvent turn:
         // Fixed-layout pages are one reading-order item per page
         // (comics and PDFs), so a swipe is a cross-file turn, not a
-        // column move. Out-of-range turns are ignored.
+        // column move; spreads turn as one unit. Out-of-range turns
+        // are ignored.
         if (event.source == _navigation.activeSlot) {
-          final target = _position.fileIndex + (turn.forward ? 1 : -1);
-          if (target >= 0 && target < (_server?.itemCount ?? 0)) {
+          final target = _flowTarget(_position.fileIndex, forward: turn.forward);
+          if (target != _position.fileIndex && target >= 0 && target < (_server?.itemCount ?? 0)) {
             await _navigation.navigate(target, const NavigationIntent(offset: 0));
           }
         }
@@ -1824,6 +1945,7 @@ class ViewerController extends ChangeNotifier
           'rtl': rtlPageProgression,
           'reverseZones': _reversePageTurnZones,
         },
+        if (fixed) _fixedLayoutMessage(),
       ],
     });
   }
@@ -2043,17 +2165,19 @@ class ViewerController extends ChangeNotifier
   }
 
   /// Next reading-order section (chapter), Calibre's next_section.
+  /// Spread pairs turn as one unit; EPUB `linear="no"` items are
+  /// stepped over.
   Future<void> nextChapter() async {
-    final target = _position.fileIndex + 1;
-    if (target < (_server?.itemCount ?? 0)) {
+    final target = _flowTarget(_position.fileIndex, forward: true);
+    if (target != _position.fileIndex && target < (_server?.itemCount ?? 0)) {
       await _navigation.navigate(target, const NavigationIntent());
     }
   }
 
   /// Previous reading-order section (chapter).
   Future<void> previousChapter() async {
-    final target = _position.fileIndex - 1;
-    if (target >= 0) {
+    final target = _flowTarget(_position.fileIndex, forward: false);
+    if (target != _position.fileIndex && target >= 0) {
       await _navigation.navigate(target, const NavigationIntent(atEnd: true));
     }
   }

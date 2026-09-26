@@ -44,6 +44,12 @@
     wordMarks: null, // last applied [start, end, state] triples — see applyWordMarks
     fixedViewport: null, // {w, h} declared page size of a fixed page, null = fit-width
     fixedScale: 1, // current fit scale of the fixed stage
+    fixedZoom: {
+      mode: 'fitPage', // fitPage | fitWidth | oneToOne | custom
+      customScale: 1,
+      pan: { x: 0, y: 0 },
+      zoomed: false,
+    },
   };
 
   function post(message) {
@@ -528,8 +534,10 @@
     markTextNodesDirty();
   }
 
-  // Fit-page scale s = min(vw/W, vh/H) with top-left transform origin
-  // and computed centering offsets, so the scaled page never clips.
+  // Base fit s = min(vw/W, vh/H) with top-left transform origin and
+  // computed centering offsets, so the scaled page never clips. The
+  // host's fixed-layout zoom mode scales on top of the declared
+  // geometry (the publisher box stays the base); zoomed content pans.
   function applyFixedTransform() {
     var vp = state.fixedViewport;
     if (!vp) {
@@ -537,22 +545,48 @@
       document.body.style.removeProperty('transform');
       document.body.style.removeProperty('transform-origin');
       state.fixedScale = 1;
+      state.fixedZoom.zoomed = false;
 
       return;
     }
     var vw = inlineSize();
     var vh = blockSize();
-    var scale = Math.min(vw / vp.w, vh / vp.h);
-    if (!isFinite(scale) || scale <= 0) {
+    var base = Math.min(vw / vp.w, vh / vp.h);
+    var scale = base;
+    if (state.fixedZoom.mode === 'fitWidth') {
+      scale = vw / vp.w;
+    } else if (state.fixedZoom.mode === 'oneToOne') {
       scale = 1;
+    } else if (state.fixedZoom.mode === 'custom') {
+      scale = base * state.fixedZoom.customScale;
+    }
+    if (!isFinite(scale) || scale <= 0) {
+      scale = base;
     }
     state.fixedScale = scale;
-    var offsetX = Math.max(0, (vw - vp.w * scale) / 2);
-    var offsetY = Math.max(0, (vh - vp.h * scale) / 2);
+    state.fixedZoom.zoomed = scale > base + 0.001;
+    var offsetX = (vw - vp.w * scale) / 2;
+    var offsetY = (vh - vp.h * scale) / 2;
+    var panX = state.fixedZoom.pan.x;
+    var panY = state.fixedZoom.pan.y;
+    // Keep as much of the zoomed page on screen as the clamp allows;
+    // content smaller than the viewport stays centered.
+    if (vp.w * scale <= vw) {
+      panX = 0;
+    } else {
+      panX = Math.max(vw - vp.w * scale - offsetX, Math.min(-offsetX, panX));
+    }
+    if (vp.h * scale <= vh) {
+      panY = 0;
+    } else {
+      panY = Math.max(vh - vp.h * scale - offsetY, Math.min(-offsetY, panY));
+    }
+    state.fixedZoom.pan.x = panX;
+    state.fixedZoom.pan.y = panY;
     document.body.classList.add('elv-stage-scaled');
     document.body.style.transformOrigin = '0 0';
     document.body.style.transform =
-      'translate(' + offsetX + 'px, ' + offsetY + 'px) scale(' + scale + ')';
+      'translate(' + (offsetX + panX) + 'px, ' + (offsetY + panY) + 'px) scale(' + scale + ')';
   }
 
   // Fixed pages turn as whole units: the host maps the request onto
@@ -2271,6 +2305,14 @@
         };
         relayoutKeepingPosition();
         break;
+      case 'setFixedLayout':
+        if (!isFixedPage()) break;
+        state.fixedZoom.mode = String(message.mode || 'fitPage');
+        state.fixedZoom.customScale = Math.min(5, Math.max(1, Number(message.customScale) || 1));
+        state.fixedZoom.pan.x = 0;
+        state.fixedZoom.pan.y = 0;
+        applyFixedTransform();
+        break;
       case 'setOverrideColors':
         if (isFixedPage()) break; // never repaint the page's own content
         if (message.enabled) {
@@ -2604,6 +2646,7 @@
   function installTextGestures() {
     var start = null;
     var pinchStart = null;
+    var panned = false;
     document.addEventListener(
       'touchstart',
       function (event) {
@@ -2622,6 +2665,7 @@
             x: event.touches[0].clientX,
             y: event.touches[0].clientY,
           };
+          panned = false;
         }
       },
       { passive: true }
@@ -2630,6 +2674,27 @@
       'touchmove',
       function (event) {
         if (isComic() || event.touches.length !== 2 || !pinchStart) {
+          if (
+            isFixedPage() &&
+            state.fixedZoom.zoomed &&
+            event.touches.length === 1 &&
+            start &&
+            !panned
+          ) {
+            // A drag on a zoomed fixed stage pans instead of turning;
+            // a stray sub-threshold wiggle still counts as a turn.
+            var first = event.touches[0];
+            var pdx = first.clientX - start.x;
+            var pdy = first.clientY - start.y;
+            if (Math.abs(pdx) > 2 || Math.abs(pdy) > 2) {
+              panned = true;
+            }
+            state.fixedZoom.pan.x += pdx;
+            state.fixedZoom.pan.y += pdy;
+            applyFixedTransform();
+            start = { x: first.clientX, y: first.clientY };
+          }
+
           return;
         }
         var dx = event.touches[0].clientX - event.touches[1].clientX;
@@ -2651,6 +2716,13 @@
       function (event) {
         if (isComic() || !start) {
           return;
+        }
+        var wasPanned = panned;
+        panned = false;
+        if (wasPanned && isFixedPage() && state.fixedZoom.zoomed) {
+          start = null;
+
+          return; // the drag panned the zoomed stage, not a page turn
         }
         var t = event.changedTouches[0];
         var dx = t.clientX - start.x;
