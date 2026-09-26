@@ -180,7 +180,7 @@ Future<void> _runPick(
     );
     var coldIndex = 0;
     await group.addAsync(
-      'goToCfi cold scan (last file)',
+      'goToCfi cold scan (last file) · $label',
       () {
         final cold = freshControllers[coldIndex++];
 
@@ -209,7 +209,7 @@ Future<void> _runPick(
       );
       var bookLevelIndex = 0;
       await group.addAsync(
-        'goToCfi book-level cold (deep link)',
+        'goToCfi book-level cold (deep link) · $label',
         () {
           final cold = bookLevelControllers[bookLevelIndex++];
 
