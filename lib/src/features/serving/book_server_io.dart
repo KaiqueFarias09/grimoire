@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -127,6 +128,23 @@ class BookServer {
     return baseUrl.replace(path: '/__page__/$index');
   }
 
+  /// URL of the synthetic spread wrapper showing [left] and [right]
+  /// reading-order indexes; either side may be null for a blank
+  /// filler. The wrapper iframes the halves at their natural declared
+  /// size and scales the pair.
+  Uri urlForSpread({required final int? left, required final int? right}) {
+    return baseUrl.replace(path: '/__spread__/${left ?? 'b'}/${right ?? 'b'}');
+  }
+
+  /// Loopback URL of [index] as a spread half: the same rewritten page
+  /// plus the frame guard that routes its bridge through the wrapper.
+  Uri _spreadHalfUrl(final int index) {
+    return baseUrl.replace(
+      path: '/book/${_encodePath(_order[index].name)}',
+      queryParameters: const {'elvframe': '1'},
+    );
+  }
+
   /// URL of the raw PDF document (facsimile pages feed it to
   /// pdf.js, which reads it in byte-range chunks).
   Uri get pdfDocumentUrl => baseUrl.replace(path: '/__pdfdoc__');
@@ -156,6 +174,14 @@ class BookServer {
       }
       if (path.startsWith('__pdfpage__/')) {
         return _syntheticPdfPage(int.tryParse(path.substring('__pdfpage__/'.length)));
+      }
+      if (path.startsWith('__spread__/')) {
+        final sides = path.substring('__spread__/'.length).split('/');
+        if (sides.length == 2) {
+          return _syntheticSpreadPage(sides[0], sides[1]);
+        }
+
+        return shelf.Response.notFound('No such spread');
       }
       if (path == '__pdfdoc__') return _servePdfDocument(request);
       if (path.startsWith('__pdfjs__/')) return _servePdfJs(path.substring('__pdfjs__/'.length));
@@ -205,6 +231,77 @@ class BookServer {
     return shelf.Response.ok(html, headers: _htmlHeaders);
   }
 
+  /// Parses one `/__spread__/<left>/<right>` side: a reading-order
+  /// index or `b` for a blank filler.
+  int? _spreadSide(final String spec) {
+    if (spec == 'b' || spec.isEmpty) return null;
+
+    return int.tryParse(spec);
+  }
+
+  shelf.Response _syntheticSpreadPage(final String leftSpec, final String rightSpec) {
+    final left = _spreadSide(leftSpec);
+    final right = _spreadSide(rightSpec);
+    if (!_isValidSpreadSide(left) || !_isValidSpreadSide(right)) {
+      return shelf.Response.notFound('No such spread');
+    }
+
+    ({int width, int height}) halfSize(final int index) {
+      final presentation = _fixedPages[_order[index].name];
+      final viewport = presentation?.declaredViewport;
+
+      // Pairing requires declared viewports; the fallback keeps a
+      // malformed book renderable instead of crashing the route.
+      return viewport ?? (width: 800, height: 1200);
+    }
+
+    final halves = <SpreadHalf>[];
+    final sizes = <({int width, int height})>[];
+    if (left != null) {
+      final size = halfSize(left);
+      sizes.add(size);
+      halves.add(
+        SpreadHalf.content(
+          url: _spreadHalfUrl(left).toString(),
+          width: size.width,
+          height: size.height,
+          half: 0,
+        ),
+      );
+    }
+    if (right != null) {
+      final size = halfSize(right);
+      sizes.add(size);
+      halves.add(
+        SpreadHalf.content(
+          url: _spreadHalfUrl(right).toString(),
+          width: size.width,
+          height: size.height,
+          half: left == null ? 0 : 1,
+        ),
+      );
+    }
+    if (halves.length == 1) {
+      // Blank filler takes the content half's size.
+      final size = sizes.single;
+      halves.insert(
+        left == null ? 0 : halves.length,
+        SpreadHalf.blank(width: size.width, height: size.height),
+      );
+    }
+    final stageWidth =
+        halves.fold(0, (final sum, final half) => sum + half.width) + kSpreadGap.round();
+    final stageHeight = halves.fold(0, (final max, final half) => math.max(max, half.height));
+
+    return shelf.Response.ok(
+      syntheticSpreadPageHtml(halves: halves, stageWidth: stageWidth, stageHeight: stageHeight),
+      headers: _htmlHeaders,
+    );
+  }
+
+  bool _isValidSpreadSide(final int? index) =>
+      index == null || (index >= 0 && index < _order.length && _order[index].isHtml);
+
   shelf.Response _servePdfDocument(final shelf.Request request) {
     final pdf = _pdfBook;
     if (pdf == null) return shelf.Response.notFound('Not a PDF book');
@@ -238,7 +335,12 @@ class BookServer {
     final content = entry.value;
     if (content is String) {
       if (isHtmlName(rawPath)) {
-        return shelf.Response.ok(_rewrittenPage(entry.key, content), headers: _htmlHeaders);
+        final asFrame = request.url.queryParameters['elvframe'] == '1';
+
+        return shelf.Response.ok(
+          _rewrittenPage(entry.key, content, asFrame: asFrame),
+          headers: _htmlHeaders,
+        );
       }
 
       return shelf.Response.ok(
@@ -253,30 +355,38 @@ class BookServer {
   /// Rewritten HTML for a page, cached by canonical path so repeat
   /// GETs (and quirky-case variants of the same file) skip the regex
   /// passes. The output is stable: the injected tags are static and
-  /// the MathJax choice only sniffs the stored content.
-  String _rewrittenPage(final String key, final String content) =>
-      _rewrittenPages.putIfAbsent(key, () {
-        var html = sanitizeBookHtml(content, policy: bookJavaScriptPolicy);
-        // Fixed-layout EPUB pages carry their presentation marker so
-        // the viewer stages them instead of paginating. Runs before
-        // injectViewerAssets so the book's own viewport meta is
-        // stripped before the viewer device-width meta is injected.
-        final fixed = _fixedPages[key];
-        if (fixed != null) {
-          html = injectFixedPageMarkers(html, presentation: fixed);
-        }
-        html = injectViewerAssets(
-          html,
-          cssUrl: '/__viewer__/viewer.css',
-          jsUrl: '/__viewer__/viewer.js',
-        );
-        // Calibre's heuristic: only math pages pay for MathJax.
-        if (containsMath(content)) {
-          html = injectMathJax(html, scriptBase: '/__mathjax__');
-        }
+  /// the MathJax choice only sniffs the stored content. [asFrame]
+  /// serves the spread-half variant, whose bridge is rerouted through
+  /// the wrapper frame, and caches it under a distinct key.
+  String _rewrittenPage(final String key, final String content, {required final bool asFrame}) {
+    final cacheKey = asFrame ? '$key\u0000frame' : key;
 
-        return html;
-      });
+    return _rewrittenPages.putIfAbsent(cacheKey, () {
+      var html = sanitizeBookHtml(content, policy: bookJavaScriptPolicy);
+      // Fixed-layout EPUB pages carry their presentation marker so
+      // the viewer stages them instead of paginating. Runs before
+      // injectViewerAssets so the book's own viewport meta is
+      // stripped before the viewer device-width meta is injected.
+      final fixed = _fixedPages[key];
+      if (fixed != null) {
+        html = injectFixedPageMarkers(html, presentation: fixed);
+      }
+      if (asFrame) {
+        html = injectSpreadFrameGuard(html);
+      }
+      html = injectViewerAssets(
+        html,
+        cssUrl: '/__viewer__/viewer.css',
+        jsUrl: '/__viewer__/viewer.js',
+      );
+      // Calibre's heuristic: only math pages pay for MathJax.
+      if (containsMath(content)) {
+        html = injectMathJax(html, scriptBase: '/__mathjax__');
+      }
+
+      return html;
+    });
+  }
 
   shelf.Response _serveBinary(
     final shelf.Request request,

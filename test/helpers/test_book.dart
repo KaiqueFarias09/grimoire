@@ -169,6 +169,9 @@ final class Epub3SpineItem {
     this.fixed = false,
     this.viewportWidth,
     this.viewportHeight,
+    this.pageSpread,
+    this.spread,
+    this.linear = true,
   });
 
   /// Canonical path of the item (also its files.html key).
@@ -185,6 +188,15 @@ final class Epub3SpineItem {
 
   /// Declared page height, or null for no viewport declaration.
   final int? viewportHeight;
+
+  /// Declared synthetic-spread placement of the item.
+  final EpubPageSpread? pageSpread;
+
+  /// Per-item spread override.
+  final EpubSpread? spread;
+
+  /// Whether the spine itemref is `linear` (default true).
+  final bool linear;
 
   /// The full XHTML document of the item.
   String get content {
@@ -232,7 +244,12 @@ EpubBook buildEpub3FixedLayoutTestBook({
 
   final fixedItems = <String, EpubSpineRendition>{
     for (final item in items)
-      if (item.fixed) item.path: const EpubSpineRendition(layout: EpubLayout.prePaginated),
+      if (item.fixed)
+        item.path: EpubSpineRendition(
+          layout: EpubLayout.prePaginated,
+          pageSpread: item.pageSpread,
+          spread: item.spread,
+        ),
   };
 
   return EpubBook(
@@ -264,6 +281,10 @@ EpubBook buildEpub3FixedLayoutTestBook({
     // real parse produces (the helper uses each path as the id).
     spinePaths: [for (final item in items) item.path],
     spineIdrefs: [for (final item in items) item.path],
+    nonLinearSpinePaths: {
+      for (final item in items)
+        if (!item.linear) item.path,
+    },
     contentViewports: {
       for (final item in items)
         if (item.viewportWidth != null && item.viewportHeight != null)
@@ -284,6 +305,10 @@ EpubBook buildEpub3FixedLayoutTestBook({
         tocId: null,
         items: [for (final item in items) item.path],
         pageProgressionDirection: pageProgressionDirection,
+        nonLinearIdrefs: {
+          for (final item in items)
+            if (!item.linear) item.path,
+        },
       ),
       tocId: null,
       renditionSettings: EpubRendition(layout: EpubLayout.reflowable, spineItems: fixedItems),

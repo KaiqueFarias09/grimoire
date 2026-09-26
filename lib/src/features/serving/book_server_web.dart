@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -49,6 +50,8 @@ class BookServer {
   final Map<String, String> _blobUrls = <String, String>{};
   final Map<int, String> _comicPages = <int, String>{};
   final Map<int, String> _pdfPages = <int, String>{};
+  final Map<int, String> _spreadHalves = <int, String>{};
+  final Map<String, String> _spreadPages = <String, String>{};
   final Set<String> _createdUrls = <String>{};
   final Set<String> _building = <String>{};
   List<ReadingOrderItem> _order = const <ReadingOrderItem>[];
@@ -119,6 +122,8 @@ class BookServer {
     _blobUrls.clear();
     _comicPages.clear();
     _pdfPages.clear();
+    _spreadHalves.clear();
+    _spreadPages.clear();
     _pdfDocumentUrl = null;
     _files.clear();
     _started = false;
@@ -140,6 +145,101 @@ class BookServer {
   /// Blob URL of a book file path (resource references, internal
   /// link navigation).
   Uri urlForPath(final String path) => Uri.parse(_urlFor(_canonicalOrThrow(path, 'book file')));
+
+  /// Blob URL of the synthetic spread wrapper showing [left] and
+  /// [right] reading-order indexes; either side may be null for a
+  /// blank filler. Halves iframe their pages with the frame guard so
+  /// bridge messages relay through the wrapper.
+  Uri urlForSpread({required final int? left, required final int? right}) {
+    final key = '${left ?? 'b'}/${right ?? 'b'}';
+    final existing = _spreadPages[key];
+    if (existing != null) return Uri.parse(existing);
+
+    ({int width, int height}) halfSize(final int index) {
+      final presentation = _fixedPages[_order[index].name];
+
+      // Pairing requires declared viewports; the fallback keeps a
+      // malformed book renderable (mirrors the IO server route).
+      final viewport = presentation?.declaredViewport;
+
+      return viewport ?? (width: 800, height: 1200);
+    }
+
+    final halves = <SpreadHalf>[];
+    final sizes = <({int width, int height})>[];
+    if (left != null) {
+      final size = halfSize(left);
+      sizes.add(size);
+      halves.add(
+        SpreadHalf.content(
+          url: _spreadHalfUrl(left).toString(),
+          width: size.width,
+          height: size.height,
+          half: 0,
+        ),
+      );
+    }
+    if (right != null) {
+      final size = halfSize(right);
+      sizes.add(size);
+      halves.add(
+        SpreadHalf.content(
+          url: _spreadHalfUrl(right).toString(),
+          width: size.width,
+          height: size.height,
+          half: left == null ? 0 : 1,
+        ),
+      );
+    }
+    if (halves.length == 1) {
+      final size = sizes.single;
+      halves.insert(
+        left == null ? 0 : halves.length,
+        SpreadHalf.blank(width: size.width, height: size.height),
+      );
+    }
+    final stageWidth =
+        halves.fold(0, (final sum, final half) => sum + half.width) + kSpreadGap.round();
+    final stageHeight = halves.fold(0, (final max, final half) => math.max(max, half.height));
+
+    final html = syntheticSpreadPageHtml(
+      halves: halves,
+      stageWidth: stageWidth,
+      stageHeight: stageHeight,
+    );
+
+    return Uri.parse(_spreadPages[key] = _register(utf8.encode(html), 'text/html; charset=utf-8'));
+  }
+
+  /// Blob URL of [index] as a spread half: the rewritten page plus the
+  /// frame guard that routes its bridge through the wrapper.
+  Uri _spreadHalfUrl(final int index) {
+    final existing = _spreadHalves[index];
+    if (existing != null) return Uri.parse(existing);
+
+    final item = _order[index];
+    final path = _canonicalOrThrow(item.name, 'reading order item');
+    final content = _files[path];
+    final raw = content is String ? content : '';
+    var prepared = sanitizeBookHtml(raw, policy: bookJavaScriptPolicy);
+    final fixed = _fixedPages[path];
+    if (fixed != null) {
+      prepared = injectFixedPageMarkers(prepared, presentation: fixed);
+    }
+    prepared = injectSpreadFrameGuard(prepared);
+    prepared = injectViewerAssets(
+      prepared,
+      cssUrl: _assetUrl('viewer.css'),
+      jsUrl: _assetUrl('viewer.js'),
+    );
+    if (containsMath(raw)) {
+      prepared = injectMathJax(prepared, scriptBase: _mathJaxBase);
+    }
+
+    return Uri.parse(
+      _spreadHalves[index] = _register(utf8.encode(prepared), 'text/html; charset=utf-8'),
+    );
+  }
 
   MapEntry<String, Object>? _lookupEntry(final String rawPath) => lookupBookFile(_files, rawPath);
 

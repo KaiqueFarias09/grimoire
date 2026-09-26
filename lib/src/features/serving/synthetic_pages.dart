@@ -1,6 +1,7 @@
 import 'package:unseal/unseal.dart' show PdfTextLine;
 
 import 'book_html_pipeline.dart';
+import 'fixed_layout.dart' show kSpreadGap;
 
 /// Synthetic wrapper page for comic (image-only) reading-order items.
 String syntheticComicPageHtml({
@@ -200,4 +201,363 @@ String _cssNumber(final double value) {
 
 String _escapeHtml(final String text) {
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+/// One visual half of a synthetic spread page.
+class SpreadHalf {
+  /// Creates a content half showing [url] at the declared page size.
+  const SpreadHalf.content({
+    required this.url,
+    required this.width,
+    required this.height,
+    required this.half,
+  }) : blank = false;
+
+  /// A blank filler half sized like [width]×[height].
+  const SpreadHalf.blank({required this.width, required this.height})
+    : url = '',
+      half = -1,
+      blank = true;
+
+  /// Served URL of the content half (empty for a blank filler).
+  final String url;
+
+  /// Declared page width of the half, in CSS px.
+  final int width;
+
+  /// Declared page height of the half, in CSS px.
+  final int height;
+
+  /// Content half index in spine order: 0 = first item of the pair,
+  /// 1 = second. Blank fillers use -1.
+  final int half;
+
+  /// Whether this half is a blank filler.
+  final bool blank;
+}
+
+/// The synthetic spread boot script: fits the two-half stage to the
+/// viewport with the active zoom mode, pans when zoomed, routes
+/// actions to the half iframes, relays inner-frame bridge messages to
+/// the top-frame channel, and turns pages from swipes and keys on the
+/// wrapper surface. Placeholders are replaced by
+/// [syntheticSpreadPageHtml] — the body is a template, not Dart
+/// interpolation, to keep the JavaScript braces readable.
+const String _spreadBootTemplate = '''
+(function () {
+  'use strict';
+  var stage = document.getElementById('elv-spread');
+  var stageWidth = __STAGE_WIDTH__;
+  var stageHeight = __STAGE_HEIGHT__;
+  var state = {
+    viewport: null,
+    zoomMode: 'fitPage',
+    customScale: 1,
+    rtl: false,
+    pan: { x: 0, y: 0 },
+    zoomed: false,
+  };
+
+  function post(message) {
+    if (window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('GrimoireBridge', message);
+      return;
+    }
+    if (window.GrimoireBridge && window.GrimoireBridge.postMessage) {
+      window.GrimoireBridge.postMessage(JSON.stringify(message));
+      return;
+    }
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(message, '*');
+    }
+  }
+
+  function frames() {
+    return [
+      stage.querySelector('[data-elv-half="0"]'),
+      stage.querySelector('[data-elv-half="1"]'),
+    ];
+  }
+
+  function forwardToHalf(half, message) {
+    var frame = frames()[half];
+    if (frame && frame.contentWindow && frame.contentWindow.__grimoire) {
+      try {
+        frame.contentWindow.__grimoire(message);
+        return true;
+      } catch (error) {}
+    }
+    return false;
+  }
+
+  function broadcast(message) {
+    var all = frames();
+    for (var i = 0; i < all.length; i++) {
+      forwardToHalf(i, message);
+    }
+  }
+
+  function applyRtl() {
+    stage.style.flexDirection = state.rtl ? 'row-reverse' : 'row';
+  }
+
+  function clampPan(pan, contentSize, viewSize, center) {
+    if (contentSize <= viewSize) {
+      return 0;
+    }
+    var lower = viewSize - contentSize - center;
+    var upper = -center;
+
+    return Math.max(lower, Math.min(upper, pan));
+  }
+
+  function applyTransform() {
+    var vw = (state.viewport && state.viewport.w) || window.innerWidth;
+    var vh = (state.viewport && state.viewport.h) || window.innerHeight;
+    if (!vw || !vh) {
+      return;
+    }
+    var base = Math.min(vw / stageWidth, vh / stageHeight);
+    var scale = base;
+    if (state.zoomMode === 'fitWidth') {
+      scale = vw / stageWidth;
+    } else if (state.zoomMode === 'oneToOne') {
+      scale = 1;
+    } else if (state.zoomMode === 'custom') {
+      scale = base * state.customScale;
+    }
+    if (!isFinite(scale) || scale <= 0) {
+      scale = base;
+    }
+    state.zoomed = scale > base + 0.001;
+    var centerX = (vw - stageWidth * scale) / 2;
+    var centerY = (vh - stageHeight * scale) / 2;
+    var panX = clampPan(state.pan.x, stageWidth * scale, vw, centerX);
+    var panY = clampPan(state.pan.y, stageHeight * scale, vh, centerY);
+    stage.style.transform =
+      'translate(' + (centerX + panX) + 'px, ' + (centerY + panY) + 'px) scale(' + scale + ')';
+    stage.style.transformOrigin = '0 0';
+    var all = frames();
+    for (var i = 0; i < all.length; i++) {
+      // Zoomed spreads pan instead of interacting: touches fall
+      // through the frames to the wrapper while zoomed.
+      all[i].style.pointerEvents = state.zoomed ? 'none' : 'auto';
+    }
+  }
+
+  function turn(forward) {
+    if (state.rtl) {
+      forward = !forward;
+    }
+    post({ type: 'pageTurn', forward: !!forward });
+  }
+
+  window.__grimoire = function (payload) {
+    var message;
+    try {
+      message = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    } catch (error) {
+      return;
+    }
+    if (!message || !message.action) {
+      return;
+    }
+    switch (message.action) {
+      case 'elvSpreadAll':
+        broadcast(message.message);
+        break;
+      case 'elvSpreadHalf':
+        forwardToHalf(message.half | 0, message.message);
+        break;
+      case 'setVars':
+        // The halves stage their own theme vars; the wrapper only
+        // paints the gap/filler background.
+        broadcast(message);
+        applyBackground(message.vars || {});
+        broadcast(message);
+        break;
+      case 'setPageProgression':
+        state.rtl = !!message.rtl;
+        applyRtl();
+        broadcast(message);
+        break;
+      case 'setViewport':
+        state.viewport = {
+          w: Number(message.width) || 0,
+          h: Number(message.height) || 0,
+        };
+        applyTransform();
+        break;
+      case 'setFixedLayout':
+        state.zoomMode = String(message.mode || 'fitPage');
+        state.customScale = Number(message.customScale) || 1;
+        state.pan.x = 0;
+        state.pan.y = 0;
+        applyTransform();
+        break;
+    }
+  };
+
+  function applyBackground(vars) {
+    var background = vars['--elv-bg'] || '';
+    if (background) {
+      document.body.style.backgroundColor = background;
+    }
+  }
+
+  // Inner-frame relay: pages served as spread halves post their bridge
+  // messages wrapped; anything shape-compatible is relayed upward.
+  window.addEventListener('message', function (event) {
+    var data = event.data;
+    if (!data || typeof data !== 'object') {
+      return;
+    }
+    if (data.__elvFrame === 1 && data.message) {
+      post(data.message);
+      return;
+    }
+    if (typeof data.type === 'string' && !data.action) {
+      post(data);
+    }
+  });
+
+  // Wrapper-surface gestures: swipe turns at fit scale, a single
+  // finger pans while zoomed (pages pass touches through then).
+  var gesture = { start: null, last: null, moved: false };
+  document.addEventListener(
+    'touchstart',
+    function (event) {
+      if (event.touches.length === 1) {
+        gesture.start = {
+          x: event.touches[0].clientX,
+          y: event.touches[0].clientY,
+        };
+        gesture.last = gesture.start;
+        gesture.moved = false;
+      } else {
+        gesture.start = null;
+        gesture.last = null;
+      }
+    },
+    { passive: true }
+  );
+  document.addEventListener(
+    'touchmove',
+    function (event) {
+      if (!gesture.start || event.touches.length !== 1) {
+        return;
+      }
+      var touch = event.touches[0];
+      var dx = touch.clientX - gesture.last.x;
+      var dy = touch.clientY - gesture.last.y;
+      if (state.zoomed && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+        gesture.moved = true;
+        state.pan.x += dx;
+        state.pan.y += dy;
+        applyTransform();
+      } else if (
+        Math.abs(touch.clientX - gesture.start.x) > 8 ||
+        Math.abs(touch.clientY - gesture.start.y) > 8
+      ) {
+        gesture.moved = true;
+      }
+      gesture.last = { x: touch.clientX, y: touch.clientY };
+    },
+    { passive: true }
+  );
+  document.addEventListener('touchend', function (event) {
+    var start = gesture.start;
+    gesture.start = null;
+    gesture.last = null;
+    if (!start || gesture.moved) {
+      return;
+    }
+    var touch = event.changedTouches[0];
+    var dx = touch.clientX - start.x;
+    var dy = touch.clientY - start.y;
+    var adx = Math.abs(dx);
+    var ady = Math.abs(dy);
+    if (Math.max(adx, ady) >= 64 && ady / Math.max(adx, ady) < 0.35) {
+      turn(dx < 0);
+    }
+  });
+
+  document.addEventListener('keydown', function (event) {
+    switch (event.key) {
+      case 'ArrowRight':
+        turn(true);
+        event.preventDefault();
+        break;
+      case 'ArrowLeft':
+        turn(false);
+        event.preventDefault();
+        break;
+      case 'PageDown':
+        turn(true);
+        event.preventDefault();
+        break;
+      case 'PageUp':
+        turn(false);
+        event.preventDefault();
+        break;
+    }
+  });
+
+  window.addEventListener('resize', function () {
+    applyTransform();
+  });
+
+  applyTransform();
+})();
+''';
+
+/// Synthetic spread wrapper for two fixed-layout pages (or one page
+/// plus a blank filler). The halves render at their natural declared
+/// size inside same-origin iframes; the wrapper scales the pair to the
+/// viewport with one transform, routes bridge actions to the halves
+/// and relays inner-frame bridge messages to the top-frame channel.
+String syntheticSpreadPageHtml({
+  required final List<SpreadHalf> halves,
+  required final int stageWidth,
+  required final int stageHeight,
+}) {
+  final buffer = StringBuffer();
+  for (final half in halves) {
+    if (half.blank) {
+      buffer.write(
+        '<div class="elv-spread-half elv-spread-blank" '
+        'style="width:${half.width}px;height:${half.height}px"></div>',
+      );
+    } else {
+      buffer.write(
+        '<iframe class="elv-spread-half" data-elv-half="${half.half}" '
+        'src="${_escapeHtml(half.url)}" '
+        'style="width:${half.width}px;height:${half.height}px" '
+        'scrolling="no"></iframe>',
+      );
+    }
+    if (!identical(half, halves.last)) {
+      buffer.write('<div class="elv-spread-gap"></div>');
+    }
+  }
+  final boot = _spreadBootTemplate
+      .replaceFirst('__STAGE_WIDTH__', '$stageWidth')
+      .replaceFirst('__STAGE_HEIGHT__', '$stageHeight');
+
+  return '<!DOCTYPE html><html><head><title></title>'
+      '<meta name="viewport" content="width=device-width, '
+      'initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>'
+      '<style>'
+      'html, body { margin: 0; padding: 0; overflow: hidden; '
+      'background: #3b3b3b; touch-action: none; }'
+      '#elv-spread { position: absolute; left: 0; top: 0; '
+      'display: flex; align-items: center; transform-origin: 0 0; }'
+      '.elv-spread-half { flex: none; border: 0; background: #fff; '
+      'display: block; }'
+      '.elv-spread-gap { flex: none; width: ${kSpreadGap.toStringAsFixed(0)}px; }'
+      '</style>'
+      '<script>$boot</script></head>'
+      '<body><div id="elv-spread" '
+      'data-elv-width="$stageWidth" data-elv-height="$stageHeight">'
+      '${buffer.toString()}</div></body></html>';
 }

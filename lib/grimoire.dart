@@ -82,6 +82,11 @@ export 'src/features/search/viewer_search.dart' show ViewerSearchResult, ViewerW
 export 'src/features/serving/book_content.dart' show BookJavaScriptPolicy;
 export 'src/features/settings/viewer_margins.dart' show ViewerMargins;
 export 'src/features/settings/viewer_settings.dart'
-    show BookPageCountMode, ViewerLayoutMode, ViewerFootnoteMode;
+    show
+        BookPageCountMode,
+        ViewerLayoutMode,
+        ViewerFootnoteMode,
+        FixedPageZoomMode,
+        ViewerFixedLayoutSettings;
 export 'src/features/settings/viewer_theme.dart' show ViewerTheme;
 export 'src/widgets/grimoire_view.dart' show GrimoireView;
