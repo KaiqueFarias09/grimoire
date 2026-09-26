@@ -144,50 +144,55 @@ const double kSpreadGap = 16;
 /// Whether the effective spread of the item at [index] permits pairing
 /// under [viewport]. `none` never pairs; `both` always pairs;
 /// `landscape`/`portrait` pair in a matching viewport orientation;
-/// `auto` is the reading-system choice — pair when the viewport is
-/// wider than tall and both pages fit side by side at a readable
-/// scale (see [kAutoSpreadReadableScale]). The auto readable check
-/// needs both declared viewports; pages without one never auto-pair.
+/// `auto` is the reading-system choice — permit in a landscape
+/// viewport; pages without a declared viewport only pair under an
+/// explicit `both`.
 bool fixedSpreadPermitsPairing(
   final Book book,
   final int index, {
   required final ({double width, double height})? viewport,
 }) {
-  if (book is! EpubBook || viewport == null) {
-    // Without a viewport the orientation and readability rules cannot
-    // be evaluated; only an explicit `both` declaration may pair.
-    return book is EpubBook && book.spreadForSpineIndex(index) == EpubSpread.both;
-  }
-  final epub = book;
-  switch (epub.spreadForSpineIndex(index)) {
+  if (book is! EpubBook) return false;
+
+  return _declarationPermits(book, index, viewport);
+}
+
+bool _declarationPermits(
+  final EpubBook book,
+  final int index,
+  final ({double width, double height})? viewport,
+) {
+  switch (book.spreadForSpineIndex(index)) {
     case EpubSpread.none:
       return false;
     case EpubSpread.both:
       return true;
     case EpubSpread.landscape:
-      return viewport.width > viewport.height;
+      return viewport != null && viewport.width > viewport.height;
     case EpubSpread.portrait:
-      return viewport.height > viewport.width;
+      return viewport != null && viewport.height > viewport.width;
     case EpubSpread.auto:
-      if (viewport.width <= viewport.height) return false;
-      return _autoPairIsReadable(epub, index, viewport);
+      // The reading system chooses; readable-scale pairing of the
+      // exact pair is checked separately (see [_pairIsReadable]).
+      return viewport != null && viewport.width > viewport.height;
   }
 }
 
-/// Whether both pages around the candidate pair fit side by side at a
-/// readable scale.
-bool _autoPairIsReadable(
+/// Whether the exact pair `[a, b]` fits side by side at a readable
+/// scale. Both pages must declare their viewports.
+bool _pairIsReadable(
   final EpubBook epub,
-  final int index,
+  final int a,
+  final int b,
   final ({double width, double height}) viewport,
 ) {
-  final a = epub.viewportForSpineIndex(index);
-  final b = epub.viewportForSpineIndex(index + 1);
-  if (a == null || b == null) return false;
+  final va = epub.viewportForSpineIndex(a);
+  final vb = epub.viewportForSpineIndex(b);
+  if (va == null || vb == null) return false;
 
-  final scale = (viewport.width / (a.width + b.width + kSpreadGap)).clamp(
+  final scale = (viewport.width / (va.width + vb.width + kSpreadGap)).clamp(
     0.0,
-    viewport.height / math.max(a.height, b.height),
+    viewport.height / math.max(va.height, vb.height),
   );
 
   return scale >= kAutoSpreadReadableScale;
@@ -221,12 +226,22 @@ Map<int, FixedPresentation> fixedPresentationsOf(
   bool declared(final int index) => placement(index) != null;
   bool bothDeclared(final int a, final int b) =>
       epub.viewportForSpineIndex(a) != null && epub.viewportForSpineIndex(b) != null;
-  bool permits(final int a, final int b) =>
-      bothDeclared(a, b) &&
-      fixedSpreadPermitsPairing(book, a, viewport: viewport) &&
-      fixedSpreadPermitsPairing(book, b, viewport: viewport);
+  bool permits(final int a, final int b) {
+    if (!bothDeclared(a, b)) return false;
+    if (!_declarationPermits(book, a, viewport)) return false;
+    if (!_declarationPermits(book, b, viewport)) return false;
+    // An `auto` participant only pairs when the exact pair fits at a
+    // readable scale; explicit declarations pair regardless.
+    final autoInvolved =
+        epub.spreadForSpineIndex(a) == EpubSpread.auto ||
+        epub.spreadForSpineIndex(b) == EpubSpread.auto;
+    if (!autoInvolved) return true;
+
+    return viewport != null && _pairIsReadable(epub, a, b, viewport);
+  }
+
   bool inSpreadContext(final int index) =>
-      fixedSpreadPermitsPairing(book, index, viewport: viewport);
+      _declarationPermits(book, index, viewport);
 
   final presentations = <int, FixedPresentation>{};
   void close(final int? left, final int? right) {
