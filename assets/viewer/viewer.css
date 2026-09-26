@@ -72,6 +72,13 @@ body.elv-facsimile {
   overflow: hidden;
 }
 
+/* Fixed-layout EPUB pages: the body itself is the stage (viewer.js
+   adds the class); the declared page box is scaled with a transform,
+   so the book's authored geometry and selectors stay intact. */
+body.elv-stage {
+  transform-origin: 0 0;
+}
+
 #elv-pdf-stage {
   position: relative;
   transform-origin: center center;

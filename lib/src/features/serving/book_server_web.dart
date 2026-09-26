@@ -53,6 +53,7 @@ class BookServer {
   final Set<String> _building = <String>{};
   List<ReadingOrderItem> _order = const <ReadingOrderItem>[];
   PdfBook? _pdfBook;
+  Map<String, FixedPagePresentation> _fixedPages = const <String, FixedPagePresentation>{};
   String? _pdfDocumentUrl;
   bool _started = false;
 
@@ -90,6 +91,7 @@ class BookServer {
     _started = true;
     _order = book.readingOrder;
     _pdfBook = book is PdfBook ? book : null;
+    _fixedPages = fixedPagePresentationOf(book);
     if (_pdfBook != null) {
       // The whole document crosses as one blob; pdf.js loads it
       // without range requests on the web.
@@ -176,6 +178,14 @@ class BookServer {
   String _prepareHtml(final String path, final String html) {
     var prepared = sanitizeBookHtml(html, policy: bookJavaScriptPolicy);
     prepared = rewriteHtmlResources(prepared, pagePath: path, resolve: _resolveOrNull);
+    // Fixed-layout EPUB pages carry their presentation marker so the
+    // viewer stages them instead of paginating. Runs before
+    // injectViewerAssets so the book's own viewport meta is stripped
+    // before the viewer device-width meta is injected.
+    final fixed = _fixedPages[path];
+    if (fixed != null) {
+      prepared = injectFixedPageMarkers(prepared, presentation: fixed);
+    }
     prepared = injectViewerAssets(
       prepared,
       cssUrl: _assetUrl('viewer.css'),

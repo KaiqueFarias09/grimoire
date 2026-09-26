@@ -8,4 +8,5 @@ library;
 export 'book_html_pipeline.dart';
 export 'book_javascript_policy.dart';
 export 'book_resource_resolution.dart';
+export 'fixed_layout.dart';
 export 'synthetic_pages.dart';

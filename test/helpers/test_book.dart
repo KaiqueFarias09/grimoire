@@ -156,3 +156,137 @@ PdfBook buildPdfTestBook({final bool withTextLayer = true}) {
     ],
   );
 }
+
+/// One spine item of [buildEpub3FixedLayoutTestBook].
+final class Epub3SpineItem {
+  /// Creates a spine item. Fixed items carry a
+  /// `rendition:layout-pre-paginated` override and an optional
+  /// declared viewport (also emitted as the XHTML `<meta name=
+  /// "viewport">`, like a real fixed page).
+  const Epub3SpineItem({
+    required this.path,
+    required this.body,
+    this.fixed = false,
+    this.viewportWidth,
+    this.viewportHeight,
+  });
+
+  /// Canonical path of the item (also its files.html key).
+  final String path;
+
+  /// Inner body markup of the document.
+  final String body;
+
+  /// Whether the item is pre-paginated.
+  final bool fixed;
+
+  /// Declared page width, or null for no viewport declaration.
+  final int? viewportWidth;
+
+  /// Declared page height, or null for no viewport declaration.
+  final int? viewportHeight;
+
+  /// The full XHTML document of the item.
+  String get content {
+    final viewportMeta = (fixed && viewportWidth != null && viewportHeight != null)
+        ? '<meta name="viewport" content="width=$viewportWidth, '
+              'height=$viewportHeight"/>'
+        : '';
+
+    return '<!DOCTYPE html><html><head><title>${path.split('/').last}</title>'
+        '$viewportMeta</head><body>$body</body></html>';
+  }
+}
+
+/// Builds a small in-memory EPUB 3 book whose spine mixes reflowable
+/// and fixed-layout items, mirroring what Unseal produces for a
+/// `rendition:layout-pre-paginated` publication: the package carries
+/// the rendition overrides and the book the per-document viewports.
+EpubBook buildEpub3FixedLayoutTestBook({
+  final List<Epub3SpineItem> items = const [
+    Epub3SpineItem(path: 'prose1.html', body: '<p>Reflowable prose one.</p>'),
+    Epub3SpineItem(
+      path: 'fixed1.html',
+      body: '<div class="page"><p>Fixed page one text.</p></div>',
+      fixed: true,
+      viewportWidth: 1000,
+      viewportHeight: 1400,
+    ),
+    Epub3SpineItem(path: 'prose2.html', body: '<p>Reflowable prose two.</p>'),
+  ],
+  final PageProgressionDirection pageProgressionDirection = PageProgressionDirection.unspecified,
+}) {
+  final metadata = Epub2Metadata(
+    rights: const [],
+    contributor: null,
+    creator: 'Test Author',
+    publisher: null,
+    title: 'Test EPUB 3 Fixed Layout',
+    date: '2024-01-01',
+    language: 'en',
+    subject: null,
+    description: null,
+    identifiers: const ['test-id-1'],
+    uniqueIdentifierValue: 'test-id-1',
+  );
+
+  final fixedItems = <String, EpubSpineRendition>{
+    for (final item in items)
+      if (item.fixed) item.path: const EpubSpineRendition(layout: EpubLayout.prePaginated),
+  };
+
+  return EpubBook(
+    navigation: Navigation(
+      title: 'Contents',
+      navPoints: [
+        for (var index = 0; index < items.length; index++)
+          NavPoint(
+            classAttribute: 'chapter',
+            id: 'toc$index',
+            playOrder: '${index + 1}',
+            label: 'Item $index',
+            content: items[index].path,
+          ),
+      ],
+    ),
+    files: Files(
+      images: const [],
+      css: const [],
+      html: [
+        for (final item in items)
+          TextFile(name: item.path, type: 'html', path: item.path, content: item.content),
+      ],
+      fonts: const [],
+      others: const [],
+    ),
+    cover: BinaryFile.empty(),
+    // The spine-resolved reading order and its manifest idrefs, as a
+    // real parse produces (the helper uses each path as the id).
+    spinePaths: [for (final item in items) item.path],
+    spineIdrefs: [for (final item in items) item.path],
+    contentViewports: {
+      for (final item in items)
+        if (item.viewportWidth != null && item.viewportHeight != null)
+          item.path: EpubViewport(width: item.viewportWidth!, height: item.viewportHeight!),
+    },
+    package: Epub3Package(
+      xmlns: null,
+      uniqueIdentifier: 'uid',
+      version: '3.0',
+      metadata: metadata,
+      manifest: Manifest(
+        items: [
+          for (final item in items)
+            ManifestItem(path: item.path, id: item.path, mediaType: 'application/xhtml+xml'),
+        ],
+      ),
+      spine: Spine(
+        tocId: null,
+        items: [for (final item in items) item.path],
+        pageProgressionDirection: pageProgressionDirection,
+      ),
+      tocId: null,
+      renditionSettings: EpubRendition(layout: EpubLayout.reflowable, spineItems: fixedItems),
+    ),
+  );
+}
