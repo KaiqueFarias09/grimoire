@@ -21,13 +21,26 @@ import 'book_content.dart';
 /// Calibre serves prepared books through its own URL scheme. Comic
 /// (image-only) reading order items get synthetic wrapper pages at
 /// `/__page__/<index>`.
+///
+/// The server holds content two ways. Without a `contentResolver` the
+/// book's files are snapshotted into memory at [start] (the classic
+/// fully-parsed path). With one, the snapshot keeps only the path
+/// inventory and every request resolves its content through the
+/// resolver — the progressive-session path, where content lives
+/// behind an on-demand loader.
 class BookServer {
   /// Creates a server for later [start]. [assetLoader] serves the
-  /// bundled viewer assets (injectable for tests).
+  /// bundled viewer assets (injectable for tests). [contentResolver]
+  /// switches the server from an in-memory content snapshot to
+  /// on-demand resolution: it receives a canonical book path and
+  /// completes with the file's `String` text (HTML/CSS) or
+  /// `Uint8List` bytes, or null when the entry does not exist.
   BookServer({
     this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     final Future<Uint8List> Function(String name)? assetLoader,
-  }) : _assetLoader = assetLoader ?? _rootBundleLoader;
+    final Future<Object?> Function(String path)? contentResolver,
+  }) : _assetLoader = assetLoader ?? _rootBundleLoader,
+       _contentResolver = contentResolver;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
@@ -37,6 +50,9 @@ class BookServer {
 
   final Future<Uint8List> Function(String name) _assetLoader;
 
+  /// On-demand content source; null serves from the [start] snapshot.
+  final Future<Object?> Function(String path)? _contentResolver;
+
   /// Controls JavaScript authored by book HTML. The default removes
   /// book scripts while leaving grimoire's injected viewer and
   /// bridge scripts functional.
@@ -44,6 +60,10 @@ class BookServer {
 
   HttpServer? _httpServer;
   final Map<String, Object> _files = <String, Object>{};
+  // Content requests dedupe per path: one in-flight fetch, every
+  // concurrent request for the same file shares its future.
+  final Map<String, Future<Object?>> _inFlightContent = <String, Future<Object?>>{};
+  bool _mathJaxNotified = false;
   final Map<String, Uint8List> _assets = <String, Uint8List>{};
   // The book is immutable after start() and the injected tags are
   // static, so each HTML page only needs one rewrite per server.
@@ -62,6 +82,14 @@ class BookServer {
   /// downloaded yet, or the book has no math), `/__mathjax__/`
   /// returns 404 and pages fall back to native MathML rendering.
   MathJaxSource? mathJaxSource;
+
+  /// Called once when a served page turns out to contain math while
+  /// the MathJax runtime is not downloaded yet. Only consulted in
+  /// resolver mode: without a resolver the controller pre-downloads
+  /// MathJax from the whole-book sniff at [start]. The injected
+  /// MathJax boot retries its script tag, so a download landing after
+  /// the page loaded still typesets.
+  void Function()? onMathPage;
 
   /// Where the downloaded pdf.js runtime lives. When null (not
   /// downloaded yet), `/__pdfjs__/` returns 404 and facsimile pages
@@ -85,7 +113,17 @@ class BookServer {
   /// Whether [start] ran and [stop] has not.
   bool get isRunning => _httpServer != null;
 
+  /// Whether content resolves on demand (a session is attached). The
+  /// loopback URL accessors stay synchronous here — the resolver runs
+  /// inside the request handlers.
+  bool get isResolverBacked => _contentResolver != null;
+
   /// Starts the server for [book] on an ephemeral loopback port.
+  ///
+  /// Without a content resolver the book's files are snapshotted
+  /// here; with one, the map keeps only the path inventory used to
+  /// canonicalize quirky request paths and every request resolves
+  /// through the resolver.
   Future<void> start(final Book book) async {
     if (_httpServer != null) throw StateError('BookServer already started.');
 
@@ -94,13 +132,20 @@ class BookServer {
     _fixedPages = fixedPagePresentationOf(book);
     _files
       ..clear()
-      ..addAll({
-        for (final file in book.files.html) file.path: file.content,
-        for (final file in book.files.css) file.path: file.content,
-        for (final file in book.files.images) file.path: file.content,
-        for (final file in book.files.fonts) file.path: file.content,
-        for (final file in book.files.others) file.path: file.content,
-      });
+      ..addAll(
+        _contentResolver == null
+            ? {
+                for (final file in book.files.html) file.path: file.content,
+                for (final file in book.files.css) file.path: file.content,
+                for (final file in book.files.images) file.path: file.content,
+                for (final file in book.files.fonts) file.path: file.content,
+                for (final file in book.files.others) file.path: file.content,
+              }
+            : {
+                for (final entry in book.archiveEntries) entry.path: entry.path,
+                for (final item in book.readingOrder) item.name: item.name,
+              },
+      );
 
     final handler = const shelf.Pipeline()
         .addMiddleware(shelf.logRequests(logger: _silentLogger))
@@ -186,13 +231,28 @@ class BookServer {
       if (path == '__pdfdoc__') return _servePdfDocument(request);
       if (path.startsWith('__pdfjs__/')) return _servePdfJs(path.substring('__pdfjs__/'.length));
       if (path.startsWith('book/')) {
-        return _serveBookFile(request, Uri.decodeComponent(path.substring('book/'.length)));
+        return await _serveBookFile(request, Uri.decodeComponent(path.substring('book/'.length)));
       }
 
       return shelf.Response.notFound('Unknown route: /$path');
     } catch (error) {
       return shelf.Response.internalServerError(body: '$error');
     }
+  }
+
+  /// URL of the reading-order item at [index], awaiting any content
+  /// work the platform variant needs (the loopback server resolves
+  /// content per request, so this mirrors [urlForItem]).
+  Future<Uri> urlForItemAsync(final int index) async => urlForItem(index);
+
+  /// Loopback URL of a book file path, mirroring [urlForPath] for the
+  /// shared async controller contract.
+  Future<Uri> urlForPathAsync(final String path) async => urlForPath(path);
+
+  /// URL of the synthetic spread wrapper, mirroring [urlForSpread]
+  /// for the shared async controller contract.
+  Future<Uri> urlForSpreadAsync({required final int? left, required final int? right}) async {
+    return urlForSpread(left: left, right: right);
   }
 
   shelf.Response _syntheticPage(final int? index) {
@@ -328,9 +388,17 @@ class BookServer {
     );
   }
 
-  shelf.Response _serveBookFile(final shelf.Request request, final String rawPath) {
+  Future<shelf.Response> _serveBookFile(final shelf.Request request, final String rawPath) async {
     final entry = _lookup(rawPath);
     if (entry == null) return shelf.Response.notFound('No book file: $rawPath');
+
+    final resolver = _contentResolver;
+    if (resolver != null) {
+      final content = await _resolveContent(entry.key);
+      if (content == null) return shelf.Response.notFound('No book file: $rawPath');
+
+      return _serveResolved(entry.key, request, content);
+    }
 
     final content = entry.value;
     if (content is String) {
@@ -350,6 +418,44 @@ class BookServer {
     }
     // Binary assets (audio, images): players seek with byte ranges.
     return _serveBinary(request, rawPath, content as Uint8List);
+  }
+
+  /// Serves one resolver-provided file: HTML goes through the rewrite
+  /// pipeline, other text keeps its charset header, binaries keep the
+  /// byte-range machinery.
+  shelf.Response _serveResolved(
+    final String key,
+    final shelf.Request request,
+    final Object content,
+  ) {
+    if (content is String) {
+      if (isHtmlName(key)) {
+        final asFrame = request.url.queryParameters['elvframe'] == '1';
+
+        return shelf.Response.ok(
+          _rewrittenPage(key, content, asFrame: asFrame),
+          headers: _htmlHeaders,
+        );
+      }
+
+      return shelf.Response.ok(content, headers: {'Content-Type': '${mimeOf(key)}; charset=utf-8'});
+    }
+
+    return _serveBinary(request, key, content as Uint8List);
+  }
+
+  /// Resolves one file through the content resolver, deduplicating
+  /// concurrent requests for the same path onto a single fetch.
+  Future<Object?> _resolveContent(final String path) {
+    final inFlight = _inFlightContent[path];
+    if (inFlight != null) return inFlight;
+
+    final future = _contentResolver!(path).whenComplete(() {
+      _inFlightContent.remove(path)?.ignore();
+    });
+    _inFlightContent[path] = future;
+
+    return future;
   }
 
   /// Rewritten HTML for a page, cached by canonical path so repeat
@@ -382,6 +488,14 @@ class BookServer {
       // Calibre's heuristic: only math pages pay for MathJax.
       if (containsMath(content)) {
         html = injectMathJax(html, scriptBase: '/__mathjax__');
+        if (_contentResolver != null && !_mathJaxNotified) {
+          // In resolver mode there is no whole-book sniff, so the
+          // controller downloads MathJax on the first math page. The
+          // injected boot retries its script tag once, covering the
+          // download window.
+          _mathJaxNotified = true;
+          onMathPage?.call();
+        }
       }
 
       return html;

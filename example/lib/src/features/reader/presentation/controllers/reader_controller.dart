@@ -162,29 +162,40 @@ class ReaderController extends Notifier<ReaderState> {
         return;
       }
       // The shelf holds metadata only: the full parse happens here,
-      // once per session, when the book is actually opened.
+      // once per session, when the book is actually opened. The
+      // reading path prefers a progressive BookSession (content loads
+      // on demand behind the viewer); formats without session support
+      // fall back to the fully-parsed viewer.
       final hadParsedBook = entry.book != null;
       final parseWatch = Stopwatch()..start();
-      final book = entry.book ??= await parseForReading(
-        entry,
-        password: repository.passwordOf(bookId) ?? '',
-      );
-      debugPrint(
-        'example-timing: parse${hadParsedBook ? ' (cached)' : ''} '
-        '${parseWatch.elapsedMilliseconds}ms',
-      );
+      final theme = viewerThemeFor(ref.read(readerSettingsControllerProvider).theme);
+      final session = hadParsedBook
+          ? null
+          : await openReadingSession(entry, password: repository.passwordOf(bookId) ?? '');
+      final ViewerController viewer;
+      if (session != null) {
+        debugPrint('example-timing: progressive session ${parseWatch.elapsedMilliseconds}ms');
+        viewer = ViewerController.session(session, theme: theme, fontFamily: 'Georgia');
+      } else {
+        final book = entry.book ??= await parseForReading(
+          entry,
+          password: repository.passwordOf(bookId) ?? '',
+        );
+        debugPrint(
+          'example-timing: parse${hadParsedBook ? ' (cached)' : ''} '
+          '${parseWatch.elapsedMilliseconds}ms',
+        );
+        viewer = ViewerController(book, theme: theme, fontFamily: 'Georgia');
+      }
       if (!ref.mounted) {
+        session?.dispose();
+        viewer.dispose();
         return;
       }
-      final viewer =
-          ViewerController(
-              book,
-              theme: viewerThemeFor(ref.read(readerSettingsControllerProvider).theme),
-              fontFamily: 'Georgia',
-            )
-            ..useHostChrome = true
-            ..mathJaxCachePath = cachePath
-            ..pdfJsCachePath = cachePath;
+      viewer
+        ..useHostChrome = true
+        ..mathJaxCachePath = cachePath
+        ..pdfJsCachePath = cachePath;
       _viewer = viewer;
       _pageSub = viewer.pageChanges.listen((final change) {
         if (!ref.mounted) {
@@ -214,7 +225,7 @@ class ReaderController extends Notifier<ReaderState> {
           state = state.copyWith(chromeVisible: !state.chromeVisible);
         }
       });
-      if (book is PdfBook) {
+      if (viewer.book is PdfBook) {
         // Encrypted PDF: pdf.js asks through the controller; the
         // stored password answers the first ask, the user the rest.
         viewer.onPdfPassword = (final failedAttempts) => _passwordFor(repository, failedAttempts);

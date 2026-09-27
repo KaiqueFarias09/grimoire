@@ -408,3 +408,23 @@ Future<Book> parseForReading(final LoadedBook entry, {final String? password}) {
 
   return Unseal.readFile(entry.fixture.asset, password: password ?? '');
 }
+
+/// Opens the progressive reading session behind a shelf entry, or null
+/// when the format has no session support and the caller should fall
+/// back to [parseForReading] (the fully-parsed reading path). The
+/// shelf/metadata path stays on `readMetadata`; passwords flow through
+/// exactly as in the full parse.
+Future<BookSession?> openReadingSession(final LoadedBook entry, {final String? password}) async {
+  try {
+    if (entry.fixture.isBundled) {
+      final data = await rootBundle.load(entry.fixture.asset);
+      final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
+
+      return await BookSession.open(bytes, password: password ?? '');
+    }
+
+    return await BookSession.openFile(entry.fixture.asset, password: password ?? '');
+  } on SessionUnsupportedFormatException {
+    return null;
+  }
+}

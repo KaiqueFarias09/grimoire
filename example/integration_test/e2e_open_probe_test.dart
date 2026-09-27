@@ -53,6 +53,9 @@ const _transitionCount = 3;
 
 const _pathDefine = String.fromEnvironment('E2E_OPEN_BOOK_PATH');
 const _assetDefine = String.fromEnvironment('E2E_OPEN_BOOK_ASSET');
+/// `session` opens through the progressive BookSession path; anything
+/// else keeps the Unseal.read full-materialization baseline.
+const _modeDefine = String.fromEnvironment('E2E_OPEN_BOOK_MODE');
 
 /// The configured asset key, honoring both the --dart-define (works on
 /// devices and web) and the host env var (desktop).
@@ -94,13 +97,22 @@ Future<void> main() async {
     // --- open (t_open) ---
     final rssBeforeOpen = currentRssBytes();
     final openWatch = Stopwatch()..start();
-    final book = await Unseal.read(bytes);
+    final Book book;
+    BookSession? session;
+    if (_modeDefine == 'session') {
+      session = await BookSession.open(bytes);
+      book = session.book;
+    } else {
+      book = await Unseal.read(bytes);
+    }
     openWatch.stop();
     final parseMs = openWatch.elapsedMilliseconds;
     final rssAfterOpen = currentRssBytes();
 
     // --- mount -> first position report AFTER layout ---
-    final controller = ViewerController(book);
+    final controller = session == null
+        ? ViewerController(book)
+        : ViewerController.session(session);
     final events = PageChangeQueue()..attach(controller);
     addTearDown(() async {
       await events.dispose();

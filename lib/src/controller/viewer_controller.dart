@@ -38,7 +38,7 @@ class ViewerController extends ChangeNotifier
     implements NavigationHost, PageMeasurementHost, ViewerExportSource {
   /// Creates a controller for [book].
   ViewerController(
-    this.book, {
+    final Book book, {
     final ViewerTheme theme = ViewerTheme.light,
     final int fontSizePx = 17,
     final int marginsPx = 20,
@@ -47,11 +47,87 @@ class ViewerController extends ChangeNotifier
     final String? fontFamily,
     final bool justify = false,
     final bool hyphenate = false,
-    this.onExternalLink,
-    this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
+    final void Function(String href)? onExternalLink,
+    final BookJavaScriptPolicy bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     final ViewerEngineFactory? engineFactory,
     final MathJaxLoader? mathJaxLoader,
     final PdfJsLoader? pdfJsLoader,
+  }) : this._(
+         book,
+         null,
+         theme: theme,
+         fontSizePx: fontSizePx,
+         marginsPx: marginsPx,
+         layoutMode: layoutMode,
+         columnsPerScreen: columnsPerScreen,
+         fontFamily: fontFamily,
+         justify: justify,
+         hyphenate: hyphenate,
+         onExternalLink: onExternalLink,
+         bookJavaScriptPolicy: bookJavaScriptPolicy,
+         engineFactory: engineFactory,
+         mathJaxLoader: mathJaxLoader,
+         pdfJsLoader: pdfJsLoader,
+       );
+
+  /// Creates a controller over a progressive [BookSession].
+  ///
+  /// The controller reads structure from `session.book` (the header:
+  /// real [EpubBook]/[ComicBook] with empty files) and loads all
+  /// content on demand through the session: the book server resolves
+  /// files through it, progression, search and book-level CFIs run
+  /// inside it, and [dispose] ends the session. Formats without
+  /// session support never reach here — hosts fall back to the
+  /// fully-parsed constructor.
+  ViewerController.session(
+    final BookSession session, {
+    final ViewerTheme theme = ViewerTheme.light,
+    final int fontSizePx = 17,
+    final int marginsPx = 20,
+    final ViewerLayoutMode layoutMode = ViewerLayoutMode.paged,
+    final int columnsPerScreen = 0,
+    final String? fontFamily,
+    final bool justify = false,
+    final bool hyphenate = false,
+    final void Function(String href)? onExternalLink,
+    final BookJavaScriptPolicy bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
+    final ViewerEngineFactory? engineFactory,
+    final MathJaxLoader? mathJaxLoader,
+    final PdfJsLoader? pdfJsLoader,
+  }) : this._(
+         session.book,
+         session,
+         theme: theme,
+         fontSizePx: fontSizePx,
+         marginsPx: marginsPx,
+         layoutMode: layoutMode,
+         columnsPerScreen: columnsPerScreen,
+         fontFamily: fontFamily,
+         justify: justify,
+         hyphenate: hyphenate,
+         onExternalLink: onExternalLink,
+         bookJavaScriptPolicy: bookJavaScriptPolicy,
+         engineFactory: engineFactory,
+         mathJaxLoader: mathJaxLoader,
+         pdfJsLoader: pdfJsLoader,
+       );
+
+  ViewerController._(
+    this.book,
+    this._session, {
+    required final ViewerTheme theme,
+    required final int fontSizePx,
+    required final int marginsPx,
+    required final ViewerLayoutMode layoutMode,
+    required final int columnsPerScreen,
+    required final String? fontFamily,
+    required final bool justify,
+    required final bool hyphenate,
+    required this.onExternalLink,
+    required this.bookJavaScriptPolicy,
+    required final ViewerEngineFactory? engineFactory,
+    required final MathJaxLoader? mathJaxLoader,
+    required final PdfJsLoader? pdfJsLoader,
   }) : _theme = theme,
        _fontSizePx = fontSizePx,
        _margins = ViewerMargins.uniform(marginsPx),
@@ -74,13 +150,24 @@ class ViewerController extends ChangeNotifier
     );
     _annotations = AnnotationController(overlay: _ViewerAnnotationOverlay(this))
       ..addListener(notifyListeners);
-    readingProgression = BookProgression.of(book);
+    _initProgression();
     _buildChapterTitles();
     _subscription = bridge.events.listen(_onEvent);
   }
 
-  /// The parsed book being read.
+  /// The parsed book being read. With a session this is the session
+  /// header: complete structure with no content files — content is
+  /// served through the session, never from `book.files`.
   final Book book;
+
+  /// The progressive session behind this controller, or null when the
+  /// controller was built from a fully parsed [Book].
+  final BookSession? _session;
+
+  /// The progressive session backing this reader, or null for the
+  /// fully-parsed path. Narration passes its `loadDocumentSource`
+  /// to the media-overlay catalog and hosts can branch on it.
+  BookSession? get session => _session;
 
   @override
   String? get bookTitle => book.metadata.title;
@@ -101,8 +188,43 @@ class ViewerController extends ChangeNotifier
   /// app decides how to open it.
   void Function(String href)? onExternalLink;
 
-  /// Per-book canonical text progression.
-  late final BookProgression readingProgression;
+  /// Per-book canonical text progression. Fully measured at
+  /// construction on the parsed-book path; with a session it starts
+  /// empty (progress reads 0) and fills when the background
+  /// `computeProgression` completes.
+  BookProgression readingProgression = BookProgression.fromSectionLengths(const <int>[]);
+
+  /// Whether the session's background progression measurement has
+  /// landed; progress reads 0 before that.
+  bool _progressionReady = false;
+
+  /// Measures progression synchronously for a parsed book, or in the
+  /// background through the session.
+  void _initProgression() {
+    final session = _session;
+    if (session == null) {
+      readingProgression = BookProgression.of(book);
+      _progressionReady = true;
+
+      return;
+    }
+    readingProgression = BookProgression.fromSectionLengths(<int>[
+      for (var index = 0; index < book.readingOrder.length; index++) 0,
+    ]);
+    unawaited(
+      session.computeProgression().then(
+        (final progression) {
+          readingProgression = progression;
+          _progressionReady = true;
+          if (!_disposed) notifyListeners();
+        },
+        onError: (final Object error) {
+          // Session closed or cancelled before measuring: progress
+          // stays at 0 and nothing else depends on the measurement.
+        },
+      ),
+    );
+  }
 
   final ViewerEngineFactory _engineFactory;
   StreamSubscription<ViewerEvent>? _subscription;
@@ -239,6 +361,10 @@ class ViewerController extends ChangeNotifier
 
       return (_position.fileIndex / count).clamp(0.0, 1.0).toDouble();
     }
+
+    // With a session the character measurement arrives after the
+    // first paint; report 0 instead of an empty-progression guess.
+    if (_session != null && !_progressionReady) return 0;
 
     return readingProgression.fractionOf(
       sectionIndex: _position.fileIndex,
@@ -749,19 +875,60 @@ class ViewerController extends ChangeNotifier
   }
 
   /// Resolves a footnote href to its (raw html, plain text) body, or
-  /// null when the target cannot be found.
+  /// null when the target cannot be found. Reads the target document
+  /// from the parsed book's snapshot; the session path is
+  /// [_resolveFootnoteAsync].
   (String, String)? _resolveFootnote(final String href) {
-    final parts = href.split('#');
-    final path = parts[0];
-    final fragment = parts.length > 1 ? parts[1] : '';
-    if (path.isEmpty || fragment.isEmpty) {
+    final (path, fragment) = _splitFootnoteHref(href);
+    if (path == null || fragment == null) {
       return null;
     }
     final fileIndex = _navigation.resolveRelativePath(path);
     if (fileIndex == null) {
       return null;
     }
-    final content = _htmlByPath[book.readingOrder[fileIndex].name];
+
+    return _footnoteBody(_htmlByPath[book.readingOrder[fileIndex].name], fragment);
+  }
+
+  /// Session twin of [_resolveFootnote]: fetches the target document
+  /// through the session before the anchor extraction runs. A
+  /// synchronous signature is not preserved here because the content
+  /// is not resident; the popup event handler awaits this variant.
+  Future<(String, String)?> _resolveFootnoteAsync(final String href) async {
+    final (path, fragment) = _splitFootnoteHref(href);
+    if (path == null || fragment == null) {
+      return null;
+    }
+    final fileIndex = _navigation.resolveRelativePath(path);
+    final session = _session;
+    if (fileIndex == null || session == null) {
+      return null;
+    }
+    String? content;
+    try {
+      content = await session.loadDocumentSource(book.readingOrder[fileIndex].name);
+    } on UnsealException {
+      return null;
+    }
+
+    return _footnoteBody(content, fragment);
+  }
+
+  static (String?, String?) _splitFootnoteHref(final String href) {
+    final parts = href.split('#');
+    final path = parts[0];
+    final fragment = parts.length > 1 ? parts[1] : '';
+    if (path.isEmpty || fragment.isEmpty) {
+      return (null, null);
+    }
+
+    return (path, fragment);
+  }
+
+  /// Extracts the (raw html, plain text) footnote body carrying the
+  /// anchor [fragment], or null when it cannot be found.
+  (String, String)? _footnoteBody(final String? content, final String fragment) {
     if (content == null) {
       return null;
     }
@@ -773,6 +940,7 @@ class ViewerController extends ChangeNotifier
     if (text.isEmpty) {
       return null;
     }
+
     return (element, text);
   }
 
@@ -844,10 +1012,19 @@ class ViewerController extends ChangeNotifier
       _pdfReadingMode = PdfReadingMode.facsimile;
     }
 
-    final server = BookServer(bookJavaScriptPolicy: bookJavaScriptPolicy);
+    final server = BookServer(
+      bookJavaScriptPolicy: bookJavaScriptPolicy,
+      contentResolver: _session == null ? null : _resolveBookContent,
+    );
     await server.start(book);
     _server = server;
-    if (_mathJaxEnabled &&
+    if (_session != null) {
+      // Resolver mode has no whole-book content to sniff: MathJax
+      // downloads when the first served page contains math.
+      server.onMathPage = () {
+        if (_mathJaxEnabled) unawaited(_ensureMathJax());
+      };
+    } else if (_mathJaxEnabled &&
         book.files.html.any((final f) => f.content.toLowerCase().contains('<math'))) {
       // Nothing downloads unless a book actually has math.
       unawaited(_ensureMathJax());
@@ -866,9 +1043,21 @@ class ViewerController extends ChangeNotifier
     _navigation.prepareInitial(0);
     _refreshFixedPresentations();
     final activeSlot = _navigation.activeSlot;
-    debugPrint('🔌 Loading URL: ${_loadUriFor(server, 0)}');
-    await _engines[activeSlot].loadUrl(_loadUriFor(server, 0));
+    final initialUri = await _loadUriFor(server, 0);
+    debugPrint('🔌 Loading URL: $initialUri');
+    await _engines[activeSlot].loadUrl(initialUri);
     debugPrint('🔌 URL loaded on engine $activeSlot');
+  }
+
+  /// The session-backed content resolver handed to the book server:
+  /// HTML and CSS resolve as decoded text, everything else as bytes.
+  Future<Object?> _resolveBookContent(final String path) {
+    final session = _session!;
+    if (isHtmlName(path) || path.toLowerCase().endsWith('.css')) {
+      return session.loadDocumentSource(path);
+    }
+
+    return session.loadResource(path);
   }
 
   @mustCallSuper
@@ -892,6 +1081,7 @@ class ViewerController extends ChangeNotifier
       unawaited(engine.dispose());
     }
     unawaited(_server?.stop());
+    _session?.dispose();
     super.dispose();
   }
 
@@ -971,6 +1161,8 @@ class ViewerController extends ChangeNotifier
     if (selection == null || selection.text.isEmpty) {
       return null;
     }
+    await documentTextForAsync(selection.fileIndex);
+
     return _annotations.addHighlight(
       selection: selection,
       before: _contextAround(selection.fileIndex, selection.start, before: true),
@@ -979,13 +1171,24 @@ class ViewerController extends ChangeNotifier
       color: color,
       decoration: decoration,
       note: note,
-      cfi: _highlightCfi(selection.fileIndex, selection.start),
+      cfi: await _highlightCfi(selection.fileIndex, selection.start),
     );
   }
 
   /// Dual-write: every highlight serializes its EPUB CFI alongside the
-  /// char offsets (interop with Calibre/Readium tooling).
-  String? _highlightCfi(final int fileIndex, final int start) {
+  /// char offsets (interop with Calibre/Readium tooling). With a
+  /// session the projection runs in the session worker
+  /// (`buildCfi`); otherwise the file-local document is parsed
+  /// inline.
+  Future<String?> _highlightCfi(final int fileIndex, final int start) async {
+    final session = _session;
+    if (session != null) {
+      try {
+        return await session.buildCfi(contentIndex: fileIndex, offsetInText: start);
+      } on Object {
+        return null;
+      }
+    }
     final doc = _cfiDocFor(fileIndex);
     if (doc == null) return null;
     try {
@@ -1028,11 +1231,18 @@ class ViewerController extends ChangeNotifier
   }
 
   /// Plain text per reading-order index, extracted once (the book is
-  /// immutable after construction).
+  /// immutable after construction). With a session the map fills from
+  /// `loadDocumentText` as files are asked for: the sync read answers
+  /// with an empty placeholder and the fetch backfills the cache.
   final Map<int, String> _documentTextByFile = <int, String>{};
 
+  /// Session text fetches in flight, deduplicated per reading-order
+  /// index.
+  final Map<int, Future<void>> _documentTextLoads = <int, Future<void>>{};
+
   /// Raw HTML per file path, built on first use ([search] and footnote
-  /// resolution map hrefs through it).
+  /// resolution map hrefs through it). Empty with a session, which is
+  /// why those paths route through the session instead.
   Map<String, String>? _htmlByPathCache;
 
   String _contextAround(final int fileIndex, final int offset, {required final bool before}) {
@@ -1050,14 +1260,84 @@ class ViewerController extends ChangeNotifier
       return '';
     }
     return _documentTextByFile.putIfAbsent(fileIndex, () {
+      final session = _session;
+      if (session != null) {
+        // The header book carries no content: answer empty now and
+        // let the session fetch backfill the cache.
+        unawaited(_fetchDocumentText(fileIndex, session));
+
+        return '';
+      }
       final name = book.readingOrder[fileIndex].name;
       for (final file in book.files.html) {
         if (file.path == name) {
           return documentTextOf(file);
         }
       }
+
       return '';
     });
+  }
+
+  /// Loads [fileIndex]'s canonical text through the session into
+  /// [documentTextFor]'s cache, deduplicating concurrent fetches. A
+  /// null answer is an authoritative miss (the entry does not exist)
+  /// and caches as empty; the empty placeholder from the sync read is
+  /// always overwritten by a successful fetch.
+  Future<void> _fetchDocumentText(final int fileIndex, final BookSession session) async {
+    final inFlight = _documentTextLoads[fileIndex];
+    if (inFlight != null) {
+      await inFlight;
+
+      return;
+    }
+    final future = _loadDocumentText(fileIndex, session);
+    _documentTextLoads[fileIndex] = future;
+    try {
+      await future;
+    } finally {
+      // Already awaited above; dropping the map entry must not read
+      // as discarding an unobserved future.
+      _documentTextLoads.remove(fileIndex)?.ignore();
+    }
+  }
+
+  Future<void> _loadDocumentText(final int fileIndex, final BookSession session) async {
+    String? text;
+    try {
+      text = await session.loadDocumentText(book.readingOrder[fileIndex].name);
+    } on UnsealException {
+      // Session closed or cancelled mid-fetch: the placeholder stays.
+      return;
+    }
+    if (text == null) {
+      _documentTextByFile[fileIndex] = '';
+
+      return;
+    }
+    _documentTextByFile[fileIndex] = text;
+    if (!_disposed) notifyListeners();
+  }
+
+  /// The canonical text of [fileIndex], awaiting the session fetch
+  /// when the synchronous cache has not filled yet. Narration and
+  /// callers that must not depend on warm-up timing use this over
+  /// [documentTextFor].
+  Future<String> documentTextForAsync(final int fileIndex) async {
+    if (fileIndex < 0 || fileIndex >= book.readingOrder.length) {
+      return '';
+    }
+    final cached = _documentTextByFile[fileIndex];
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+    final session = _session;
+    if (session == null) {
+      return _documentTextOf(fileIndex);
+    }
+    await _fetchDocumentText(fileIndex, session);
+
+    return _documentTextByFile[fileIndex] ?? '';
   }
 
   /// Raw HTML per file path (lazily built; the book is immutable).
@@ -1066,7 +1346,11 @@ class ViewerController extends ChangeNotifier
   };
 
   /// The canonical character space of [fileIndex]'s content, or ''
-  /// when the file is not HTML. Narration segments against this.
+  /// when the file is not HTML. Narration segments against this. With
+  /// a session the text arrives through
+  /// [documentTextForAsync]'s fetch; hosts and narration that need
+  /// the text immediately after a navigation should prefer the async
+  /// accessor.
   String documentTextFor(final int fileIndex) => _documentTextOf(fileIndex);
 
   /// Lazy-downloads the MathJax cache and wires it into the book
@@ -1170,13 +1454,30 @@ class ViewerController extends ChangeNotifier
 
   /// The loopback URL serving the book file at [path] (audio,
   /// images), or null before [start]. Narration players stream
-  /// overlay audio from here.
+  /// overlay audio from here. Null on the web when a session is
+  /// attached: blob URLs are built asynchronously there — use
+  /// [bookServerUrlForAsync] when the caller can await.
   String? bookServerUrlFor(final String path) {
     final server = _server;
     if (server == null) {
       return null;
     }
+    if (server.isResolverBacked && kIsWeb) {
+      return null;
+    }
+
     return server.urlForPath(path).toString();
+  }
+
+  /// Async twin of [bookServerUrlFor]: resolves the served URL of
+  /// [path] even when the platform builds URLs from on-demand content.
+  Future<String?> bookServerUrlForAsync(final String path) async {
+    final server = _server;
+    if (server == null) {
+      return null;
+    }
+
+    return (await server.urlForPathAsync(path)).toString();
   }
 
   final Map<String, Completer<int>> _fragmentRequests = <String, Completer<int>>{};
@@ -1222,25 +1523,38 @@ class ViewerController extends ChangeNotifier
       _searchResults = results;
       _searchMarkersByFile = const <int, List<(int, int)>>{};
       notifyListeners();
+
       return results;
     }
-    final htmlByPath = _htmlByPath;
-    final textBySection = <String, String>{};
+    // With a session the matching runs in the session worker over the
+    // resident content; the inline path scans the parsed book here.
+    // Both share the document-text offset space, so the mapping below
+    // is identical.
+    final SearchResults searchResults;
+    if (_session != null) {
+      searchResults = await _session.search(
+        query,
+        mode: mode,
+        isCaseSensitive: caseSensitive,
+        nearChars: nearChars,
+        maxMatches: 500,
+      );
+    } else {
+      searchResults = book.search(
+        query,
+        mode: mode,
+        isCaseSensitive: caseSensitive,
+        nearChars: nearChars,
+        maxMatches: 500,
+      );
+    }
+    final textBySection = <String, Future<String>>{};
     final markersByFile = <int, List<(int, int)>>{};
-    for (final match
-        in book
-            .search(
-              query,
-              mode: mode,
-              isCaseSensitive: caseSensitive,
-              nearChars: nearChars,
-              maxMatches: 500,
-            )
-            .matches) {
+    for (final match in searchResults.matches) {
       // Extract each section's text at most once per search.
-      final text = textBySection.putIfAbsent(
+      final text = await textBySection.putIfAbsent(
         match.sectionName,
-        () => DocumentTextScanner(htmlByPath[match.sectionName] ?? '').scan(),
+        () => _canonicalTextOf(match.sectionName),
       );
       results.add(
         ViewerSearchResult(
@@ -1261,7 +1575,24 @@ class ViewerController extends ChangeNotifier
     if (_started) {
       await _applySearchMarkersToEngine(_navigation.activeSlot, _position.fileIndex);
     }
+
     return results;
+  }
+
+  /// Canonical text of one section path: with a session it loads
+  /// through `loadDocumentText`; otherwise it scans the resident
+  /// HTML.
+  Future<String> _canonicalTextOf(final String path) async {
+    final session = _session;
+    if (session != null) {
+      try {
+        return await session.loadDocumentText(path) ?? '';
+      } on UnsealException {
+        return '';
+      }
+    }
+
+    return DocumentTextScanner(_htmlByPath[path] ?? '').scan();
   }
 
   /// Clears the current search results, page markers and selection.
@@ -1693,17 +2024,19 @@ class ViewerController extends ChangeNotifier
     if (server == null || slot < 0 || slot >= _engines.length) {
       return;
     }
-    await _engines[slot].loadUrl(_loadUriFor(server, fileIndex));
+    await _engines[slot].loadUrl(await _loadUriFor(server, fileIndex));
   }
 
   /// The URL presenting [fileIndex]: its spread wrapper when the item
   /// pairs (or carries a declared side placement), otherwise the item
   /// page. Both halves of a pair resolve to the same wrapper, so a
-  /// locator pointing into either half restores the whole spread.
-  Uri _loadUriFor(final BookServer server, final int fileIndex) {
+  /// locator pointing into either half restores the whole spread. The
+  /// async variants cover the web resolver path, where the URL only
+  /// exists after the content arrives.
+  Future<Uri> _loadUriFor(final BookServer server, final int fileIndex) async {
     final presentation = _fixedPresentations[fileIndex];
     if (presentation == null || !presentation.isSpread) {
-      return server.urlForItem(fileIndex);
+      return server.urlForItemAsync(fileIndex);
     }
     final pairItem = presentation.pairItem;
     final int? left = presentation.blankLeft ? null : presentation.item;
@@ -1711,7 +2044,7 @@ class ViewerController extends ChangeNotifier
         ? null
         : (pairItem ?? (presentation.blankLeft ? presentation.item : null));
 
-    return server.urlForSpread(left: left, right: right);
+    return server.urlForSpreadAsync(left: left, right: right);
   }
 
   @override
@@ -1726,6 +2059,21 @@ class ViewerController extends ChangeNotifier
     _position = ViewerPosition(fileIndex: fileIndex, charOffset: 0);
     notifyListeners();
     _schedulePreload();
+    _warmSessionContent(fileIndex);
+  }
+
+  /// Warms the session-backed caches for the file the reader just
+  /// activated: canonical text (TTS segments against it right after a
+  /// chapter swap) and the CFI document (position CFIs and highlight
+  /// projections read it). No-ops without a session; both fetches
+  /// swallow session lifecycle errors internally.
+  void _warmSessionContent(final int fileIndex) {
+    final session = _session;
+    if (session == null) {
+      return;
+    }
+    unawaited(_fetchDocumentText(fileIndex, session));
+    unawaited(_sessionCfiDocFor(fileIndex));
   }
 
   @override
@@ -1836,7 +2184,9 @@ class ViewerController extends ChangeNotifier
       case final FootnoteTapEvent footnote:
         if (event.source == _navigation.activeSlot) {
           if (_footnoteMode == ViewerFootnoteMode.popup) {
-            final content = _resolveFootnote(footnote.href);
+            final content = _session != null
+                ? await _resolveFootnoteAsync(footnote.href)
+                : _resolveFootnote(footnote.href);
             if (content != null) {
               _footnoteTaps.add(
                 FootnoteTapEvent(
@@ -2015,16 +2365,19 @@ class ViewerController extends ChangeNotifier
     return (math.max(1, page).toInt(), math.max(1, total), allMeasured);
   }
 
+  /// Length of the cached canonical text of [fileIndex] without
+  /// triggering a session fetch: estimates must not pull content for
+  /// every unmeasured file.
+  int _cachedTextLengthOf(final int fileIndex) => _documentTextByFile[fileIndex]?.length ?? 0;
+
   int _estimatePagesFor(final int fileIndex) {
     final measuredColumns = _pageMeasurement.columns;
-    final chars = _documentTextOf(fileIndex).length;
+    final chars = _cachedTextLengthOf(fileIndex);
+    final currentChars = _cachedTextLengthOf(_position.fileIndex);
     final density = currentPageIsMeasured
-        ? math.max(
-            1,
-            _documentTextOf(_position.fileIndex).length /
-                math.max(1, measuredColumns[_position.fileIndex]!),
-          )
+        ? math.max(1.0, currentChars / math.max(1, measuredColumns[_position.fileIndex]!))
         : 1500.0;
+
     return chars <= 0 ? 1 : math.max(1, (chars / density).ceil());
   }
 
@@ -2055,10 +2408,19 @@ class ViewerController extends ChangeNotifier
   Future<void> loadPageForMeasurement(final int fileIndex) async {
     _ensureMeasureEngine();
     final engine = _measureEngine;
-    if (engine == null) {
+    final server = _server;
+    if (engine == null || server == null) {
       return;
     }
-    await engine.loadUrl(_server!.urlForItem(fileIndex));
+    // The loopback URL needs no content work, so it stays on the sync
+    // path; only the web resolver variant must await its blob.
+    final url = server.isResolverBacked
+        ? await server.urlForItemAsync(fileIndex)
+        : server.urlForItem(fileIndex);
+    if (_disposed || !engine.isCreated) {
+      return;
+    }
+    await engine.loadUrl(url);
   }
 
   void _onEngineMessage(final Object message, final int source) {
@@ -2070,8 +2432,21 @@ class ViewerController extends ChangeNotifier
 
   final Map<int, EpubCfiDocument?> _cfiDocs = <int, EpubCfiDocument?>{};
 
+  /// Session-loaded CFI documents. Only successes memoize: the
+  /// contract forbids persisting negative lookups against a session,
+  /// where content arrives on demand.
+  final Map<int, EpubCfiDocument> _sessionCfiDocs = <int, EpubCfiDocument>{};
+
+  /// Session CFI-document loads in flight, deduplicated per index.
+  final Map<int, Future<EpubCfiDocument?>> _sessionCfiDocLoads = <int, Future<EpubCfiDocument?>>{};
+
   EpubCfiDocument? _cfiDocFor(final int fileIndex) {
     if (book is! EpubBook) return null;
+    if (_session != null) {
+      // The header book has no content to parse: the answer may
+      // still be in flight from the session.
+      return _sessionCfiDocs[fileIndex];
+    }
     if (_cfiDocs.containsKey(fileIndex)) return _cfiDocs[fileIndex];
     final name = book.readingOrder[fileIndex].name;
     TextFile? file;
@@ -2089,11 +2464,61 @@ class ViewerController extends ChangeNotifier
     return doc;
   }
 
+  /// Loads and parses [fileIndex]'s document through the session for
+  /// file-local CFI work. Hits memoize in [_sessionCfiDocs]; misses
+  /// never persist, so a later call retries the load.
+  Future<EpubCfiDocument?> _sessionCfiDocFor(final int fileIndex) async {
+    final cached = _sessionCfiDocs[fileIndex];
+    if (cached != null) return cached;
+    final session = _session;
+    if (session == null || book is! EpubBook) return null;
+    if (fileIndex < 0 || fileIndex >= book.readingOrder.length) return null;
+
+    final inFlight = _sessionCfiDocLoads[fileIndex];
+    if (inFlight != null) return inFlight;
+    final future = _loadSessionCfiDoc(fileIndex, session).whenComplete(() {
+      // The removed value is itself a future: a bare `=> map.remove`
+      // would hand it back to whenComplete and deadlock on itself.
+      _sessionCfiDocLoads.remove(fileIndex)?.ignore();
+    });
+    _sessionCfiDocLoads[fileIndex] = future;
+
+    return future;
+  }
+
+  Future<EpubCfiDocument?> _loadSessionCfiDoc(
+    final int fileIndex,
+    final BookSession session,
+  ) async {
+    String? source;
+    try {
+      source = await session.loadDocumentSource(book.readingOrder[fileIndex].name);
+    } on UnsealException {
+      // Session closed or cancelled mid-load: nothing memoized, the
+      // next call retries.
+      return null;
+    }
+    if (source == null) return null;
+
+    final doc = EpubCfiDocument.parse(source);
+    _sessionCfiDocs[fileIndex] = doc;
+
+    return doc;
+  }
+
   /// CFI of the current reading position (dual-write alongside
-  /// [TextLocator]; both address the same characters).
+  /// [TextLocator]; both address the same characters). With a session
+  /// the current document's CFI parse is loaded in the background; a
+  /// read before it lands returns null and the next read resolves.
   String? get positionCfi {
     final doc = _cfiDocFor(_position.fileIndex);
-    if (doc == null) return null;
+    if (doc == null) {
+      if (_session != null) {
+        unawaited(_sessionCfiDocFor(_position.fileIndex));
+      }
+
+      return null;
+    }
     try {
       return doc.cfiForOffset(_position.charOffset).encode();
     } on Object {
@@ -2104,10 +2529,12 @@ class ViewerController extends ChangeNotifier
   /// Jumps to a CFI in the current book. Book-level CFIs
   /// (`epubcfi(/6/N!/…)`, the deep-link/interop form) carry their spine
   /// item, so they resolve directly against the book and parse only the
-  /// target document. File-local CFIs (the viewer's own single-segment
-  /// output, no `!` step) try the current file first, then the remaining
-  /// ones in reading order. Returns false when the CFI cannot be
-  /// resolved.
+  /// target document — through the session when one is attached, with
+  /// a fall-through to the file-local scan when the session cannot
+  /// resolve it. File-local CFIs (the viewer's own single-segment
+  /// output, no `!` step) try the current file first, then the
+  /// remaining ones in reading order. Returns false when the CFI
+  /// cannot be resolved.
   Future<bool> goToCfi(final String cfi) async {
     final parsed = EpubCfi.tryParse(cfi);
     if (parsed == null) {
@@ -2116,22 +2543,29 @@ class ViewerController extends ChangeNotifier
     if (book is EpubBook && parsed.start.segments.length > 1) {
       // The spine step names its file: one document parse, no scan. A
       // range CFI resolves both boundaries inside the same section.
-      final location = (book as EpubBook).resolveCfi(parsed);
+      final location = _session != null
+          ? await _loadSessionCfiLocation(cfi)
+          : (book as EpubBook).resolveCfi(parsed);
       final startOffset = location?.charOffset;
-      if (location == null || startOffset == null) {
+      if (location != null && startOffset != null) {
+        final endOffset = location.endCharOffset;
+        final intent = endOffset == null
+            ? NavigationIntent(offset: startOffset)
+            : NavigationIntent(selection: (startOffset, endOffset));
+        await _navigation.jumpTo(
+          currentFileIndex: _position.fileIndex,
+          currentOffset: _position.charOffset,
+          fileIndex: location.contentIndex,
+          intent: intent,
+        );
+
+        return true;
+      }
+      if (_session == null) {
         return false;
       }
-      final endOffset = location.endCharOffset;
-      final intent = endOffset == null
-          ? NavigationIntent(offset: startOffset)
-          : NavigationIntent(selection: (startOffset, endOffset));
-      await _navigation.jumpTo(
-        currentFileIndex: _position.fileIndex,
-        currentOffset: _position.charOffset,
-        fileIndex: location.contentIndex,
-        intent: intent,
-      );
-      return true;
+      // Session resolution failed: fall through to the file-local
+      // scan, which loads candidate documents on demand.
     }
     // Find the file whose text space contains it: the current file
     // first (a CFI usually targets where the reader is), then the
@@ -2146,7 +2580,7 @@ class ViewerController extends ChangeNotifier
       if (!book.readingOrder[fileIndex].isHtml) {
         continue;
       }
-      final doc = _cfiDocFor(fileIndex);
+      final doc = _session != null ? await _sessionCfiDocFor(fileIndex) : _cfiDocFor(fileIndex);
       if (doc == null) {
         continue;
       }
@@ -2158,10 +2592,22 @@ class ViewerController extends ChangeNotifier
           fileIndex: fileIndex,
           intent: NavigationIntent(offset: offset),
         );
+
         return true;
       }
     }
+
     return false;
+  }
+
+  /// Resolves a book-level CFI through the session. Malformed or
+  /// unresolving CFIs complete with null.
+  Future<EpubCfiLocation?> _loadSessionCfiLocation(final String cfi) async {
+    try {
+      return await _session!.resolveCfi(cfi);
+    } on UnsealException {
+      return null;
+    }
   }
 
   /// Next reading-order section (chapter), Calibre's next_section.
