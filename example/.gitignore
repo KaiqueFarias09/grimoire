@@ -50,3 +50,6 @@ app.*.map.json
 /assets/books/large-fxl.epub
 /assets/books/large-cbz.cbz
 unseal_worker.js
+mahabharata.epub
+unseal_worker.js.deps
+unseal_worker.js.map
