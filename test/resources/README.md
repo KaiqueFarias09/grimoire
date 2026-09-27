@@ -28,8 +28,8 @@ second hand-written version of the parser fixtures.
 | ODT | `books/odt/synthetic.odt` | 783 | `f98fad84d827126788c712c4ee606e75204d809edcbb65f0f22a547e9e559ac3` |
 | EPUB (fixed) | `books/epub/page-blanche.epub` | 3,136,922 | `d2efb562f17d43cef50578d4d67dd7fd991f8f254b6f5a7c28bde7461ea783eb` |
 | EPUB (fixed) | `books/epub/fxl-xhtml-viewport.epub` | 2,625 | `d9a4e4f04a2d4b876a716101df517f1e5b6a8b571e1c3f656278a26716e69372` |
-| EPUB (fixed) | `books/epub/fxl-spread-hints.epub` | 3,541 | `a836ec02ea0ab3d46bc8fed6884ed827c03b13ee2b5b3df2a547f5d84bdd4ac7` |
-| EPUB (fixed) | `books/epub/fxl-spread-portrait.epub` | 3,067 | `7c519a964022b921e22390f5fa22bba075ff4f27eb9cf3aee5aafe9ff9962235` |
+| EPUB (fixed) | `books/epub/fxl-spread-hints.epub` | 3,562 | `6cadbe50fd322786a9101f578c6483e3dca6bef92b8edaeb3ac6b12cabbfa217` |
+| EPUB (fixed) | `books/epub/fxl-spread-portrait.epub` | 3,088 | `d513e3a9b75268c25575f04ca0c0c04b11032564f36350cdc4974fcde453f9af` |
 | EPUB (fixed) | `books/epub/fxl-rtl.epub` | 3,119 | `be96d64f7d99b10c53ac9f14b2f8b4f651bc72a80a18213e7654ad32f2135128` |
 | EPUB (fixed) | `books/epub/fxl-orientation.epub` | 2,641 | `a40d17e3d0821bbdfce3db0c0ad21dfee964bffcfc2d23d0cef9a3d84497fac4` |
 | EPUB (fixed) | `books/epub/fxl-mixed-fixed-override.epub` | 2,968 | `b67f0bf41d948c99b7b1017d16b6252f817a03082f5b87105c3c9215cc9e2bdb` |
