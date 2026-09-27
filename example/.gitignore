@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated large-book bench fixtures (unseal tool/generate_large_*),
+# copied in locally for integration_test/e2e_open_probe_test.dart.
+/assets/books/large-reflowable.epub
+/assets/books/large-fxl.epub
+/assets/books/large-cbz.cbz
