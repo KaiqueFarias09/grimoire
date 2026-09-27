@@ -5,10 +5,10 @@
 import 'dart:typed_data';
 
 /// Null on the web; `--dart-define` configuration still works there.
-String? openProbeEnv(final String key) => null;
+String? openProbeEnv(String key) => null;
 
 /// Unsupported on the web; use the bundled asset instead.
-Uint8List readBookFile(final String path) =>
+Uint8List readBookFile(String path) =>
     throw UnsupportedError('E2E_OPEN_BOOK_PATH requires a native target');
 
 /// Null on the web: RSS sampling is a native-only signal.

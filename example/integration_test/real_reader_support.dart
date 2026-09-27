@@ -75,4 +75,4 @@ int nextHtmlIndex(Book book, int current) {
 }
 
 /// The number of renderable HTML sections in [book]'s reading order.
-int htmlSectionCount(Book book) => book.readingOrder.where((final item) => item.isHtml).length;
+int htmlSectionCount(Book book) => book.readingOrder.where((item) => item.isHtml).length;
