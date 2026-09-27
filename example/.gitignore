@@ -49,3 +49,4 @@ app.*.map.json
 /assets/books/large-reflowable.epub
 /assets/books/large-fxl.epub
 /assets/books/large-cbz.cbz
+unseal_worker.js
