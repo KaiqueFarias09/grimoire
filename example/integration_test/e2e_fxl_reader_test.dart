@@ -20,7 +20,6 @@
 //       --driver=test_driver/e2e_scenario_driver.dart \
 //       --target=integration_test/e2e_fxl_reader_test.dart
 
-
 import 'package:flutter/material.dart';
 
 import 'package:flutter/scheduler.dart';
@@ -39,16 +38,17 @@ void main() {
   final frameTimings = <FrameTiming>[];
   SchedulerBinding.instance.addTimingsCallback(frameTimings.addAll);
 
-  testWidgets('fxl reader: staged milestones and repeated page turns',
-      (tester) async {
+  testWidgets('fxl reader: staged milestones and repeated page turns', (tester) async {
     final bytes = (await rootBundle.load(_asset)).buffer.asUint8List();
 
     final parseWatch = Stopwatch()..start();
     final book = await Unseal.read(bytes);
     parseWatch.stop();
     // ignore: avoid_print
-    print('e2e-fxl: parse ${parseWatch.elapsedMilliseconds}ms '
-        '(spine ${book.readingOrder.length})');
+    print(
+      'e2e-fxl: parse ${parseWatch.elapsedMilliseconds}ms '
+      '(spine ${book.readingOrder.length})',
+    );
 
     final controller = ViewerController(book);
     final changes = <ViewerPageChange>[];
@@ -61,11 +61,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: GrimoireView(
-            book: book,
-            controller: controller,
-            showShell: false,
-          ),
+          body: GrimoireView(book: book, controller: controller, showShell: false),
         ),
       ),
     );
@@ -79,16 +75,17 @@ void main() {
     }
     if (first == null) throw StateError('no first page report within 90s');
     // ignore: avoid_print
-    print('e2e-fxl: controller ${openWatch.elapsedMilliseconds}ms '
-        '(first page report · file ${first.position.fileIndex} · '
-        'column ${first.position.column}/${first.position.columns})');
+    print(
+      'e2e-fxl: controller ${openWatch.elapsedMilliseconds}ms '
+      '(first page report · file ${first.position.fileIndex} · '
+      'column ${first.position.column}/${first.position.columns})',
+    );
 
     final turnMs = <int>[];
     for (var turn = 1; turn <= _pageTurns; turn++) {
       final forward = turn <= _pageTurns ~/ 2;
       final previous = controller.position.fileIndex;
-      final expected =
-          (previous + (forward ? 1 : -1)).clamp(0, book.readingOrder.length - 1);
+      final expected = (previous + (forward ? 1 : -1)).clamp(0, book.readingOrder.length - 1);
       final watch = Stopwatch()..start();
       if (forward) {
         await controller.nextChapter();
@@ -110,28 +107,33 @@ void main() {
       watch.stop();
       turnMs.add(watch.elapsedMilliseconds);
       // ignore: avoid_print
-      print('e2e-fxl: turn $turn ${watch.elapsedMilliseconds}ms '
-          'file ${controller.position.fileIndex} '
-          '(${forward ? 'forward' : 'back'})');
+      print(
+        'e2e-fxl: turn $turn ${watch.elapsedMilliseconds}ms '
+        'file ${controller.position.fileIndex} '
+        '(${forward ? 'forward' : 'back'})',
+      );
     }
 
     final sorted = List<int>.from(turnMs)..sort();
     // ignore: avoid_print
-    print('e2e-fxl: turns median ${sorted[sorted.length ~/ 2]}ms '
-        'max ${sorted.last}ms');
+    print(
+      'e2e-fxl: turns median ${sorted[sorted.length ~/ 2]}ms '
+      'max ${sorted.last}ms',
+    );
 
     // Let the last page settle, then summarize frame timings observed
     // during the whole run (turns included).
     await Future<void>.delayed(const Duration(milliseconds: 500));
     if (frameTimings.isNotEmpty) {
-      final total = frameTimings.map((t) => t.totalSpan.inMicroseconds).toList()
-        ..sort();
+      final total = frameTimings.map((t) => t.totalSpan.inMicroseconds).toList()..sort();
       final jank = total.where((m) => m > 16667).length;
       // ignore: avoid_print
-      print('e2e-fxl: frames n=${total.length} '
-          'jank=$jank (${(100 * jank ~/ total.length)}%) '
-          'p90=${total[(total.length * 0.9).floor()]}us '
-          'worst=${total.last}us');
+      print(
+        'e2e-fxl: frames n=${total.length} '
+        'jank=$jank (${(100 * jank ~/ total.length)}%) '
+        'p90=${total[(total.length * 0.9).floor()]}us '
+        'worst=${total.last}us',
+      );
     }
     // ignore: avoid_print
     print('e2e-fxl: done');

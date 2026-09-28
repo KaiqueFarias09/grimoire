@@ -17,6 +17,7 @@ import '../features/pdf/pdf_reading_mode.dart';
 import '../features/pdfjs/pdfjs_loader.dart';
 import '../features/rendering/api/viewer_engine.dart';
 import '../features/rendering/composition/viewer_engine_selector.dart';
+import '../features/search/search_generation.dart';
 import '../features/search/viewer_search.dart';
 import '../features/serving/book_content.dart';
 import '../features/serving/book_server.dart';
@@ -1498,6 +1499,7 @@ class ViewerController extends ChangeNotifier
 
   // --- search ---
 
+  final SearchGeneration _searchGeneration = SearchGeneration();
   Map<int, List<(int, int)>> _searchMarkersByFile = const <int, List<(int, int)>>{};
 
   /// Searches [query] across the book.
@@ -1518,6 +1520,7 @@ class ViewerController extends ChangeNotifier
     final bool caseSensitive = false,
     final int nearChars = 60,
   }) async {
+    final generation = _searchGeneration.begin();
     final results = <ViewerSearchResult>[];
     if (query.trim().isEmpty) {
       _searchResults = results;
@@ -1569,10 +1572,14 @@ class ViewerController extends ChangeNotifier
         break;
       }
     }
-    _searchResults = results;
-    _searchMarkersByFile = markersByFile;
+    final published = _searchGeneration.commitIfCurrent(generation, () {
+      _searchResults = results;
+      _searchMarkersByFile = markersByFile;
+    });
+    if (!published) return results;
+
     notifyListeners();
-    if (_started) {
+    if (_started && _searchGeneration.isCurrent(generation)) {
       await _applySearchMarkersToEngine(_navigation.activeSlot, _position.fileIndex);
     }
 
@@ -1597,6 +1604,7 @@ class ViewerController extends ChangeNotifier
 
   /// Clears the current search results, page markers and selection.
   Future<void> clearSearch() async {
+    _searchGeneration.begin();
     _searchResults = const <ViewerSearchResult>[];
     _searchMarkersByFile = const <int, List<(int, int)>>{};
     notifyListeners();

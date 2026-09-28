@@ -329,20 +329,16 @@ class BookServer {
     final path = _canonicalOrThrow(item.name, 'reading order item');
     final content = _files[path];
     final raw = content is String ? content : '';
-    var prepared = sanitizeBookHtml(raw, policy: bookJavaScriptPolicy);
-    final fixed = _fixedPages[path];
-    if (fixed != null) {
-      prepared = injectFixedPageMarkers(prepared, presentation: fixed);
-    }
-    prepared = injectSpreadFrameGuard(prepared);
-    prepared = injectViewerAssets(
-      prepared,
+    final prepared = prepareSpreadHalfHtml(
+      raw,
+      pagePath: path,
+      resolve: _resolveOrNull,
       cssUrl: _assetUrl('viewer.css'),
       jsUrl: _assetUrl('viewer.js'),
+      policy: bookJavaScriptPolicy,
+      fixedPage: _fixedPages[path],
+      mathJaxScriptBase: containsMath(raw) ? _mathJaxBase : null,
     );
-    if (containsMath(raw)) {
-      prepared = injectMathJax(prepared, scriptBase: _mathJaxBase);
-    }
 
     return _spreadHalves[index] = _register(utf8.encode(prepared), 'text/html; charset=utf-8');
   }
@@ -357,23 +353,14 @@ class BookServer {
     final path = _lookupEntry(item.name)?.key;
     final content = path == null ? null : await _resolveContent(path);
     final raw = content is String ? content : '';
-    var prepared = sanitizeBookHtml(raw, policy: bookJavaScriptPolicy);
-    if (path != null) {
-      final fixed = _fixedPages[path];
-      if (fixed != null) {
-        prepared = injectFixedPageMarkers(prepared, presentation: fixed);
-      }
-    }
-    prepared = injectSpreadFrameGuard(prepared);
-    prepared = injectViewerAssets(
-      prepared,
-      cssUrl: _assetUrl('viewer.css'),
-      jsUrl: _assetUrl('viewer.js'),
-    );
-    if (containsMath(raw)) {
-      prepared = injectMathJax(prepared, scriptBase: _mathJaxBase);
-      _notifyMathPage();
-    }
+    final prepared = path == null
+        ? finishBookHtmlForViewer(
+            raw,
+            cssUrl: _assetUrl('viewer.css'),
+            jsUrl: _assetUrl('viewer.js'),
+            asSpreadFrame: true,
+          )
+        : await _prepareHtmlAsync(path, raw, <String>{path}, asSpreadFrame: true);
 
     return _spreadHalves[index] = _register(utf8.encode(prepared), 'text/html; charset=utf-8');
   }
@@ -419,27 +406,16 @@ class BookServer {
   }
 
   String _prepareHtml(final String path, final String html) {
-    var prepared = sanitizeBookHtml(html, policy: bookJavaScriptPolicy);
-    prepared = rewriteHtmlResources(prepared, pagePath: path, resolve: _resolveOrNull);
-    // Fixed-layout EPUB pages carry their presentation marker so the
-    // viewer stages them instead of paginating. Runs before
-    // injectViewerAssets so the book's own viewport meta is stripped
-    // before the viewer device-width meta is injected.
-    final fixed = _fixedPages[path];
-    if (fixed != null) {
-      prepared = injectFixedPageMarkers(prepared, presentation: fixed);
-    }
-    prepared = injectViewerAssets(
-      prepared,
+    return prepareBookHtmlForViewer(
+      html,
+      pagePath: path,
+      resolve: _resolveOrNull,
       cssUrl: _assetUrl('viewer.css'),
       jsUrl: _assetUrl('viewer.js'),
+      policy: bookJavaScriptPolicy,
+      fixedPage: _fixedPages[path],
+      mathJaxScriptBase: containsMath(html) ? _mathJaxBase : null,
     );
-    // Calibre's heuristic: only math pages pay for MathJax.
-    if (containsMath(html)) {
-      prepared = injectMathJax(prepared, scriptBase: _mathJaxBase);
-    }
-
-    return prepared;
   }
 
   String _prepareTextAsset(final String path, final String text) {
@@ -523,8 +499,9 @@ class BookServer {
   Future<String> _prepareHtmlAsync(
     final String path,
     final String html,
-    final Set<String> active,
-  ) async {
+    final Set<String> active, {
+    final bool asSpreadFrame = false,
+  }) async {
     var prepared = sanitizeBookHtml(html, policy: bookJavaScriptPolicy);
     prepared = await _withResolvedResources(
       prepared,
@@ -534,26 +511,17 @@ class BookServer {
         return rewriteHtmlResources(source, pagePath: path, resolve: resolve);
       },
     );
-    // Fixed-layout EPUB pages carry their presentation marker so the
-    // viewer stages them instead of paginating. Runs before
-    // injectViewerAssets so the book's own viewport meta is stripped
-    // before the viewer device-width meta is injected.
-    final fixed = _fixedPages[path];
-    if (fixed != null) {
-      prepared = injectFixedPageMarkers(prepared, presentation: fixed);
-    }
-    prepared = injectViewerAssets(
+    final hasMath = containsMath(html);
+    if (hasMath) _notifyMathPage();
+
+    return finishBookHtmlForViewer(
       prepared,
       cssUrl: _assetUrl('viewer.css'),
       jsUrl: _assetUrl('viewer.js'),
+      fixedPage: _fixedPages[path],
+      asSpreadFrame: asSpreadFrame,
+      mathJaxScriptBase: hasMath ? _mathJaxBase : null,
     );
-    // Calibre's heuristic: only math pages pay for MathJax.
-    if (containsMath(html)) {
-      prepared = injectMathJax(prepared, scriptBase: _mathJaxBase);
-      _notifyMathPage();
-    }
-
-    return prepared;
   }
 
   Future<String> _prepareTextAssetAsync(

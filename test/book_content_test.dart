@@ -82,7 +82,7 @@ void main() {
   });
 
   group('rewriteHtmlResources', () {
-    String? resolve(final String path) => 'blob:https://x/$path';
+    String? resolve(String path) => 'blob:https://x/$path';
 
     test('rewrites resource attributes to absolute URLs', () {
       final html = rewriteHtmlResources(
@@ -111,7 +111,7 @@ void main() {
         '<img src="https://cdn/x.png"/><img src="data:image/png;base64,AA"/>'
         '<img src="missing.png"/>',
         pagePath: 'ch1.xhtml',
-        resolve: (final path) => path == 'missing.png' ? null : 'blob:$path',
+        resolve: (path) => path == 'missing.png' ? null : 'blob:$path',
       );
       expect(html, contains('src="https://cdn/x.png"'));
       expect(html, contains('src="data:image/png;base64,AA"'));
@@ -149,7 +149,7 @@ void main() {
   });
 
   group('rewriteCssResources', () {
-    String? resolve(final String path) => 'blob:https://x/$path';
+    String? resolve(String path) => 'blob:https://x/$path';
 
     test('rewrites quoted and bare url() references', () {
       final css = rewriteCssResources(
@@ -173,6 +173,33 @@ void main() {
   });
 
   group('injections', () {
+    test('spread half rewrites page resources before creating a blob document', () {
+      const html =
+          '<html><head><meta name="viewport" content="width=800,height=1200">'
+          '<link rel="stylesheet" href="../Styles/page.css"></head>'
+          '<body><img src="../Images/page.png"/></body></html>';
+
+      final prepared = prepareSpreadHalfHtml(
+        html,
+        pagePath: 'OEBPS/Text/page.xhtml',
+        resolve: (path) => 'blob:$path',
+        cssUrl: 'blob:viewer.css',
+        jsUrl: 'blob:viewer.js',
+        policy: BookJavaScriptPolicy.disabled,
+        fixedPage: const FixedPagePresentation(viewportWidth: 800, viewportHeight: 1200),
+        mathJaxScriptBase: null,
+      );
+
+      expect(prepared, contains('href="blob:OEBPS/Styles/page.css"'));
+      expect(prepared, contains('src="blob:OEBPS/Images/page.png"'));
+      expect(prepared, contains('class="elv-fixed"'));
+      expect(prepared, contains('data-elv-page="800×1200"'));
+      expect(prepared, contains('name="viewport" content="width=device-width'));
+      expect(prepared, isNot(contains('content="width=800,height=1200"')));
+      expect(prepared, contains('__elvFrame'));
+      expect(prepared, contains('src="blob:viewer.js"'));
+    });
+
     test('injectViewerAssets falls back to a synthesized head', () {
       final out = injectViewerAssets('<p>no head</p>', cssUrl: 'blob:css', jsUrl: 'blob:js');
       expect(out, startsWith('<!DOCTYPE html>'));

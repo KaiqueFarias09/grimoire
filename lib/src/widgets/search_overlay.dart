@@ -30,13 +30,17 @@ class SearchOverlay extends StatefulWidget {
 }
 
 class _SearchOverlayState extends State<SearchOverlay> {
+  static const _searchDebounceDelay = Duration(milliseconds: 250);
+
   final TextEditingController _field = TextEditingController();
   final FocusNode _focus = FocusNode();
   Future<List<ViewerSearchResult>>? _future;
+  Timer? _searchDebounce;
   SearchMode _mode = SearchMode.contains;
   bool _caseSensitive = false;
   String? _error;
   String _lastQuery = '';
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -48,29 +52,58 @@ class _SearchOverlayState extends State<SearchOverlay> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _field.dispose();
     _focus.dispose();
     super.dispose();
   }
 
+  void _scheduleSearch() {
+    _searchDebounce?.cancel();
+    _searchDebounce = null;
+    final hadSearch = _future != null;
+    ++_searchGeneration;
+    _lastQuery = '';
+    setState(() {
+      _future = null;
+      _error = null;
+    });
+    if (_field.text.length < 3) {
+      if (hadSearch) {
+        unawaited(widget.controller.clearSearch());
+      }
+      return;
+    }
+
+    _searchDebounce = Timer(_searchDebounceDelay, () {
+      _searchDebounce = null;
+      if (mounted) {
+        _runSearch();
+      }
+    });
+  }
+
   void _runSearch() {
+    _searchDebounce?.cancel();
+    _searchDebounce = null;
     final query = _field.text;
     final fingerprint = '$query|$_mode|$_caseSensitive';
     if (query.trim().isEmpty || fingerprint == _lastQuery) {
       return;
     }
     _lastQuery = fingerprint;
+    final generation = ++_searchGeneration;
     setState(() {
       _error = null;
-      _future = _search(query);
+      _future = _search(query, generation);
     });
   }
 
-  Future<List<ViewerSearchResult>> _search(final String query) async {
+  Future<List<ViewerSearchResult>> _search(final String query, final int generation) async {
     try {
       return await widget.controller.search(query, mode: _mode, caseSensitive: _caseSensitive);
     } on FormatException catch (error) {
-      if (mounted) {
+      if (mounted && generation == _searchGeneration) {
         setState(() => _error = error.message);
       }
 
@@ -120,11 +153,7 @@ class _SearchOverlayState extends State<SearchOverlay> {
                         border: InputBorder.none,
                       ),
                       onSubmitted: (final _) => _runSearch(),
-                      onChanged: (final _) {
-                        if (_field.text.length >= 3) {
-                          _runSearch();
-                        }
-                      },
+                      onChanged: (final _) => _scheduleSearch(),
                     ),
                   ),
                   _ModePicker(mode: _mode, onSelected: _setMode),

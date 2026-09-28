@@ -617,6 +617,80 @@ String injectSpreadFrameGuard(final String html) {
   return injectIntoHead(html, guard);
 }
 
+/// Prepares one book HTML page for a viewer URL, resolving its relative
+/// resources before injecting the viewer assets. [asSpreadFrame] routes the
+/// page bridge through a synthetic spread wrapper.
+String prepareBookHtmlForViewer(
+  final String html, {
+  required final String pagePath,
+  required final String? Function(String bookPath) resolve,
+  required final String cssUrl,
+  required final String jsUrl,
+  final BookJavaScriptPolicy policy = BookJavaScriptPolicy.disabled,
+  final FixedPagePresentation? fixedPage,
+  final bool asSpreadFrame = false,
+  final String? mathJaxScriptBase,
+}) {
+  var prepared = sanitizeBookHtml(html, policy: policy);
+  prepared = rewriteHtmlResources(prepared, pagePath: pagePath, resolve: resolve);
+
+  return finishBookHtmlForViewer(
+    prepared,
+    cssUrl: cssUrl,
+    jsUrl: jsUrl,
+    fixedPage: fixedPage,
+    asSpreadFrame: asSpreadFrame,
+    mathJaxScriptBase: mathJaxScriptBase,
+  );
+}
+
+/// Adds the viewer shell to already sanitized and resource-rewritten HTML.
+/// This is shared by the synchronous and asynchronous web serving paths.
+String finishBookHtmlForViewer(
+  final String html, {
+  required final String cssUrl,
+  required final String jsUrl,
+  final FixedPagePresentation? fixedPage,
+  final bool asSpreadFrame = false,
+  final String? mathJaxScriptBase,
+}) {
+  var prepared = html;
+  if (fixedPage != null) {
+    prepared = injectFixedPageMarkers(prepared, presentation: fixedPage);
+  }
+  if (asSpreadFrame) {
+    prepared = injectSpreadFrameGuard(prepared);
+  }
+  prepared = injectViewerAssets(prepared, cssUrl: cssUrl, jsUrl: jsUrl);
+  if (mathJaxScriptBase != null) {
+    prepared = injectMathJax(prepared, scriptBase: mathJaxScriptBase);
+  }
+
+  return prepared;
+}
+
+/// Prepares the fixed-layout half displayed inside a synthetic spread.
+String prepareSpreadHalfHtml(
+  final String html, {
+  required final String pagePath,
+  required final String? Function(String bookPath) resolve,
+  required final String cssUrl,
+  required final String jsUrl,
+  required final FixedPagePresentation? fixedPage,
+  required final String? mathJaxScriptBase,
+  final BookJavaScriptPolicy policy = BookJavaScriptPolicy.disabled,
+}) => prepareBookHtmlForViewer(
+  html,
+  pagePath: pagePath,
+  resolve: resolve,
+  cssUrl: cssUrl,
+  jsUrl: jsUrl,
+  policy: policy,
+  fixedPage: fixedPage,
+  asSpreadFrame: true,
+  mathJaxScriptBase: mathJaxScriptBase,
+);
+
 /// Matches a `<meta>` tag carrying `name="viewport"` in any attribute
 /// order, quoted or bare.
 final RegExp _viewportMetaPattern = RegExp(

@@ -106,6 +106,29 @@ cp build/integration_open_probe.json \
   /Volumes/SSD/Projects/bench-artifacts/<date>/open-device/open-$(date +%H%M%S).json
 ```
 
+The end-to-end time to the first visible page is `parseMs +
+firstPostLayoutReportMs` **within each run**. Summarize these per-run
+totals; adding two independent medians can give a different result.
+
+On macOS, capture peak RSS separately. The JSON's RSS deltas are snapshots,
+not a peak. From `example/`, wrap each drive command with the package's
+sampler; use a unique output directory per run and retain its sample series.
+The second argument identifies the app executable; the sampler matches its
+name exactly and records the executable path with every RSS sample:
+
+```sh
+../tool/sample_app_peak_rss_macos.sh \
+  /Volumes/SSD/Projects/bench-artifacts/<date>/open-macos/run-01 \
+  'grimoire_example.app/Contents/MacOS/grimoire_example' -- \
+  flutter drive --profile -d macos \
+    --driver=test_driver/e2e_open_probe_driver.dart \
+    --target=integration_test/e2e_open_probe_test.dart
+```
+
+Run baseline and candidate alternately with the same fixture and build
+configuration. Compare the retained `peak-rss-kib.txt` and
+`rss-samples.tsv` files only when both runs captured app samples.
+
 Repeat ≥5 times per book, alternating books (A/B alternation), and
 report medians + worst run, never single sightings.
 

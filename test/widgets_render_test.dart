@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire/grimoire.dart';
@@ -78,4 +80,125 @@ void main() {
     await tester.pump();
     expect(controller.searchResults, isNotEmpty);
   });
+
+  testWidgets('an obsolete search error does not replace newer results', (final tester) async {
+    final older = Completer<List<ViewerSearchResult>>();
+    final newer = Completer<List<ViewerSearchResult>>();
+    final searchController = _ControlledSearchController(buildTestBook(), {
+      'old query': older,
+      'new query': newer,
+    });
+    addTearDown(searchController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: SearchOverlay(controller: searchController)),
+      ),
+    );
+
+    final field = find.byType(TextField);
+    await tester.enterText(field, 'old query');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.enterText(field, 'new query');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    newer.complete(const <ViewerSearchResult>[
+      ViewerSearchResult(fileIndex: 0, start: 0, end: 3, excerpt: 'new result'),
+    ]);
+    await tester.pump();
+    expect(find.text('new result'), findsOneWidget);
+
+    older.completeError(const FormatException('obsolete query failed'));
+    await tester.pump();
+
+    expect(find.text('obsolete query failed'), findsNothing);
+    expect(find.text('new result'), findsOneWidget);
+  });
+
+  testWidgets('SearchOverlay debounces rapid typing to the newest query', (final tester) async {
+    final searchController = _TrackingSearchController(buildTestBook());
+    addTearDown(searchController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: SearchOverlay(controller: searchController)),
+      ),
+    );
+
+    final field = find.byType(TextField);
+    await tester.enterText(field, 'abc');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(searchController.queries, isEmpty);
+
+    await tester.enterText(field, 'abcd');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 249));
+    expect(searchController.queries, isEmpty);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(searchController.queries, <String>['abcd']);
+  });
+
+  testWidgets('SearchOverlay cancels pending debounce below minimum length and on dispose', (
+    final tester,
+  ) async {
+    final searchController = _TrackingSearchController(buildTestBook());
+    addTearDown(searchController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: SearchOverlay(controller: searchController)),
+      ),
+    );
+
+    final field = find.byType(TextField);
+    await tester.enterText(field, 'abc');
+    await tester.pump();
+    await tester.enterText(field, 'ab');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(searchController.queries, isEmpty);
+
+    await tester.enterText(field, 'abcd');
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(searchController.queries, isEmpty);
+  });
+}
+
+class _ControlledSearchController extends ViewerController {
+  _ControlledSearchController(super.book, this._pending);
+
+  final Map<String, Completer<List<ViewerSearchResult>>> _pending;
+
+  @override
+  Future<List<ViewerSearchResult>> search(
+    final String query, {
+    final SearchMode mode = SearchMode.contains,
+    final bool caseSensitive = false,
+    final int nearChars = 60,
+  }) => _pending[query]!.future;
+}
+
+class _TrackingSearchController extends ViewerController {
+  _TrackingSearchController(super.book);
+
+  final List<String> queries = <String>[];
+
+  @override
+  Future<List<ViewerSearchResult>> search(
+    final String query, {
+    final SearchMode mode = SearchMode.contains,
+    final bool caseSensitive = false,
+    final int nearChars = 60,
+  }) async {
+    queries.add(query);
+    return const <ViewerSearchResult>[];
+  }
 }

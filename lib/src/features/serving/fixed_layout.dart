@@ -240,8 +240,7 @@ Map<int, FixedPresentation> fixedPresentationsOf(
     return viewport != null && _pairIsReadable(epub, a, b, viewport);
   }
 
-  bool inSpreadContext(final int index) =>
-      _declarationPermits(book, index, viewport);
+  bool inSpreadContext(final int index) => _declarationPermits(book, index, viewport);
 
   final presentations = <int, FixedPresentation>{};
   void close(final int? left, final int? right) {

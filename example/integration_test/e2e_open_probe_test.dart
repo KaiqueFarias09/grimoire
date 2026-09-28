@@ -1,8 +1,7 @@
 // Real-reader OPENING probe for the progressive-reading A/B benchmark
 // (Unseal docs/specs/progressive-reading/design.md section 6). ONE book
-// per run, the current full-parse path; the session variants will
-// replace the open step later without touching the page-visible
-// signals.
+// per run, with full parse or progressive session selected by
+// E2E_OPEN_BOOK_MODE. Both modes use the same page-visible signals.
 //
 // Book selection, in order:
 //
@@ -19,7 +18,7 @@
 // page is the post-layout JavaScript position report, never a
 // controller timing):
 //
-//   * parseMs        bytes -> parsed Book (Unseal.read).
+//   * parseMs        bytes -> parsed Book (Unseal.read) or session header.
 //   * firstPostLayoutReportMs  mount -> first position report after
 //                    viewer.js lays the page out.
 //   * RSS            ProcessInfo before open / after open / after the
@@ -53,6 +52,7 @@ const _transitionCount = 3;
 
 const _pathDefine = String.fromEnvironment('E2E_OPEN_BOOK_PATH');
 const _assetDefine = String.fromEnvironment('E2E_OPEN_BOOK_ASSET');
+
 /// `session` opens through the progressive BookSession path; anything
 /// else keeps the Unseal.read full-materialization baseline.
 const _modeDefine = String.fromEnvironment('E2E_OPEN_BOOK_MODE');
@@ -110,9 +110,7 @@ Future<void> main() async {
     final rssAfterOpen = currentRssBytes();
 
     // --- mount -> first position report AFTER layout ---
-    final controller = session == null
-        ? ViewerController(book)
-        : ViewerController.session(session);
+    final controller = session == null ? ViewerController(book) : ViewerController.session(session);
     final events = PageChangeQueue()..attach(controller);
     addTearDown(() async {
       await events.dispose();
