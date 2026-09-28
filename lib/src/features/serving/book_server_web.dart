@@ -39,13 +39,19 @@ class BookServer {
   /// switches the server to on-demand resolution: it receives a
   /// canonical book path and completes with the file's `String` text
   /// (HTML/CSS) or `Uint8List` bytes, or null when the entry does not
-  /// exist.
+  /// exist. [byteRangeLoader] (with [pdfDocumentByteLength]) assembles
+  /// the PDF facsimile document lazily for session-backed books whose
+  /// `PdfBook.bytes` arrive empty.
   BookServer({
     this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     final Future<Uint8List> Function(String name)? assetLoader,
     final Future<Object?> Function(String path)? contentResolver,
+    final Future<Uint8List?> Function(int offset, int count)? byteRangeLoader,
+    final int? pdfDocumentByteLength,
   }) : _assetLoader = assetLoader ?? _rootBundleLoader,
-       _contentResolver = contentResolver;
+       _contentResolver = contentResolver,
+       _byteRangeLoader = byteRangeLoader,
+       _pdfDocumentByteLength = pdfDocumentByteLength;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
@@ -57,6 +63,13 @@ class BookServer {
 
   /// On-demand content source; null serves from the [start] snapshot.
   final Future<Object?> Function(String path)? _contentResolver;
+
+  /// On-demand byte-range source for the PDF facsimile document;
+  /// null keeps the eager resident-bytes path.
+  final Future<Uint8List?> Function(int offset, int count)? _byteRangeLoader;
+
+  /// Total document size the lazy assembly reads up to.
+  final int? _pdfDocumentByteLength;
 
   /// Controls JavaScript authored by book HTML. The default removes
   /// book scripts while leaving grimoire's injected viewer and
@@ -82,6 +95,9 @@ class BookServer {
   PdfBook? _pdfBook;
   Map<String, FixedPagePresentation> _fixedPages = const <String, FixedPagePresentation>{};
   String? _pdfDocumentUrl;
+
+  /// In-flight lazy assembly of the session-backed document blob.
+  Future<String>? _pdfDocumentUrlBuild;
   bool _started = false;
 
   /// The PDF reading mode the item URLs resolve under. The
@@ -132,9 +148,12 @@ class BookServer {
     _order = book.readingOrder;
     _pdfBook = book is PdfBook ? book : null;
     _fixedPages = fixedPagePresentationOf(book);
-    if (_pdfBook != null) {
+    if (_pdfBook != null && _byteRangeLoader == null) {
       // The whole document crosses as one blob; pdf.js loads it
-      // without range requests on the web.
+      // without range requests on the web. Session-backed PDFs skip
+      // this: their header bytes are empty, and the blob assembles
+      // lazily on the first facsimile page (see _ensurePdfDocumentUrl)
+      // through the session's byte ranges.
       _pdfDocumentUrl = _register(_pdfBook!.bytes, 'application/pdf');
     }
     _files
@@ -171,6 +190,7 @@ class BookServer {
     _spreadHalves.clear();
     _spreadPages.clear();
     _pdfDocumentUrl = null;
+    _pdfDocumentUrlBuild = null;
     _files.clear();
     _started = false;
   }
@@ -201,7 +221,7 @@ class BookServer {
 
     final item = _order[index];
     if (_pdfBook != null && pdfReadingMode == PdfReadingMode.facsimile) {
-      return Uri.parse(_pdfPageUrl(index));
+      return Uri.parse(await _pdfPageUrlAsync(index));
     }
     if (item.isHtml) {
       final canonical = _lookupEntry(item.name)?.key;
@@ -215,13 +235,15 @@ class BookServer {
   /// Blob URL of a book file path, fetching content through the
   /// resolver when the server runs in resolver mode. Missing paths
   /// resolve to the shared not-found blob (the web equivalent of the
-  /// loopback server's 404).
+  /// loopback server's 404). Paths outside the inventory pass through
+  /// to the resolver exactly as referenced — PDF embedded images
+  /// arrive this way — and a null answer collapses to not-found.
   Future<Uri> urlForPathAsync(final String path) async {
     if (_contentResolver == null) return urlForPath(path);
 
-    final canonical = _lookupEntry(path)?.key;
+    final canonical = _lookupEntry(path)?.key ?? path;
 
-    return Uri.parse(canonical == null ? _notFoundUrl() : await _startBlobBuild(canonical));
+    return Uri.parse(await _startBlobBuild(canonical));
   }
 
   /// Blob URL of the synthetic spread wrapper, fetching half pages
@@ -561,14 +583,18 @@ class BookServer {
       return null;
     });
     for (final ref in queried) {
-      final canonical = _lookupEntry(ref)?.key;
-      if (canonical == null || active.contains(canonical)) continue;
-      if (_blobUrls.containsKey(canonical) || _buildingFutures.containsKey(canonical)) continue;
+      // Inventory hits canonicalize; unknown paths pass through to the
+      // resolver exactly as referenced (PDF embedded images arrive this
+      // way). A null answer registers nothing, so the second rewrite
+      // pass leaves the ref untouched.
+      final key = _lookupEntry(ref)?.key ?? ref;
+      if (active.contains(key)) continue;
+      if (_blobUrls.containsKey(key) || _buildingFutures.containsKey(key)) continue;
 
-      final future = _buildBlob(canonical, active..add(canonical)).whenComplete(() {
-        _buildingFutures.remove(canonical)?.ignore();
+      final future = _buildBlob(key, active..add(key)).whenComplete(() {
+        _buildingFutures.remove(key)?.ignore();
       });
-      _buildingFutures[canonical] = future;
+      _buildingFutures[key] = future;
       await future;
     }
 
@@ -577,10 +603,11 @@ class BookServer {
 
   /// Maps a normalized book path to its prepared blob URL, or null
   /// when the path is missing or its blob is still building (the
-  /// cycle guard leaves self-referencing imports untouched).
+  /// cycle guard leaves self-referencing imports untouched). Paths
+  /// outside the inventory read their pass-through blob under the raw
+  /// path.
   String? _preparedResolve(final String bookPath) {
-    final canonical = _lookupEntry(bookPath)?.key;
-    if (canonical == null) return null;
+    final canonical = _lookupEntry(bookPath)?.key ?? bookPath;
 
     return _blobUrls[canonical];
   }
@@ -664,20 +691,82 @@ class BookServer {
     final existing = _pdfPages[index];
     if (existing != null) return existing;
 
+    return _pdfPages[index] = _register(
+      utf8.encode(_pdfPageHtml(index, _pdfDocumentUrl ?? '')),
+      'text/html; charset=utf-8',
+    );
+  }
+
+  /// Resolver-mode facsimile page: the document blob (assembled
+  /// through the session's byte ranges on first use) precedes the
+  /// page registration.
+  Future<String> _pdfPageUrlAsync(final int index) async {
+    final existing = _pdfPages[index];
+    if (existing != null) return existing;
+
+    final html = _pdfPageHtml(index, await _ensurePdfDocumentUrl());
+
+    return _pdfPages[index] = _register(utf8.encode(html), 'text/html; charset=utf-8');
+  }
+
+  /// The synthetic facsimile page for [index] against [documentUrl].
+  String _pdfPageHtml(final int index, final String documentUrl) {
     final pdf = _pdfBook!;
     final pageText = index < pdf.pageTexts.length
         ? pdf.pageTexts[index]
         : const PdfPageText(lines: <PdfTextLine>[]);
-    final html = syntheticPdfPageHtml(
+
+    return syntheticPdfPageHtml(
       pageIndex: index,
       lines: pageText.lines,
-      documentUrl: _pdfDocumentUrl ?? '',
+      documentUrl: documentUrl,
       scriptBase: _pdfJsBase,
       cssUrl: _assetUrl('viewer.css'),
       jsUrl: _assetUrl('viewer.js'),
     );
+  }
 
-    return _pdfPages[index] = _register(utf8.encode(html), 'text/html; charset=utf-8');
+  /// The document blob URL, building it on first use for
+  /// session-backed PDFs. The eager path registered the resident
+  /// bytes at [start]. Note: session facsimile ends up holding the
+  /// full document on the main thread — the same footprint as the
+  /// eager web path (the worker already holds the bytes there);
+  /// acceptable and documented in the design.
+  Future<String> _ensurePdfDocumentUrl() async {
+    final existing = _pdfDocumentUrl;
+    if (existing != null) return existing;
+
+    final loader = _byteRangeLoader;
+    if (loader == null || _pdfBook == null) {
+      throw StateError('BookServer has no PDF document source.');
+    }
+
+    final build = _pdfDocumentUrlBuild ??= _assemblePdfDocumentBlob(loader).whenComplete(() {
+      _pdfDocumentUrlBuild = null;
+    });
+
+    return build;
+  }
+
+  /// Assembles the full document through chunked [loader] calls and
+  /// registers it as one `application/pdf` blob.
+  Future<String> _assemblePdfDocumentBlob(
+    final Future<Uint8List?> Function(int offset, int count) loader,
+  ) async {
+    final total = _pdfDocumentByteLength ?? 0;
+    final builder = BytesBuilder(copy: false);
+    const chunkBytes = 1 << 20;
+    var offset = 0;
+    while (offset < total) {
+      final slice = await loader(offset, math.min(chunkBytes, total - offset));
+      if (slice == null || slice.isEmpty) {
+        throw StateError('PDF document source ended early at $offset of $total bytes.');
+      }
+      builder.add(slice);
+      offset += slice.length;
+    }
+
+    return _pdfDocumentUrl = _register(builder.takeBytes(), 'application/pdf');
   }
 
   String get _pdfJsBase {

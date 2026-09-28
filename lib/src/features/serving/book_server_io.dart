@@ -35,12 +35,20 @@ class BookServer {
   /// on-demand resolution: it receives a canonical book path and
   /// completes with the file's `String` text (HTML/CSS) or
   /// `Uint8List` bytes, or null when the entry does not exist.
+  /// [byteRangeLoader] (with [pdfDocumentByteLength]) serves the PDF
+  /// facsimile document from on-demand byte ranges — the
+  /// progressive-session path, where `PdfBook.bytes` is empty and the
+  /// document lives behind the session.
   BookServer({
     this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     final Future<Uint8List> Function(String name)? assetLoader,
     final Future<Object?> Function(String path)? contentResolver,
+    final Future<Uint8List?> Function(int offset, int count)? byteRangeLoader,
+    final int? pdfDocumentByteLength,
   }) : _assetLoader = assetLoader ?? _rootBundleLoader,
-       _contentResolver = contentResolver;
+       _contentResolver = contentResolver,
+       _byteRangeLoader = byteRangeLoader,
+       _pdfDocumentByteLength = pdfDocumentByteLength;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
@@ -52,6 +60,14 @@ class BookServer {
 
   /// On-demand content source; null serves from the [start] snapshot.
   final Future<Object?> Function(String path)? _contentResolver;
+
+  /// On-demand byte-range source for the PDF facsimile document;
+  /// null keeps the eager resident-bytes path.
+  final Future<Uint8List?> Function(int offset, int count)? _byteRangeLoader;
+
+  /// Total document size the facsimile range headers report; null
+  /// falls back to the resident [PdfBook.bytes] length.
+  final int? _pdfDocumentByteLength;
 
   /// Controls JavaScript authored by book HTML. The default removes
   /// book scripts while leaving grimoire's injected viewer and
@@ -228,7 +244,7 @@ class BookServer {
 
         return shelf.Response.notFound('No such spread');
       }
-      if (path == '__pdfdoc__') return _servePdfDocument(request);
+      if (path == '__pdfdoc__') return await _servePdfDocument(request);
       if (path.startsWith('__pdfjs__/')) return _servePdfJs(path.substring('__pdfjs__/'.length));
       if (path.startsWith('book/')) {
         return await _serveBookFile(request, Uri.decodeComponent(path.substring('book/'.length)));
@@ -362,12 +378,91 @@ class BookServer {
   bool _isValidSpreadSide(final int? index) =>
       index == null || (index >= 0 && index < _order.length && _order[index].isHtml);
 
-  shelf.Response _servePdfDocument(final shelf.Request request) {
+  /// Chunk size for the rare whole-document assembly on the session
+  /// path; pdf.js itself always boots with a Range request.
+  static const int _pdfDocChunkBytes = 256 * 1024;
+
+  Future<shelf.Response> _servePdfDocument(final shelf.Request request) async {
     final pdf = _pdfBook;
     if (pdf == null) return shelf.Response.notFound('Not a PDF book');
-    // pdf.js reads the document in range chunks; reuse the binary
-    // range machinery the audio/image assets already have.
-    return _serveBinary(request, 'document.pdf', pdf.bytes);
+
+    final loader = _byteRangeLoader;
+    if (loader == null) {
+      // Eager path: the document is resident on the book; pdf.js reads
+      // it in range chunks through the shared binary machinery.
+      return _serveBinary(request, 'document.pdf', pdf.bytes);
+    }
+
+    // Session path: the header's own bytes are empty and the document
+    // lives behind the loader. Totals come from the session handshake
+    // (pdfDocumentByteLength == session.byteLength).
+    final total = _pdfDocumentByteLength ?? 0;
+    final contentType = mimeOf('document.pdf');
+    final rangeHeader = request.headers[HttpHeaders.rangeHeader];
+    if (rangeHeader == null) {
+      if (request.method == 'HEAD') {
+        // Shelf derives Content-Length from the body, so a HEAD
+        // cannot advertise the true total; one honest byte keeps the
+        // request cheap (pdf.js itself never HEADs the document).
+        final probe = await loader(0, 1);
+
+        return shelf.Response.ok(
+          probe ?? Uint8List(0),
+          headers: {'Content-Type': contentType, 'Accept-Ranges': 'bytes'},
+        );
+      }
+      final assembled = await _assemblePdfDocument(loader, total);
+      if (assembled == null) {
+        return shelf.Response.internalServerError(body: 'PDF document source ended early');
+      }
+
+      return shelf.Response.ok(
+        assembled,
+        headers: {'Content-Type': contentType, 'Accept-Ranges': 'bytes'},
+      );
+    }
+
+    final range = _parseByteRange(rangeHeader, total);
+    if (range == null) {
+      return shelf.Response(
+        HttpStatus.requestedRangeNotSatisfiable,
+        headers: {'Content-Range': 'bytes */$total', 'Accept-Ranges': 'bytes'},
+      );
+    }
+    final slice = await loader(range.start, range.end - range.start + 1);
+    if (slice == null || slice.isEmpty) {
+      return shelf.Response.internalServerError(
+        body: 'PDF document source could not serve bytes ${range.start}-${range.end}',
+      );
+    }
+
+    return shelf.Response(
+      HttpStatus.partialContent,
+      body: slice,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Range': 'bytes ${range.start}-${range.start + slice.length - 1}/$total',
+        'Accept-Ranges': 'bytes',
+      },
+    );
+  }
+
+  /// Assembles the whole document through chunked [loader] calls.
+  /// Null when the source ends before [total] bytes.
+  static Future<Uint8List?> _assemblePdfDocument(
+    final Future<Uint8List?> Function(int offset, int count) loader,
+    final int total,
+  ) async {
+    final builder = BytesBuilder(copy: false);
+    var offset = 0;
+    while (offset < total) {
+      final slice = await loader(offset, math.min(_pdfDocChunkBytes, total - offset));
+      if (slice == null || slice.isEmpty) return null;
+      builder.add(slice);
+      offset += slice.length;
+    }
+
+    return builder.takeBytes();
   }
 
   /// Files the `/__pdfjs__/` route may serve.
@@ -390,7 +485,20 @@ class BookServer {
 
   Future<shelf.Response> _serveBookFile(final shelf.Request request, final String rawPath) async {
     final entry = _lookup(rawPath);
-    if (entry == null) return shelf.Response.notFound('No book file: $rawPath');
+    if (entry == null) {
+      // Resolver pass-through: content the inventory never lists (PDF
+      // reflow HTML references embedded images the session header does
+      // not carry) resolves through the content resolver exactly as
+      // referenced — exact path only, no fuzzy matching — and 404s
+      // only when the resolver answers null.
+      final resolver = _contentResolver;
+      if (resolver == null) return shelf.Response.notFound('No book file: $rawPath');
+
+      final content = await _resolveContent(rawPath);
+      if (content == null) return shelf.Response.notFound('No book file: $rawPath');
+
+      return _serveResolved(rawPath, request, content);
+    }
 
     final resolver = _contentResolver;
     if (resolver != null) {
