@@ -6,6 +6,7 @@ import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart
 import 'package:unseal/unseal.dart';
 
 import 'helpers/test_epub_bytes.dart';
+import 'helpers/test_rar_bytes.dart';
 
 /// Opens a session over the in-memory fixture and its controller.
 Future<(ViewerController, BookSession, FakeViewerEngineFactory)> _open() async {
@@ -150,5 +151,61 @@ void main() {
       session.loadResource('OEBPS/chapter1.xhtml'),
       throwsA(isA<SessionClosedException>()),
     );
+  });
+
+  test('comic session navigates flat pages and jumps like a PDF', () async {
+    final session = await BookSession.open(buildTestRar());
+    final factory = FakeViewerEngineFactory();
+    final controller = ViewerController.session(session, engineFactory: factory);
+    await controller.start();
+    addTearDown(session.dispose);
+    addTearDown(controller.dispose);
+
+    final pages = session.book.readingOrder.length;
+    expect(pages, 3);
+    expect(controller.book, isA<ComicBook>());
+    expect(controller.isComicMode, isTrue);
+    expect(controller.isPdfMode, isFalse);
+    // The opening page serves as a synthetic comic page over the
+    // session inventory.
+    expect(
+      factory.engines.expand((final engine) => engine.loadedUrls).map((final url) => url.path),
+      contains('/__page__/0'),
+    );
+
+    // The current position reports as a flat-page locator with the
+    // session header's total.
+    final locator = controller.positionPageLocator;
+    expect(locator, isNotNull);
+    expect(locator?.pageIndex, 0);
+    expect(locator?.total, pages);
+
+    // A page-turn event advances one flat page through the reading
+    // order.
+    factory.engines.first.postMessage({'type': 'pageTurn', 'forward': true});
+    await _waitUntil(() => controller.position.fileIndex == 1);
+    expect(controller.positionPageLocator?.pageIndex, 1);
+
+    // Page jumps address the comic's flat page space exactly like a
+    // PDF's.
+    await controller.goToPdfPage(2);
+    await _waitUntil(() => controller.position.fileIndex == 2);
+    expect(
+      factory.engines.expand((final engine) => engine.loadedUrls).map((final url) => url.path),
+      contains('/__page__/2'),
+    );
+    expect(controller.positionPageLocator?.pageIndex, 2);
+    expect(controller.positionPageLocator?.total, pages);
+
+    // A backward turn steps one flat page down.
+    factory.engines.first.postMessage({'type': 'pageTurn', 'forward': false});
+    await _waitUntil(() => controller.position.fileIndex == 1);
+
+    // Out-of-range jumps clamp into the book.
+    await controller.goToPdfPage(99);
+    await _waitUntil(() => controller.position.fileIndex == pages - 1);
+    await controller.goToPdfPage(-5);
+    await _waitUntil(() => controller.position.fileIndex == 0);
+    await _settle();
   });
 }

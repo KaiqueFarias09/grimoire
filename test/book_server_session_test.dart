@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +22,10 @@ Future<HttpClientResponse> _get(final Uri url, {final Map<String, String>? heade
 }
 
 Future<String> _body(final HttpClientResponse response) => response.transform(utf8.decoder).join();
+
+Future<Uint8List> _bytes(final HttpClientResponse response) => response
+    .fold(BytesBuilder(), (final builder, final chunk) => builder..add(chunk))
+    .then((final builder) => builder.takeBytes());
 
 /// The same content wiring the reader controller hands the book
 /// server for a session-backed book: text formats resolve as decoded
@@ -172,5 +177,103 @@ void main() {
     final html = await _body(response);
     expect(html, contains('elv-fixed'));
     expect(html, contains('/__viewer__/viewer.js'));
+  });
+
+  test('PDF session serves the facsimile document through byte ranges', () async {
+    final document = await File('test/resources/pdf/dickens-sample.pdf').readAsBytes();
+    final eager = (await Unseal.read(document)) as PdfBook;
+    // The session-shaped header (Unseal design §3.4): complete
+    // structure, empty content — bytes, page texts and page file
+    // bodies are placeholders the engine materializes on demand. The
+    // byte-range loader stands in for session.loadBytesRange, slicing
+    // the real document exactly like the session transport does.
+    final header = PdfBook(
+      bytes: Uint8List(0),
+      metadata: eager.metadata,
+      pages: eager.pages,
+      navigation: eager.navigation,
+      pageTexts: const <PdfPageText>[],
+      pageFiles: <TextFile>[
+        for (final file in eager.files.html)
+          TextFile(content: '', name: file.name, type: file.type, path: file.path),
+      ],
+    );
+    final firstPagePath = header.readingOrder.first.name;
+    expect(firstPagePath, 'page_1.html');
+    expect(header.pageCount, eager.pageCount);
+
+    Future<Uint8List?> loadRange(final int offset, final int count) async {
+      if (offset < 0 || offset >= document.length) {
+        throw RangeError.range(offset, 0, document.length, 'offset');
+      }
+      final end = math.min(offset + count, document.length);
+
+      return Uint8List.sublistView(document, offset, end);
+    }
+
+    final resolved = <String>[];
+    final server = BookServer(
+      assetLoader: (final name) async => Uint8List.fromList(name.codeUnits),
+      contentResolver: (final path) async {
+        resolved.add(path);
+        for (final file in eager.files.html) {
+          if (file.path == path) return file.content;
+        }
+        // Pass-through hit: embedded reflow images live behind the
+        // session resource loader, not in any inventory.
+        if (path == 'images/pdf-image-1.jpg') return testEpubCoverPng;
+
+        return null;
+      },
+      byteRangeLoader: loadRange,
+      pdfDocumentByteLength: document.length,
+    );
+    await server.start(header);
+    addTearDown(server.stop);
+
+    // A ranged GET answers 206 with the exact slice and the session
+    // total (Content-Range == session.byteLength).
+    final ranged = await _get(server.pdfDocumentUrl, headers: {'range': 'bytes=100-199'});
+    expect(ranged.statusCode, HttpStatus.partialContent);
+    expect(ranged.headers.value('content-range'), 'bytes 100-199/${document.length}');
+    expect(ranged.headers.value('accept-ranges'), 'bytes');
+    expect(await _bytes(ranged), document.sublist(100, 200));
+
+    // Without a Range the whole document assembles through chunked
+    // loader calls and equals the source bytes.
+    final full = await _get(server.pdfDocumentUrl);
+    expect(full.statusCode, HttpStatus.ok);
+    expect(full.headers.value('accept-ranges'), 'bytes');
+    expect(await _bytes(full), document);
+
+    // An out-of-bounds range is 416 with the session total.
+    final invalid = await _get(
+      server.pdfDocumentUrl,
+      headers: {'range': 'bytes=${document.length}-'},
+    );
+    expect(invalid.statusCode, HttpStatus.requestedRangeNotSatisfiable);
+    expect(invalid.headers.value('content-range'), 'bytes */${document.length}');
+
+    // Reflow page HTML flows through the inventory + resolver.
+    final page = await _get(server.urlForPath(firstPagePath));
+    expect(page.statusCode, 200);
+    expect(page.headers.contentType?.mimeType, 'text/html');
+    final html = await _body(page);
+    expect(html, contains('/__viewer__/viewer.js'));
+    expect(html, contains('foolishness'), reason: 'the reflow page text survives the rewrite');
+
+    // Inventory-unknown paths pass through to the resolver exactly as
+    // referenced: embedded images serve as binaries with ranges, and
+    // a null answer is a 404.
+    final image = await _get(
+      server.urlForPath('images/pdf-image-1.jpg'),
+      headers: {'range': 'bytes=2-5'},
+    );
+    expect(image.statusCode, HttpStatus.partialContent);
+    expect(image.headers.value('content-range'), 'bytes 2-5/${testEpubCoverPng.length}');
+    expect(resolved, contains('images/pdf-image-1.jpg'));
+
+    final missing = await _get(server.urlForPath('images/pdf-image-404.jpg'));
+    expect(missing.statusCode, 404);
   });
 }
