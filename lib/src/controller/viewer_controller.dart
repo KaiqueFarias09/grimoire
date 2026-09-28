@@ -1021,21 +1021,44 @@ class ViewerController extends ChangeNotifier
     }
     _started = true;
 
-    if (isPdfMode && !(book as PdfBook).hasTextLayer) {
-      // Scanned document: nothing to reflow.
-      _pdfReadingMode = PdfReadingMode.facsimile;
-    }
-
     final session = _session;
     final pdfSession = session != null && book is PdfBook;
+    if (isPdfMode) {
+      if (pdfSession) {
+        // The session header carries no pageTexts, so `hasTextLayer`
+        // cannot answer. Probe page 1's canonical text instead: a
+        // non-blank page keeps the reflow default, a blank or missing
+        // one (scanned document) falls back to facsimile. Bounded to
+        // one page and resolved before the server starts, so the
+        // initial load needs no reload. A closed or failing session
+        // must not break start: facsimile is the safe fallback (its
+        // pages render without a text layer).
+        try {
+          final first = book.readingOrder.isEmpty
+              ? null
+              : await session.loadDocumentText(book.readingOrder.first.name);
+          _pdfReadingMode = first != null && first.trim().isNotEmpty
+              ? PdfReadingMode.reflow
+              : PdfReadingMode.facsimile;
+        } on UnsealException {
+          _pdfReadingMode = PdfReadingMode.facsimile;
+        }
+      } else if (!(book as PdfBook).hasTextLayer) {
+        // Scanned document: nothing to reflow.
+        _pdfReadingMode = PdfReadingMode.facsimile;
+      }
+    }
+
     final server = BookServer(
       bookJavaScriptPolicy: bookJavaScriptPolicy,
       contentResolver: session == null ? null : _resolveBookContent,
       // PDF sessions hold no resident document bytes: the facsimile
       // document serves through the session's byte ranges (see
-      // BookServer's /__pdfdoc__).
+      // BookServer's /__pdfdoc__) and the facsimile text layer
+      // hydrates page by page through the session's line loader.
       byteRangeLoader: pdfSession ? session.loadBytesRange : null,
       pdfDocumentByteLength: pdfSession ? session.byteLength : null,
+      pdfPageLinesLoader: pdfSession ? session.loadPdfPageLines : null,
     );
     await server.start(book);
     _server = server;
