@@ -610,34 +610,47 @@ class ViewerController extends ChangeNotifier
   }
 
   /// The current position as a [PageLocator] — flat page index for
-  /// page-based formats. PDFs report
+  /// page-based formats. PDFs and comics report
   /// `PageLocator(pageIndex: position.fileIndex, total: pageCount)`
   /// (section `i` is page `i`); formats without flat pages report
   /// null.
   PageLocator? get positionPageLocator {
-    final pdf = book;
-    if (pdf is! PdfBook) {
+    final count = _flatPageCount;
+    if (count == null) {
       return null;
     }
-    return PageLocator(pageIndex: _position.fileIndex, total: pdf.pageCount);
+    return PageLocator(pageIndex: _position.fileIndex, total: count);
   }
 
-  /// Jumps to a zero-based PDF page (reflow and facsimile share the
-  /// page index: section `i` is page `i`), landing at offset 0.
-  /// Values outside `0..pageCount-1` clamp; non-PDF books ignore the
-  /// call.
+  /// Jumps to a zero-based page (reflow and facsimile share the page
+  /// index: section `i` is page `i`), landing at offset 0. Comics
+  /// address their flat page space exactly the same way, so page jumps
+  /// work identically on PDF and comic books. Values outside
+  /// `0..pageCount-1` clamp; books without flat pages ignore the call.
   Future<void> goToPdfPage(final int pageIndex) async {
-    final pdf = book;
-    if (pdf is! PdfBook || pdf.pageCount == 0) {
+    final count = _flatPageCount;
+    if (count == null || count == 0) {
       return;
     }
-    final target = pageIndex.clamp(0, pdf.pageCount - 1);
+    final target = pageIndex.clamp(0, count - 1);
     await _navigation.jumpTo(
       currentFileIndex: _position.fileIndex,
       currentOffset: _position.charOffset,
       fileIndex: target,
       intent: const NavigationIntent(offset: 0),
     );
+  }
+
+  /// Flat page count of a page-addressed book (PDF or comic — comic
+  /// session headers carry their full page list), or null: section
+  /// `i` is page `i`, so jumps and locators address reading-order
+  /// indexes directly.
+  int? get _flatPageCount {
+    final book = this.book;
+    if (book is PdfBook) return book.pageCount;
+    if (book is ComicBook) return book.pageCount;
+
+    return null;
   }
 
   /// Taps on highlights (resolved against [highlights]).
@@ -1013,9 +1026,16 @@ class ViewerController extends ChangeNotifier
       _pdfReadingMode = PdfReadingMode.facsimile;
     }
 
+    final session = _session;
+    final pdfSession = session != null && book is PdfBook;
     final server = BookServer(
       bookJavaScriptPolicy: bookJavaScriptPolicy,
-      contentResolver: _session == null ? null : _resolveBookContent,
+      contentResolver: session == null ? null : _resolveBookContent,
+      // PDF sessions hold no resident document bytes: the facsimile
+      // document serves through the session's byte ranges (see
+      // BookServer's /__pdfdoc__).
+      byteRangeLoader: pdfSession ? session.loadBytesRange : null,
+      pdfDocumentByteLength: pdfSession ? session.byteLength : null,
     );
     await server.start(book);
     _server = server;
