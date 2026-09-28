@@ -38,6 +38,8 @@
 // not reach the browser). Device numbers are diagnostics, not proof —
 // see tool/measure_open_device.md at the package root.
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
@@ -79,11 +81,19 @@ Future<void> main() async {
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets('open probe: parse, first post-layout page, transitions', (tester) async {
+    final sessionMode = _modeDefine == 'session';
     // --- book bytes (untimed) ---
+    // Session mode over a configured PATH skips the byte load entirely:
+    // BookSession.openFile reads the file inside the session isolate, so
+    // the app never holds the container — the memory story under test.
     var bookSource = 'fallback-dracula';
-    var bytes = (await rootBundle.load(_fallbackAsset)).buffer.asUint8List();
+    Uint8List? bytes = (await rootBundle.load(_fallbackAsset)).buffer.asUint8List();
     final pathConfig = _configuredPath;
-    if (pathConfig != null && pathConfig.isNotEmpty) {
+    final opensFromFile = sessionMode && pathConfig != null && pathConfig.isNotEmpty;
+    if (opensFromFile) {
+      bookSource = 'path';
+      bytes = null;
+    } else if (pathConfig != null && pathConfig.isNotEmpty) {
       bytes = readBookFile(pathConfig);
       bookSource = 'path';
     } else {
@@ -99,11 +109,13 @@ Future<void> main() async {
     final openWatch = Stopwatch()..start();
     final Book book;
     BookSession? session;
-    if (_modeDefine == 'session') {
-      session = await BookSession.open(bytes);
+    if (sessionMode) {
+      session = opensFromFile
+          ? await BookSession.openFile(pathConfig)
+          : await BookSession.open(bytes!);
       book = session.book;
     } else {
-      book = await Unseal.read(bytes);
+      book = await Unseal.read(bytes!);
     }
     openWatch.stop();
     final parseMs = openWatch.elapsedMilliseconds;
@@ -192,7 +204,7 @@ Future<void> main() async {
       'schemaVersion': 1,
       'bookSource': bookSource,
       'bookFormat': book.format.name,
-      'bytes': bytes.length,
+      'bytes': bytes?.length,
       'parseMs': parseMs,
       'firstPostLayoutReportMs': firstReportMs,
       'onReadyMs': readyMs,
