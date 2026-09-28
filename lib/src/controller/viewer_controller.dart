@@ -199,8 +199,9 @@ class ViewerController extends ChangeNotifier
   /// landed; progress reads 0 before that.
   bool _progressionReady = false;
 
-  /// Measures progression synchronously for a parsed book, or in the
-  /// background through the session.
+  /// Zero-fills progression for a session book; the actual measurement
+  /// is deferred to [_startBackgroundProgression] (first engine-ready
+  /// event). Parsed books measure synchronously here.
   void _initProgression() {
     final session = _session;
     if (session == null) {
@@ -212,6 +213,19 @@ class ViewerController extends ChangeNotifier
     readingProgression = BookProgression.fromSectionLengths(<int>[
       for (var index = 0; index < book.readingOrder.length; index++) 0,
     ]);
+  }
+
+  bool _progressionStarted = false;
+
+  /// Starts the session's background progression walk. Deferred to the
+  /// first engine-ready event: the whole-book walk occupies the session
+  /// isolate, and issuing it at construction would park the first
+  /// content request behind every page of a large book.
+  void _startBackgroundProgression() {
+    if (_progressionStarted) return;
+    final session = _session;
+    if (session == null || _disposed) return;
+    _progressionStarted = true;
     unawaited(
       session.computeProgression().then(
         (final progression) {
@@ -2157,6 +2171,7 @@ class ViewerController extends ChangeNotifier
     }
     switch (event) {
       case ReadyEvent():
+        _startBackgroundProgression();
         final slot = event.source;
         final ready = _navigation.beginEngineReady(slot);
         await _applySettingsTo(slot);
