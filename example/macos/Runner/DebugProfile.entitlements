@@ -10,5 +10,11 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- Dev-harness only: the open probe reads measurement books directly
+	     from disk (BookSession.openFile). Release builds keep the sandbox. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-only</key>
+	<string>/</string>
 </dict>
 </plist>
