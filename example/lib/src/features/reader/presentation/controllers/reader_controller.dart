@@ -229,7 +229,14 @@ class ReaderController extends Notifier<ReaderState> {
         // Encrypted PDF: pdf.js asks through the controller; the
         // stored password answers the first ask, the user the rest.
         viewer.onPdfPassword = (final failedAttempts) => _passwordFor(repository, failedAttempts);
-        await viewer.setPdfReadingMode(PdfReadingMode.facsimile);
+        if (viewer.session == null) {
+          // Eager books keep the facsimile-first default. Session
+          // backed PDFs follow the controller's own decision: its
+          // start() probes page 1's canonical text and picks reflow
+          // when the page has one (scanned documents fall back to
+          // facsimile), so forcing a mode here would clobber it.
+          await viewer.setPdfReadingMode(PdfReadingMode.facsimile);
+        }
       }
       if (!ref.mounted) {
         return;
