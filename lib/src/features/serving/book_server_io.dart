@@ -38,17 +38,22 @@ class BookServer {
   /// [byteRangeLoader] (with [pdfDocumentByteLength]) serves the PDF
   /// facsimile document from on-demand byte ranges — the
   /// progressive-session path, where `PdfBook.bytes` is empty and the
-  /// document lives behind the session.
+  /// document lives behind the session. [pdfPageLinesLoader] hydrates
+  /// the facsimile text layer page by page on the same path: the
+  /// session header carries no `PdfBook.pageTexts`, so facsimile
+  /// pages fetch their canonical lines on demand.
   BookServer({
     this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     final Future<Uint8List> Function(String name)? assetLoader,
     final Future<Object?> Function(String path)? contentResolver,
     final Future<Uint8List?> Function(int offset, int count)? byteRangeLoader,
     final int? pdfDocumentByteLength,
+    final Future<PdfPageText?> Function(int pageIndex)? pdfPageLinesLoader,
   }) : _assetLoader = assetLoader ?? _rootBundleLoader,
        _contentResolver = contentResolver,
        _byteRangeLoader = byteRangeLoader,
-       _pdfDocumentByteLength = pdfDocumentByteLength;
+       _pdfDocumentByteLength = pdfDocumentByteLength,
+       _pdfPageLinesLoader = pdfPageLinesLoader;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
@@ -68,6 +73,14 @@ class BookServer {
   /// Total document size the facsimile range headers report; null
   /// falls back to the resident [PdfBook.bytes] length.
   final int? _pdfDocumentByteLength;
+
+  /// Per-page facsimile text-layer source for session-backed books;
+  /// null keeps the eager resident-`pageTexts` path.
+  final Future<PdfPageText?> Function(int pageIndex)? _pdfPageLinesLoader;
+
+  /// Hydrated facsimile line sets, cached per index so repeat page
+  /// requests skip the session round trip. Failures stay uncached.
+  final Map<int, PdfPageText> _pdfPageTexts = <int, PdfPageText>{};
 
   /// Controls JavaScript authored by book HTML. The default removes
   /// book scripts while leaving grimoire's injected viewer and
@@ -234,7 +247,7 @@ class BookServer {
         return _serveMathJax(path.substring('__mathjax__/'.length));
       }
       if (path.startsWith('__pdfpage__/')) {
-        return _syntheticPdfPage(int.tryParse(path.substring('__pdfpage__/'.length)));
+        return await _syntheticPdfPage(int.tryParse(path.substring('__pdfpage__/'.length)));
       }
       if (path.startsWith('__spread__/')) {
         final sides = path.substring('__spread__/'.length).split('/');
@@ -286,15 +299,13 @@ class BookServer {
     return shelf.Response.ok(html, headers: _htmlHeaders);
   }
 
-  shelf.Response _syntheticPdfPage(final int? index) {
+  Future<shelf.Response> _syntheticPdfPage(final int? index) async {
     final pdf = _pdfBook;
     if (pdf == null || index == null || index < 0 || index >= _order.length) {
       return shelf.Response.notFound('No such PDF page');
     }
 
-    final pageText = index < pdf.pageTexts.length
-        ? pdf.pageTexts[index]
-        : const PdfPageText(lines: <PdfTextLine>[]);
+    final pageText = await _pdfPageTextFor(pdf, index);
     final html = syntheticPdfPageHtml(
       pageIndex: index,
       lines: pageText.lines,
@@ -305,6 +316,39 @@ class BookServer {
     );
 
     return shelf.Response.ok(html, headers: _htmlHeaders);
+  }
+
+  /// The facsimile text-layer source for [index]: eager books read
+  /// the parsed `pageTexts` synchronously; session-backed books
+  /// hydrate through [_pdfPageLinesLoader] — the header carries no
+  /// page texts. A disposed or failing session degrades to a
+  /// canvas-only page (empty lines) instead of breaking the request,
+  /// and successful hydrations cache per index.
+  Future<PdfPageText> _pdfPageTextFor(final PdfBook pdf, final int index) async {
+    if (index < pdf.pageTexts.length) {
+      return pdf.pageTexts[index];
+    }
+    final cached = _pdfPageTexts[index];
+    if (cached != null) {
+      return cached;
+    }
+    final loader = _pdfPageLinesLoader;
+    if (loader == null) {
+      return const PdfPageText(lines: <PdfTextLine>[]);
+    }
+    try {
+      final pageText = await loader(index);
+      if (pageText != null) {
+        return _pdfPageTexts[index] = pageText;
+      }
+    } on UnsealException {
+      // Session closed mid-request: the canvas-only fallback serves.
+    } on RangeError {
+      // Out-of-range answers stay typed-tolerant: the page renders
+      // without a text layer.
+    }
+
+    return const PdfPageText(lines: <PdfTextLine>[]);
   }
 
   /// Parses one `/__spread__/<left>/<right>` side: a reading-order

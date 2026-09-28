@@ -41,17 +41,21 @@ class BookServer {
   /// (HTML/CSS) or `Uint8List` bytes, or null when the entry does not
   /// exist. [byteRangeLoader] (with [pdfDocumentByteLength]) assembles
   /// the PDF facsimile document lazily for session-backed books whose
-  /// `PdfBook.bytes` arrive empty.
+  /// `PdfBook.bytes` arrive empty. [pdfPageLinesLoader] hydrates the
+  /// facsimile text layer page by page on the same path: the session
+  /// header carries no `PdfBook.pageTexts`.
   BookServer({
     this.bookJavaScriptPolicy = BookJavaScriptPolicy.disabled,
     final Future<Uint8List> Function(String name)? assetLoader,
     final Future<Object?> Function(String path)? contentResolver,
     final Future<Uint8List?> Function(int offset, int count)? byteRangeLoader,
     final int? pdfDocumentByteLength,
+    final Future<PdfPageText?> Function(int pageIndex)? pdfPageLinesLoader,
   }) : _assetLoader = assetLoader ?? _rootBundleLoader,
        _contentResolver = contentResolver,
        _byteRangeLoader = byteRangeLoader,
-       _pdfDocumentByteLength = pdfDocumentByteLength;
+       _pdfDocumentByteLength = pdfDocumentByteLength,
+       _pdfPageLinesLoader = pdfPageLinesLoader;
 
   static Future<Uint8List> _rootBundleLoader(final String name) async {
     final data = await rootBundle.load('packages/grimoire/assets/viewer/$name');
@@ -71,6 +75,10 @@ class BookServer {
   /// Total document size the lazy assembly reads up to.
   final int? _pdfDocumentByteLength;
 
+  /// Per-page facsimile text-layer source for session-backed books;
+  /// null keeps the eager resident-`pageTexts` path.
+  final Future<PdfPageText?> Function(int pageIndex)? _pdfPageLinesLoader;
+
   /// Controls JavaScript authored by book HTML. The default removes
   /// book scripts while leaving grimoire's injected viewer and
   /// bridge scripts functional.
@@ -87,6 +95,11 @@ class BookServer {
   bool _mathJaxNotified = false;
   final Map<int, String> _comicPages = <int, String>{};
   final Map<int, String> _pdfPages = <int, String>{};
+
+  /// Hydrated facsimile page texts (session path), cached per index
+  /// alongside [_pdfPages] so repeat page builds skip the session
+  /// round trip. Failed hydrations stay uncached.
+  final Map<int, PdfPageText> _pdfPageTexts = <int, PdfPageText>{};
   final Map<int, String> _spreadHalves = <int, String>{};
   final Map<String, String> _spreadPages = <String, String>{};
   final Set<String> _createdUrls = <String>{};
@@ -187,6 +200,7 @@ class BookServer {
     _buildingFutures.clear();
     _comicPages.clear();
     _pdfPages.clear();
+    _pdfPageTexts.clear();
     _spreadHalves.clear();
     _spreadPages.clear();
     _pdfDocumentUrl = null;
@@ -691,31 +705,31 @@ class BookServer {
     final existing = _pdfPages[index];
     if (existing != null) return existing;
 
-    return _pdfPages[index] = _register(
-      utf8.encode(_pdfPageHtml(index, _pdfDocumentUrl ?? '')),
-      'text/html; charset=utf-8',
-    );
-  }
-
-  /// Resolver-mode facsimile page: the document blob (assembled
-  /// through the session's byte ranges on first use) precedes the
-  /// page registration.
-  Future<String> _pdfPageUrlAsync(final int index) async {
-    final existing = _pdfPages[index];
-    if (existing != null) return existing;
-
-    final html = _pdfPageHtml(index, await _ensurePdfDocumentUrl());
-
-    return _pdfPages[index] = _register(utf8.encode(html), 'text/html; charset=utf-8');
-  }
-
-  /// The synthetic facsimile page for [index] against [documentUrl].
-  String _pdfPageHtml(final int index, final String documentUrl) {
     final pdf = _pdfBook!;
     final pageText = index < pdf.pageTexts.length
         ? pdf.pageTexts[index]
         : const PdfPageText(lines: <PdfTextLine>[]);
 
+    return _pdfPages[index] = _register(
+      utf8.encode(_pdfPageHtml(index, _pdfDocumentUrl ?? '', pageText)),
+      'text/html; charset=utf-8',
+    );
+  }
+
+  /// Resolver-mode facsimile page: the document blob (assembled
+  /// through the session's byte ranges on first use) and the page's
+  /// text-layer hydration precede the page registration.
+  Future<String> _pdfPageUrlAsync(final int index) async {
+    final existing = _pdfPages[index];
+    if (existing != null) return existing;
+
+    final html = _pdfPageHtml(index, await _ensurePdfDocumentUrl(), await _pdfPageTextFor(index));
+
+    return _pdfPages[index] = _register(utf8.encode(html), 'text/html; charset=utf-8');
+  }
+
+  /// The synthetic facsimile page for [index] against [documentUrl].
+  String _pdfPageHtml(final int index, final String documentUrl, final PdfPageText pageText) {
     return syntheticPdfPageHtml(
       pageIndex: index,
       lines: pageText.lines,
@@ -724,6 +738,40 @@ class BookServer {
       cssUrl: _assetUrl('viewer.css'),
       jsUrl: _assetUrl('viewer.js'),
     );
+  }
+
+  /// The facsimile text-layer source for [index]: eager books read
+  /// the parsed `pageTexts` synchronously; session-backed books
+  /// hydrate through the loader — the header carries no page texts.
+  /// A disposed or failing session degrades to a canvas-only page
+  /// (empty lines) instead of failing the build, and successful
+  /// hydrations cache per index.
+  Future<PdfPageText> _pdfPageTextFor(final int index) async {
+    final pdf = _pdfBook!;
+    if (index < pdf.pageTexts.length) {
+      return pdf.pageTexts[index];
+    }
+    final cached = _pdfPageTexts[index];
+    if (cached != null) {
+      return cached;
+    }
+    final loader = _pdfPageLinesLoader;
+    if (loader == null) {
+      return const PdfPageText(lines: <PdfTextLine>[]);
+    }
+    try {
+      final pageText = await loader(index);
+      if (pageText != null) {
+        return _pdfPageTexts[index] = pageText;
+      }
+    } on UnsealException {
+      // Session closed mid-request: the canvas-only fallback builds.
+    } on RangeError {
+      // Out-of-range answers stay typed-tolerant: the page renders
+      // without a text layer.
+    }
+
+    return const PdfPageText(lines: <PdfTextLine>[]);
   }
 
   /// The document blob URL, building it on first use for
