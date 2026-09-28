@@ -49,6 +49,12 @@ app.*.map.json
 /assets/books/large-reflowable.epub
 /assets/books/large-fxl.epub
 /assets/books/large-cbz.cbz
+# Generated progressive-session fixtures (PDF/CBR waves), copied in
+# locally from /tmp/elivre-fixtures for the e2e open probe and the
+# macOS A/B path runs.
+/assets/books/synthetic-400p.pdf
+/assets/books/medium-cbr.cbr
+/assets/books/large-cbr.cbr
 unseal_worker.js
 mahabharata.epub
 unseal_worker.js.deps

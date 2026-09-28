@@ -248,7 +248,9 @@ class ShelfController extends Notifier<ShelfState> {
   /// Grimoire's headless page render paints the first page of the
   /// cover-less PDF fixture as its cover, the way Apple Books and
   /// Calibre derive PDF covers. The rendered cover joins the shelf
-  /// cache so later launches skip the render.
+  /// cache so later launches skip the render. The parse stays local:
+  /// caching it on the entry would make the reader open the eager
+  /// path and mask the progressive session.
   Future<void> _renderPdfCovers(final BookRepository repository) async {
     final store = ref.read(demoStoreProvider);
     final renderer = ref.read(pageRendererProvider);
@@ -260,10 +262,9 @@ class ShelfController extends Notifier<ShelfState> {
         // Computed per book inside the guard: without the platform
         // plugin (tests) the failure degrades to a skipped cover.
         final cachePath = kIsWeb ? null : (await getTemporaryDirectory()).path;
-        final book = entry.book ??= await parseForReading(
-          entry,
-          password: repository.passwordOf(entry.fixture.id) ?? '',
-        );
+        final book =
+            entry.book ??
+            await parseForReading(entry, password: repository.passwordOf(entry.fixture.id) ?? '');
         final bytes = await renderer.renderCover(book, width: 400, pdfJsCachePath: cachePath);
         final covered = entry.copyWith(coverBytes: bytes);
         store?.saveShelfMeta(shelfMetaOf(covered));

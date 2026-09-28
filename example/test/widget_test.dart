@@ -65,7 +65,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('EPUB'), findsOneWidget);
-    expect(find.text('PDF'), findsOneWidget);
+    // The shelf carries two PDF fixtures now (the progressive-session
+    // synthetic 400p joined dickens), so the badge is not unique.
+    expect(find.text('PDF'), findsWidgets);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.textContaining('A cidade depois da chuva'));

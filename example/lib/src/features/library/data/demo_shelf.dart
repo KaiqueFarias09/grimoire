@@ -66,6 +66,28 @@ const demoFixtures = <DemoFixture>[
         'Um documento ilustrado para testar leitura por páginas, zoom, senha e retomada de progresso.',
   ),
   DemoFixture(
+    id: 'pdf-400p',
+    asset: 'assets/books/synthetic-400p.pdf',
+    progress: 0,
+    status: 'Novo',
+    chapter: 'Ainda não iniciado',
+    reader: 'pages',
+    source: 'Biblioteca',
+    descriptionFallback:
+        'Um PDF sintético de 400 páginas para exercitar a abertura progressiva e a leitura fac-símile.',
+  ),
+  DemoFixture(
+    id: 'cbr',
+    asset: 'assets/books/medium-cbr.cbr',
+    progress: 0,
+    status: 'Novo',
+    chapter: 'Ainda não iniciado',
+    reader: 'comic',
+    source: 'Importado recentemente',
+    descriptionFallback:
+        'Um quadrinho em RAR sintético para exercitar sessões progressivas e a navegação por páginas.',
+  ),
+  DemoFixture(
     id: 'comic',
     asset: 'assets/books/synthetic-pages.cb7',
     progress: 64,
@@ -186,7 +208,7 @@ const demoFixtures = <DemoFixture>[
 ];
 
 const initialCollections = <DemoCollection>[
-  DemoCollection(name: 'Todos os livros', count: 13, kind: 'all'),
+  DemoCollection(name: 'Todos os livros', count: 15, kind: 'all'),
   DemoCollection(name: 'Lendo agora', count: 7, kind: 'status', filter: 'Lendo'),
   DemoCollection(name: 'Concluídos', count: 2, kind: 'status', filter: 'Concluído'),
   DemoCollection(name: 'Favoritos', count: 0, kind: 'custom'),
