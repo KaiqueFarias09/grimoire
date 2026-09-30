@@ -55,6 +55,11 @@ app.*.map.json
 /assets/books/synthetic-400p.pdf
 /assets/books/medium-cbr.cbr
 /assets/books/large-cbr.cbr
+# Scanned-archive reading fixtures, copied in locally from Unseal's
+# test/resources (public-domain 1905 Simonovich scan + the generated
+# BigTIFF multipage) for integration_test/e2e_scanned_reading_test.dart.
+/assets/books/cyrillic.djvu
+/assets/books/bigtiff-rgb-2page.tif
 unseal_worker.js
 mahabharata.epub
 unseal_worker.js.deps

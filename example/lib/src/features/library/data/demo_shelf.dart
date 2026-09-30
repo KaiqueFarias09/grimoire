@@ -98,6 +98,38 @@ const demoFixtures = <DemoFixture>[
     descriptionFallback:
         'Uma história em quadrinhos para testar navegação por páginas e leitura visual.',
   ),
+  // DjVu pages arrive as one HTML wrapper per page holding the full-page
+  // facsimile image (plus a hidden OCR-text span), so the reading order is
+  // a page list: the shelf declares 'pages', the facsimile convention the
+  // PDF fixtures use. (The mode currently steers only PdfBook rendering;
+  // DjVu itself flows through the standard wrapper pipeline.)
+  DemoFixture(
+    id: 'djvu-cyrillic',
+    asset: 'assets/books/cyrillic.djvu',
+    progress: 0,
+    status: 'Novo',
+    chapter: 'Ainda não iniciado',
+    reader: 'pages',
+    source: 'Importado recentemente',
+    descriptionFallback:
+        'Um manual de ciências de 1905 em djvu com camada de texto OCR em '
+        'cirílico, lido página a página como fac-símile.',
+  ),
+  // TIFF has no text layer and the same one-wrapper-per-page presentation
+  // as DjVu, so it takes 'pages' for the same facsimile reason. This
+  // fixture is a BigTIFF whose two RGB pages have different sizes.
+  DemoFixture(
+    id: 'tiff-bigtiff',
+    asset: 'assets/books/bigtiff-rgb-2page.tif',
+    progress: 0,
+    status: 'Novo',
+    chapter: 'Ainda não iniciado',
+    reader: 'pages',
+    source: 'Importado recentemente',
+    descriptionFallback:
+        'Uma imagem TIFF de duas páginas em cores, aberta como livro de '
+        'fac-símiles para testar o formato de digitalizações.',
+  ),
   DemoFixture(
     id: 'office',
     asset: 'assets/books/synthetic.docx',
@@ -208,7 +240,7 @@ const demoFixtures = <DemoFixture>[
 ];
 
 const initialCollections = <DemoCollection>[
-  DemoCollection(name: 'Todos os livros', count: 15, kind: 'all'),
+  DemoCollection(name: 'Todos os livros', count: 17, kind: 'all'),
   DemoCollection(name: 'Lendo agora', count: 7, kind: 'status', filter: 'Lendo'),
   DemoCollection(name: 'Concluídos', count: 2, kind: 'status', filter: 'Concluído'),
   DemoCollection(name: 'Favoritos', count: 0, kind: 'custom'),
