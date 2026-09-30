@@ -40,6 +40,7 @@ second hand-written version of the parser fixtures.
 | EPUB (fixed) | `books/epub/fxl-overlays.epub` | 2,889 | `f0b0796ce6d6d8fefb129d0345248ad1202249069692cba49ae782c419cfcd26` |
 | EPUB (fixed) | `books/epub/fxl-scripted.epub` | 2,230 | `6df28c3db450049a43b2449434ba855e9fa01856f590ac8f937ff4a803e0c289` |
 | EPUB (fixed) | `books/epub/fxl-viewport-quirks.epub` | 3,093 | `fdb2fece59122cb49ac8aa179e1a2d059ffa97d59097935aaebccbd560ced77` |
+| DJVU | `books/djvu/links.djvu` | 440 | `3d7740439e20ae48366f62740a64f9ab67fb2062a6a7afb726e30dee81e4403f` |
 
 `page-blanche.epub` is the committed Unseal fixture: bitmap XHTML pages declaring a
 `1200×1577` viewport. The `fxl-*.epub` fixtures are produced by Unseal's deterministic
@@ -49,6 +50,11 @@ overrides in both directions, standalone SVG pages, non-linear spine items, repe
 spine references, media overlays, scripted pages, and malformed/missing/oversized
 viewport declarations. `fixed_layout_test.dart` opens them through the viewer serving
 pipeline.
+
+`books/djvu/links.djvu` is the committed Unseal DjVu fixture of the same name (a
+minimal one-page NAVM document, Unlicense per Unseal's
+`test/resources/djvu/PROVENANCE.md`); `viewer_controller_djvu_test.dart` opens it
+through the viewer to pin the DjVu wrapper reading order.
 
 `format_viewer_integration_test.dart` opens every fixture through `Unseal`, starts the
 viewer server, checks the reading-order URL and exercises text/search/position/progress,

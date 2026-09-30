@@ -56,6 +56,10 @@ sync_file books/epub/fxl-overlays.epub test/resources/books/epub/fxl-overlays.ep
 sync_file books/epub/fxl-scripted.epub test/resources/books/epub/fxl-scripted.epub
 sync_file books/epub/fxl-viewport-quirks.epub test/resources/books/epub/fxl-viewport-quirks.epub
 
+# Scanned DjVu: the minimal NAVM links fixture used by the viewer's
+# DjVu regressions (committed in Unseal; Unlicense per its PROVENANCE).
+sync_file books/djvu/links.djvu test/resources/books/djvu/links.djvu
+
 # The example intentionally carries only the small text/HTML fixtures.
 sync_file books/txt/synthetic.txt example/assets/books/synthetic.txt
 sync_file books/html/synthetic.html example/assets/books/synthetic.html
