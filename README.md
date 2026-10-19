@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/KaiqueFarias09/grimoire/main/logo.png" alt="Grimoire logo" width="180">
+  <img src="logo.png" alt="Grimoire logo" width="180">
 </p>
 
 <h1 align="center">Grimoire</h1>
