@@ -12,6 +12,50 @@ import 'helpers/fake_webview_flutter_platform.dart';
 import 'helpers/test_book.dart';
 
 void main() {
+  test('fixed presentations expose their page indexes and value semantics', () {
+    const alone = FixedPresentation.alone(2);
+    const pair = FixedPresentation.pair(2, 3);
+    const blankLeft = FixedPresentation.blankLeft(4);
+    const blankRight = FixedPresentation.blankRight(5);
+
+    expect(alone.isSpread, isFalse);
+    expect(alone.contentIndexes, <int>[2]);
+    expect(pair.isSpread, isTrue);
+    expect(pair.contentIndexes, <int>[2, 3]);
+    expect(blankLeft.isSpread, isTrue);
+    expect(blankLeft.blankLeft, isTrue);
+    expect(blankRight.isSpread, isTrue);
+    expect(blankRight.blankRight, isTrue);
+    expect(blankLeft, const FixedPresentation.blankLeft(4));
+    expect(blankLeft.hashCode, const FixedPresentation.blankLeft(4).hashCode);
+    expect(
+      blankRight.toString(),
+      'FixedPresentation(item: 5, pair: null, blankLeft: false, blankRight: true)',
+    );
+  });
+
+  test('fixed-layout settings retain copy and value semantics', () {
+    const defaults = ViewerFixedLayoutSettings();
+    const custom = ViewerFixedLayoutSettings(zoomMode: FixedPageZoomMode.custom, customScale: 1.5);
+
+    expect(
+      defaults.copyWith(zoomMode: FixedPageZoomMode.fitWidth),
+      const ViewerFixedLayoutSettings(zoomMode: FixedPageZoomMode.fitWidth),
+    );
+    expect(
+      custom,
+      const ViewerFixedLayoutSettings(zoomMode: FixedPageZoomMode.custom, customScale: 1.5),
+    );
+    expect(
+      custom.hashCode,
+      const ViewerFixedLayoutSettings(
+        zoomMode: FixedPageZoomMode.custom,
+        customScale: 1.5,
+      ).hashCode,
+    );
+    expect(custom, isNot(defaults));
+  });
+
   group('in-memory EPUB 3 fixed layout through the viewer', () {
     test('mixed book detects fixed items without touching comic/PDF modes', () async {
       final book = buildEpub3FixedLayoutTestBook();
@@ -428,6 +472,161 @@ void main() {
         ),
       ],
     );
+
+    EpubBook buildSpreadPolicyBook(final EpubSpread spread) => buildEpub3FixedLayoutTestBook(
+      items: [
+        Epub3SpineItem(
+          path: 'fixed.html',
+          body: '<p>Fixed page.</p>',
+          fixed: true,
+          viewportWidth: 800,
+          viewportHeight: 1200,
+          spread: spread,
+        ),
+      ],
+    );
+
+    test('spread declarations follow viewport orientation and explicit policies', () {
+      const landscape = (width: 1600.0, height: 900.0);
+      const portrait = (width: 900.0, height: 1600.0);
+
+      expect(fixedSpreadPermitsPairing(buildPdfTestBook(), 0, viewport: landscape), isFalse);
+      expect(
+        fixedSpreadPermitsPairing(buildSpreadPolicyBook(EpubSpread.none), 0, viewport: landscape),
+        isFalse,
+      );
+      expect(
+        fixedSpreadPermitsPairing(buildSpreadPolicyBook(EpubSpread.both), 0, viewport: null),
+        isTrue,
+      );
+      expect(
+        fixedSpreadPermitsPairing(
+          buildSpreadPolicyBook(EpubSpread.landscape),
+          0,
+          viewport: landscape,
+        ),
+        isTrue,
+      );
+      expect(
+        fixedSpreadPermitsPairing(
+          buildSpreadPolicyBook(EpubSpread.landscape),
+          0,
+          viewport: portrait,
+        ),
+        isFalse,
+      );
+      expect(
+        fixedSpreadPermitsPairing(
+          buildSpreadPolicyBook(EpubSpread.portrait),
+          0,
+          viewport: portrait,
+        ),
+        isTrue,
+      );
+      expect(
+        fixedSpreadPermitsPairing(
+          buildSpreadPolicyBook(EpubSpread.portrait),
+          0,
+          viewport: landscape,
+        ),
+        isFalse,
+      );
+      expect(
+        fixedSpreadPermitsPairing(buildSpreadPolicyBook(EpubSpread.auto), 0, viewport: landscape),
+        isTrue,
+      );
+      expect(
+        fixedSpreadPermitsPairing(buildSpreadPolicyBook(EpubSpread.auto), 0, viewport: portrait),
+        isFalse,
+      );
+    });
+
+    test('declared placements get blank fillers only in an active spread context', () {
+      final leftBeforeCenter = buildEpub3FixedLayoutTestBook(
+        items: const [
+          Epub3SpineItem(
+            path: 'left.html',
+            body: '<p>Left page.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+            pageSpread: EpubPageSpread.left,
+            spread: EpubSpread.both,
+          ),
+          Epub3SpineItem(
+            path: 'center.html',
+            body: '<p>Center page.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+            pageSpread: EpubPageSpread.center,
+            spread: EpubSpread.both,
+          ),
+        ],
+      );
+      final leftPagePresentation = fixedPresentationsOf(
+        leftBeforeCenter,
+        viewport: (width: 1600, height: 900),
+      );
+      expect(leftPagePresentation[0], const FixedPresentation.blankRight(0));
+      expect(leftPagePresentation[1], const FixedPresentation.alone(1));
+
+      final unmatchedRight = buildEpub3FixedLayoutTestBook(
+        items: const [
+          Epub3SpineItem(
+            path: 'left.html',
+            body: '<p>Unpaired left page.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+            pageSpread: EpubPageSpread.left,
+            spread: EpubSpread.none,
+          ),
+          Epub3SpineItem(
+            path: 'right.html',
+            body: '<p>Unmatched right page.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+            pageSpread: EpubPageSpread.right,
+            spread: EpubSpread.both,
+          ),
+        ],
+      );
+      final unmatchedRightPresentations = fixedPresentationsOf(
+        unmatchedRight,
+        viewport: (width: 1600, height: 900),
+      );
+      expect(unmatchedRightPresentations[0], const FixedPresentation.alone(0));
+      expect(unmatchedRightPresentations[1], const FixedPresentation.blankLeft(1));
+    });
+
+    test('auto pairing checks the second page and keeps readable explicit pairs', () {
+      final book = buildEpub3FixedLayoutTestBook(
+        items: const [
+          Epub3SpineItem(
+            path: 'explicit.html',
+            body: '<p>Explicit page.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+            spread: EpubSpread.both,
+          ),
+          Epub3SpineItem(
+            path: 'automatic.html',
+            body: '<p>Automatic page.</p>',
+            fixed: true,
+            viewportWidth: 800,
+            viewportHeight: 1200,
+            spread: EpubSpread.auto,
+          ),
+        ],
+      );
+
+      final presentations = fixedPresentationsOf(book, viewport: (width: 2400, height: 1300));
+      expect(presentations[0], const FixedPresentation.pair(0, 1));
+      expect(presentations[1], const FixedPresentation.pair(0, 1));
+    });
 
     test('declared left/right pair, center stays alone (small viewport)', () {
       final presentations = fixedPresentationsOf(

@@ -53,6 +53,26 @@ void main() {
 
       expect(sanitizeBookHtml(html, policy: BookJavaScriptPolicy.allowBookScripts), html);
     });
+
+    test('preserves comments and handles incomplete or malformed markup safely', () {
+      const completeComment = '<!-- retained --><p>Visible</p>';
+      const incompleteComment = '<p>Visible</p><!-- truncated';
+
+      expect(sanitizeBookHtml(completeComment), completeComment);
+      expect(sanitizeBookHtml(incompleteComment), incompleteComment);
+      expect(sanitizeBookHtml('<p>Visible</p><script>run()'), '<p>Visible</p>');
+      expect(sanitizeBookHtml('<p onclick="run()"'), '<p');
+      expect(
+        sanitizeBookHtml('<p == malformed data-ready="yes">Visible</p>'),
+        '<p== malformed data-ready="yes">Visible</p>',
+      );
+    });
+
+    test('decodes decimal character references before checking unsafe URLs', () {
+      const html = '<a href="java&#115;cript&#58;alert(1)">blocked</a>';
+
+      expect(sanitizeBookHtml(html), '<a>blocked</a>');
+    });
   });
 
   group('resolveBookPath', () {
@@ -125,6 +145,22 @@ void main() {
         resolve: resolve,
       );
       expect(html, contains('srcset="blob:https://x/small.png 1x, blob:https://x/big.png 2x"'));
+    });
+
+    test('preserves fragment-only and unresolved resources', () {
+      const html = '<svg><image href="#cover"/></svg><source srcset="missing.png 1x"/>';
+
+      expect(rewriteHtmlResources(html, pagePath: 'chapter.xhtml', resolve: (_) => null), html);
+    });
+
+    test('resolves a resource path without carrying its fragment', () {
+      final html = rewriteHtmlResources(
+        '<img src="cover.png#front"/>',
+        pagePath: 'OEBPS/text/chapter.xhtml',
+        resolve: (path) => 'blob:$path',
+      );
+
+      expect(html, '<img src="blob:OEBPS/text/cover.png"/>');
     });
 
     test('rewrites url() inside style blocks and attributes', () {
@@ -215,6 +251,39 @@ void main() {
       );
       expect(out, contains('src="https://cdn/js/tex-mml-svg.js"'));
       expect(out, contains('window.MathJax='));
+    });
+
+    test('fixed page markers synthesize a body when book markup omits it', () {
+      final out = injectFixedPageMarkers(
+        '<p>Fixed page</p>',
+        presentation: const FixedPagePresentation(viewportWidth: 600, viewportHeight: 800),
+      );
+
+      expect(out, contains('<body class="elv-fixed" data-elv-page="600×800">'));
+      expect(out, contains('<p>Fixed page</p>'));
+    });
+
+    test('fixed page markers merge body classes and normalize self-closing tags', () {
+      final out = injectFixedPageMarkers(
+        '<html><body class="book-page"/>Page</html>',
+        presentation: const FixedPagePresentation(viewportWidth: 600, viewportHeight: 800),
+      );
+
+      expect(out, contains('<body class="book-page elv-fixed" data-elv-page="600×800">'));
+      expect(out, contains('Page</html>'));
+    });
+
+    test('the complete viewer pipeline can add MathJax after the viewer assets', () {
+      final out = finishBookHtmlForViewer(
+        '<html><head></head><body><math/></body></html>',
+        cssUrl: 'blob:viewer.css',
+        jsUrl: 'blob:viewer.js',
+        mathJaxScriptBase: 'blob:mathjax',
+      );
+
+      expect(out, contains('href="blob:viewer.css"'));
+      expect(out, contains('src="blob:viewer.js"'));
+      expect(out, contains('src="blob:mathjax/tex-mml-svg.js"'));
     });
 
     test('syntheticComicPageHtml wraps the image with the viewer', () {
