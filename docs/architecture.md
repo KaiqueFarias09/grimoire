@@ -93,17 +93,13 @@ The host supplies external-link behavior and any persistent cache. The package m
 
 ## Testing
 
-Package tests live under `test/`, including parser-to-viewer fixture integration in `format_viewer_integration_test.dart`, server and policy tests, bridge tests, and widget/controller tests. The example app is the platform-host smoke surface. The CI package lane runs:
+Tests under `test/` cover parser-to-viewer fixtures, serving, script policy,
+the page bridge, widgets, and controller behavior. The example app is the
+host-integration smoke surface. Read the [development guide](development.md)
+for the current commands and release gate.
 
-```text
-flutter pub get --no-example
-dart format --output=none --set-exit-if-changed benchmark lib test example/lib/src example/lib/grimoire_example_app.dart example/lib/main.dart example/test
-dart analyze --fatal-infos
-dart doc --dry-run
-./tool/coverage_gate.sh
-```
-
-The local equivalent for the package is `flutter test`; run `(cd example && flutter pub get && flutter analyze && flutter test)` when changing host integration or platform files. Run `make release-check VERSION=1.0.0` from a clean `main` before the first public release.
+Fake-engine tests do not exercise every native WebView or browser adapter.
+Smoke-test the affected platform when a change touches its adapter.
 
 ## Decisions and risks
 

@@ -118,8 +118,8 @@ same guard, typography/column/stylesheet/color-override actions are no-ops on
 fixed pages (Dart skips them per engine file too), fixed items seed exactly one
 page in `page_measurement_controller.dart`, and `ViewerController` reports
 `isFixedLayoutEpub` / `isFixedLayoutPage(fileIndex)` with page-per-item
-progress. FXL-03 will add pinch/pan/double-tap zoom on the stage, synthetic
-spreads and orientation locks.
+progress. V1 does not support pinch, pan, or double-tap zoom on the stage,
+synthetic spreads, or orientation locks.
 
 ## Rendering and platform selection
 
@@ -217,12 +217,9 @@ The shell is optional. With host chrome, the controller still emits events;
 the application decides how to display menus, links, dictionary actions,
 storage, and external network requests.
 
-## Where to test a change
+## Where to check a change
 
-Run `dart analyze --fatal-infos` and the focused test for the feature first.
-`./tool/coverage_gate.sh` runs the full library suite and checks the 93.8%
-line-coverage floor. Analyze and test `example/` for host or platform changes.
-The release gate in [publication-readiness.md](publication-readiness.md)
-adds formatting, API documentation generation, package validation, and remote
-state checks. The example app demonstrates integration; its widget tests do
-not prove native WebView behavior on every supported operating system.
+Run the focused test for the feature first. Use the
+[development guide](development.md) for package, example, coverage, benchmark,
+and release commands. Example widget tests do not prove native WebView behavior
+on every supported system.

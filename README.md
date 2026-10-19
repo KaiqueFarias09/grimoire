@@ -1,4 +1,11 @@
-# grimoire
+<p align="center">
+  <img src="https://raw.githubusercontent.com/KaiqueFarias09/grimoire/main/logo.png" alt="Grimoire logo" width="180">
+</p>
+
+<h1 align="center">Grimoire</h1>
+
+Grimoire has no prior published versions. Version 1.0.0 is the first release;
+all features and fixes accumulated before its first publication belong to V1.
 
 A Calibre-style ebook reader widget for Flutter, built on
 [Unseal](https://pub.dev/packages/unseal). Renders EPUB, MOBI, AZW3
@@ -7,8 +14,9 @@ A Calibre-style ebook reader widget for Flutter, built on
 themes, highlights, bookmarks, in-book search and a text-selection hook
 for dictionary lookups.
 
-For a feature-by-feature map of the public API, source files, and tests, see
-the [codebase guide](https://github.com/KaiqueFarias09/grimoire/blob/main/docs/grimoire-codebase-guide.md).
+The [documentation index](docs/README.md) links consumer guides, architecture,
+development, and the feature-by-feature
+[codebase guide](docs/grimoire-codebase-guide.md).
 
 Platforms: **Android, iOS, macOS** (webview_flutter), **Windows,
 Linux** (flutter_inappwebview, auto-selected) and **Web** (a native
@@ -194,8 +202,8 @@ around the page still apply. Fixed items count exactly one page each, so a
 fully fixed book needs no measurement pass, and `isFixedLayoutEpub` /
 `isFixedLayoutPage(fileIndex)` let hosts branch on the mode.
 
-Not honored yet (FXL-03): pinch/pan/double-tap zoom on the fixed stage,
-synthetic spreads (`rendition:spread`, `page-spread-*`) and orientation
+V1 does not support pinch, pan, or double-tap zoom on the fixed stage,
+synthetic spreads (`rendition:spread`, `page-spread-*`), or orientation
 locks. Non-linear spine items stay reachable in the reading order.
 
 ### Exporting annotations

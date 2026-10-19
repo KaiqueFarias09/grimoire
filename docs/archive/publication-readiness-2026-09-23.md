@@ -1,9 +1,9 @@
-# Grimoire publication readiness
+# Grimoire publication readiness snapshot from 2026-09-23
 
-This is the local publication inventory for Grimoire 1.0.0, the first public
-release. It compares Grimoire with Unseal's documentation and release
-discipline. It records the checkout on 2026-09-23; remote CI and publication
-have not occurred.
+This document preserves the first-release assessment recorded on 2026-09-23.
+It records preparation for Grimoire 1.0.0, not a completed publication, and
+does not define the current release steps. Use the
+[development guide](../development.md) for current checks and release steps.
 
 ## What is in place
 

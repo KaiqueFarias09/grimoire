@@ -1,8 +1,9 @@
-# Integração da sessão progressiva no Grimoire
+# Archived progressive-session integration notes
 
-Notas de integração do caminho `BookSession` (Unseal) no leitor — o
-contrato congelado vive em
-`eLivre/docs/specs/progressive-reading/design.md` (§5 e §8).
+This Portuguese note records one integration stage for Unseal's `BookSession`
+path. Its source details and test counts are historical. See the current
+[architecture guide](../architecture.md) and
+[development guide](../development.md) for package boundaries and commands.
 
 ## API introduzida
 

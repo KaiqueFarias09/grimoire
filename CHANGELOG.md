@@ -1,8 +1,11 @@
-## Unreleased
+## 1.0.0
+
+The first Grimoire release. All features and fixes accumulated before the
+first publication are part of this version.
 
 ### Added
 
-- **Fixed-layout EPUB pages (FXL-02)**: EPUB 3 spine items whose effective
+- **Fixed-layout EPUB pages**: EPUB 3 spine items whose effective
   rendition layout is `pre-paginated` present as full pages instead of
   reflowed columns. The serving pipeline marks them (`elv-fixed` body class
   plus `data-elv-page="W×H"` from the book's declared viewports, book
@@ -18,13 +21,9 @@
   page's content; fixed items count exactly one page each (a fully fixed
   book needs no measurement pass). `ViewerController.isFixedLayoutEpub` and
   `isFixedLayoutPage(fileIndex)` let hosts branch on the mode; progress
-  advances one page per reading-order item. Synthetic spreads, orientation
-  locks and stage zoom (pinch/pan/double-tap) are not honored yet (FXL-03).
+  advances one page per reading-order item. V1 does not support synthetic
+  spreads, orientation locks, or pinch, pan, and double-tap stage zoom.
   Depends on `unseal: ^1.2.0` for the fixed-layout rendition model.
-
-## 1.0.0 - September 23, 2026
-
-### Added
 
 - **Password-protected PDFs**: facsimile rendering now supports
   encrypted PDFs. When pdf.js needs a password (first open or a
@@ -183,10 +182,9 @@
 
 ### Changed
 
-- Unseal is consumed through the release-target `^1.1.0` hosted contract. CI
-  validates package analysis, tests, and the repository coverage floor against
-  the hosted dependency.
-- **Breaking**: highlight appearance uses Unseal's canonical
+- Grimoire uses the hosted `unseal: ^1.2.0` contract. CI validates package
+  analysis, tests, and the repository coverage floor against that dependency.
+- **Highlight appearance** uses Unseal's canonical
   `HighlightColor` and `HighlightDecoration` types. The viewer maps
   palette tokens to Flutter light/dark colors while persistence stays
   owned by Unseal. The built-in palette matches Calibre's colors
@@ -194,7 +192,7 @@
   underline is expressible. `addHighlightFromSelection` takes
   `color`/`decoration`; `updateHighlightStyle` takes the same as named
   parameters.
-- **Breaking**: highlight JSON stores `decoration` (wire name) and
+- **Highlight storage** uses `decoration` (wire name) and
   `color` (`{light, dark}` hex pair) instead of `style`, and now
   includes the `cfi` dual-write. Colors render as inline `!important`
   styles instead of palette CSS classes, and the page picks the

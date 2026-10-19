@@ -11,8 +11,16 @@ Grimoire is a Flutter library that renders books parsed by [Unseal](https://pub.
 - `assets/viewer/` contains the JavaScript and CSS injected into book pages.
 - `example/` is the runnable host application. `test/` contains unit and integration tests; `test/resources/` contains committed book fixtures.
 - `benchmark/` contains Dart benchmarks and the `viewer_js` browser harness.
-- `README.md` is consumer-facing usage and format documentation. Read [docs/architecture.md](docs/architecture.md) before changing a runtime boundary, public export, serving path, or platform adapter.
-- [docs/grimoire-codebase-guide.md](docs/grimoire-codebase-guide.md) maps each feature to files, tests, and consumer documentation. [docs/publication-readiness.md](docs/publication-readiness.md) tracks release gates and remaining work.
+- `README.md` is consumer-facing usage and format documentation.
+- [docs/README.md](docs/README.md) indexes consumer and maintainer docs.
+- Read [docs/architecture.md](docs/architecture.md) before changing a runtime
+  boundary, public export, serving path, or platform adapter.
+- [docs/grimoire-codebase-guide.md](docs/grimoire-codebase-guide.md) maps
+  features to files and tests. [docs/development.md](docs/development.md)
+  documents checks and release commands.
+- [docs/archive/README.md](docs/archive/README.md) indexes historical records.
+  Use the development guide for current check commands and the release
+  procedure.
 
 ## Hard boundaries
 
@@ -29,23 +37,13 @@ Treat `test/resources/books/` as contract fixtures. Preserve their bytes and met
 
 Local dependency overrides, coverage, build output, Dart tooling state, and Steward state are machine-local. They are ignored and must not become package or publication inputs. `AGENTS.md` and `docs/architecture.md` are hand-maintained source documents, not generated reports.
 
-## Verification commands
+## Verification
 
-Run from the package root after `flutter pub get`:
+Use `make check` for the package and example checks that CI runs. Use
+`make test` for the library test suite without the coverage gate, or
+`make example-check` for the host app. See
+[docs/development.md](docs/development.md) for individual commands, fixture
+handling, benchmarks, and release steps.
 
-- `dart analyze --fatal-infos`
-- `dart format --output=none --set-exit-if-changed benchmark lib test example/lib/src example/lib/grimoire_example_app.dart example/lib/main.dart example/test`
-- `dart doc --dry-run`
-- `flutter test`
-- `./tool/coverage_gate.sh`
-- `flutter pub publish --dry-run` (release check; use hosted dependency constraints)
-- `(cd example && flutter analyze)`
-- `(cd example && flutter test)`
-
-For a release candidate, update `pubspec.yaml` and a versioned CHANGELOG
-section, then run `make release-check VERSION=x.y.z`. The `release-github` and
-`publish` targets follow only after the local gate, a synchronized `main`,
-and green CI. Do not tag, push, create a release, or publish without an explicit
-release request.
-
-For the browser benchmark, run `(cd benchmark/viewer_js && npm ci)` and then `(cd benchmark/viewer_js && node run.js)` when a compatible Chrome executable is available.
+Do not tag, push, create a release, or publish without an explicit release
+request.
