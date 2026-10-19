@@ -5,7 +5,7 @@ library;
 
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show FlutterError, debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:html/parser.dart' show parseFragment;
 import 'package:unseal/unseal.dart';
@@ -402,9 +402,9 @@ class LoadedBook {
 /// parsing the rest metadata-only through Unseal. Fixtures run in
 /// parallel: every parse already happens on its own background
 /// isolate, so the wall time approaches the slowest book instead of
-/// the sum of all of them. A fixture that fails to parse (an encrypted
-/// PDF opened without its password, for instance) is skipped so one
-/// locked book cannot take the whole shelf down.
+/// the sum of all of them. Missing assets and fixtures that fail to
+/// parse (an encrypted PDF opened without its password, for instance)
+/// are skipped so one unavailable book cannot take the whole shelf down.
 Future<List<LoadedBook>> loadDemoShelf([final DemoStore? store]) async {
   final books = await Future.wait(
     demoFixtures.map((final fixture) async {
@@ -416,8 +416,16 @@ Future<List<LoadedBook>> loadDemoShelf([final DemoStore? store]) async {
         }
       }
 
+      late final ByteData data;
       try {
-        final data = await rootBundle.load(fixture.asset);
+        data = await rootBundle.load(fixture.asset);
+      } on FlutterError catch (error) {
+        debugPrint('Fixture ${fixture.id} failed to load: $error');
+
+        return null;
+      }
+
+      try {
         final bytes = Uint8List.view(data.buffer, data.offsetInBytes, data.lengthInBytes);
         final metadata = await Unseal.readMetadata(bytes);
         final loaded = LoadedBook.fromMetadata(fixture, metadata);
