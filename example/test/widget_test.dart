@@ -133,6 +133,9 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // Picking a theme keeps the sheet open for further adjustments.
+    await tester.ensureVisible(find.text('Escuro'));
+    // The reader's loading indicator keeps animating under the fake clock.
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('Escuro'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Temas e ajustes'), findsWidgets);
