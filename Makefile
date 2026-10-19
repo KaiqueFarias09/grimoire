@@ -25,6 +25,7 @@ help:
 	  '  make release-check VERSION=1.0.0' \
 	  '      Check release metadata, the clean checkout, pinned Flutter,' \
 	  '      formatting, analysis, API docs, coverage, example checks, and pub.dev.' \
+	  '      Uses tracked files only, excluding ignored local dependency overrides.' \
 	  '  make release-github VERSION=1.0.0' \
 	  '      Re-run the gate, require main == origin/main, then push the tag' \
 	  '      and create the matching GitHub Release.' \

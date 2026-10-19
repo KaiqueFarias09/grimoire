@@ -114,7 +114,9 @@ make release-check VERSION=1.0.0
 The gate checks package metadata, repository identity, formatting, analysis,
 API docs, library coverage, example analysis, example tests, and the pub.dev
 dry-run unless that version is already published. It requires a clean `main`
-and checks the worktree again before it succeeds.
+and validates a temporary snapshot of tracked `HEAD` files. Ignored local
+dependency overrides and tooling state are excluded, and the source checkout
+is checked again against the validated commit before the gate succeeds.
 
 After a release is authorized, push `main` and wait for green CI. Then run:
 

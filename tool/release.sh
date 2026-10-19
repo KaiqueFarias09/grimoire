@@ -13,10 +13,18 @@ release_flutter_bin=
 release_dart_bin=
 release_flutter_version_file=.flutter-version
 release_notes_file=
+release_check_dir=
+release_check_archive=
 
 cleanup() {
   if [ -n "$release_notes_file" ] && [ -f "$release_notes_file" ]; then
     rm -f -- "$release_notes_file"
+  fi
+  if [ -n "$release_check_archive" ] && [ -f "$release_check_archive" ]; then
+    rm -f -- "$release_check_archive"
+  fi
+  if [ -n "$release_check_dir" ] && [ -d "$release_check_dir" ]; then
+    rm -rf -- "$release_check_dir"
   fi
 }
 
@@ -129,11 +137,8 @@ published_status() {
   esac
 }
 
-run_release_gate() {
-  require_command git
+run_release_gate_snapshot() {
   require_version_metadata
-  require_clean_main
-  require_repository_identity
   resolve_flutter
   require_flutter_version
 
@@ -154,12 +159,51 @@ run_release_gate() {
     "$release_flutter_bin" pub publish --dry-run
   fi
 
-  # Dependency resolution and tests may update tracked files after the first
-  # cleanliness check. Never approve a release from a changed checkout.
-  require_clean_main
-
   printf 'release-check: grimoire %s passed all release gates.\n' "$release_version"
-  printf 'commit: %s\n' "$(git rev-parse HEAD)"
+  printf 'commit: %s\n' "$GRIMOIRE_RELEASE_COMMIT"
+}
+
+run_release_gate() {
+  require_command git
+  require_command tar
+  require_version_metadata
+  require_clean_main
+  require_repository_identity
+  resolve_flutter
+
+  release_gate_commit=$(git rev-parse HEAD)
+  release_check_dir=$(mktemp -d "${TMPDIR:-/tmp}/grimoire-release-check.XXXXXX")
+  release_check_archive=$(mktemp "${TMPDIR:-/tmp}/grimoire-release-check.XXXXXX")
+  git archive --format=tar "$release_gate_commit" >"$release_check_archive" ||
+    fail 'could not create a tracked release-check snapshot.'
+  tar -xf "$release_check_archive" -C "$release_check_dir" ||
+    fail 'could not unpack the release-check snapshot.'
+  rm -f -- "$release_check_archive"
+  release_check_archive=
+
+  printf 'release-check: using tracked HEAD snapshot; ignored local overrides are excluded.\n'
+  if (
+    cd "$release_check_dir" &&
+      VERSION="$release_version" \
+        FLUTTER_BIN="$release_flutter_bin" \
+        GRIMOIRE_RELEASE_COMMIT="$release_gate_commit" \
+        sh tool/release.sh check-snapshot
+  ); then
+    release_gate_status=0
+  else
+    release_gate_status=$?
+  fi
+
+  rm -rf -- "$release_check_dir"
+  release_check_dir=
+  [ "$release_gate_status" -eq 0 ] || return "$release_gate_status"
+
+  # Checks run from the tracked snapshot, but the source checkout must still
+  # match the commit that was validated before release operations continue.
+  require_clean_main
+  release_current_commit=$(git rev-parse HEAD)
+  [ "$release_current_commit" = "$release_gate_commit" ] ||
+    fail "HEAD changed during release validation (validated $release_gate_commit, now $release_current_commit)."
 }
 
 tag_commit() {
@@ -294,6 +338,7 @@ run_publish() {
 
 case "$release_operation" in
   check) run_release_gate ;;
+  check-snapshot) run_release_gate_snapshot ;;
   github) run_github_release ;;
   publish) run_publish ;;
   *) fail 'usage: tool/release.sh check|github|publish (set VERSION=x.y.z)' ;;
