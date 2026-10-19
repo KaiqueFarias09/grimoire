@@ -660,6 +660,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.0"
+  markdown:
+    dependency: transitive
+    description:
+      name: markdown
+      sha256: "935e23e1ff3bc02d390bad4d4be001208ee92cc217cb5b5a6c19bc14aaa318c1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.3.0"
   matcher:
     dependency: transitive
     description:
@@ -1005,10 +1013,10 @@ packages:
     dependency: "direct main"
     description:
       name: unseal
-      sha256: "5daa5ba96131683212451679cfa6b3caf51e00f990f831ab41444a51f022eed2"
+      sha256: d97655e8b6858833eb692bac38a32d020388456ade5f8ee1243441cee5fa7f3c
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.0"
+    version: "1.3.0"
   uuid:
     dependency: transitive
     description:

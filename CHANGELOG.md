@@ -23,7 +23,7 @@ first publication are part of this version.
   `isFixedLayoutPage(fileIndex)` let hosts branch on the mode; progress
   advances one page per reading-order item. V1 does not support synthetic
   spreads, orientation locks, or pinch, pan, and double-tap stage zoom.
-  Depends on `unseal: ^1.2.0` for the fixed-layout rendition model.
+  Depends on `unseal: ^1.3.0` for the fixed-layout rendition model.
 
 - **Password-protected PDFs**: facsimile rendering now supports
   encrypted PDFs. When pdf.js needs a password (first open or a
@@ -182,7 +182,7 @@ first publication are part of this version.
 
 ### Changed
 
-- Grimoire uses the hosted `unseal: ^1.2.0` contract. CI validates package
+- Grimoire uses the hosted `unseal: ^1.3.0` contract. CI validates package
   analysis, tests, and the repository coverage floor against that dependency.
 - **Highlight appearance** uses Unseal's canonical
   `HighlightColor` and `HighlightDecoration` types. The viewer maps
