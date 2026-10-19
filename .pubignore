@@ -33,3 +33,9 @@ benchmark/
 docs/
 test/
 tool/
+/example/integration_test/
+
+# Keep the full public-domain corpus in Git for local demos and tests, but
+# publish only one compact EPUB alongside the small cross-format samples.
+/example/assets/books/*.epub
+!/example/assets/books/dom-casmurro.epub
