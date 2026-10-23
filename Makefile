@@ -19,7 +19,7 @@ help:
 	  '  make example-check' \
 	  '      Install example dependencies, analyze the app, and run its tests.' \
 	  '  make package-dry-run' \
-	  '      Validate the package contents with pub.dev.' \
+	  '      Validate committed package contents with pub.dev, excluding ignored local overrides.' \
 	  '' \
 	  'Grimoire release commands:' \
 	  '  make release-check VERSION=1.0.0' \
@@ -31,7 +31,7 @@ help:
 	  '      and create the matching GitHub Release.' \
 	  '  make publish VERSION=1.0.0' \
 	  '      Re-run the gate, require the matching tag and GitHub Release,' \
-	  '      then start interactive pub.dev publication.' \
+	  '      then publish the tracked package snapshot interactively.' \
 	  '' \
 	  'Options:' \
 	  '  YES=1                  Skip release-github confirmation.' \
@@ -56,7 +56,7 @@ example-check:
 	cd example && flutter pub get && flutter analyze && flutter test
 
 package-dry-run:
-	flutter pub publish --dry-run
+	@FLUTTER_BIN='$(FLUTTER_BIN)' sh tool/release.sh package-dry-run
 
 check:
 	flutter pub get --no-example

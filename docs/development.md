@@ -57,8 +57,10 @@ make package-dry-run
 `make coverage` runs the package tests with coverage and enforces the 93.8%
 line-coverage floor declared in `tool/coverage_gate.sh`. `make example-check`
 installs example dependencies, analyzes the host app, and runs its tests.
-`make package-dry-run` checks the package archive against pub.dev rules; use
-hosted dependency constraints for this check.
+`make package-dry-run` requires a clean checkout and checks committed `HEAD`
+against pub.dev rules from a temporary tracked-files snapshot. Ignored local
+dependency overrides remain available for development but are excluded from
+the check.
 
 Run the same package and example checks as CI with:
 
@@ -128,7 +130,9 @@ make publish VERSION=1.0.0
 `release-github` checks that local `main` matches `origin/main`, then creates
 and pushes the version tag and creates the matching GitHub Release. The target
 asks for confirmation unless you pass `YES=1`. `publish` checks the remote tag
-and GitHub Release, then starts the interactive pub.dev publication.
+and GitHub Release, then starts the interactive pub.dev publication from the
+same tracked-files snapshot used by the release gate, so local dependency
+overrides do not affect publication.
 
 Do not run release mutation targets without an explicit release request. See
 [the archived publication snapshot](archive/publication-readiness-2026-09-23.md)
