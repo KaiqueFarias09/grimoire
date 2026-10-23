@@ -1097,6 +1097,10 @@ class ViewerController extends ChangeNotifier
     _engines = _engineFactory.createPair(
       (final message, final source) => bridge.accept(message, source: source),
     );
+    // Some platform engines are created by their widget and cannot load
+    // a URL until that widget is mounted. Wake the loading view so it can
+    // build the active engine before start waits for its platform callback.
+    notifyListeners();
 
     _navigation.prepareInitial(0);
     _refreshFixedPresentations();

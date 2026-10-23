@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
 
+import 'helpers/fake_inappwebview_platform.dart';
 import 'helpers/fake_webview_flutter_platform.dart';
 import 'helpers/test_book.dart';
 
@@ -89,7 +90,8 @@ void main() {
   }
 
   testWidgets('creates and owns a controller when none is supplied', (final tester) async {
-    // The owned controller uses the real webview_flutter factory.
+    // Grimoire selects different platform engines for mobile and desktop.
+    installFakeInAppWebViewPlatform(autoBoot: true);
     installFakeWebViewPlatform(autoBoot: true);
     var ready = false;
     await tester.pumpWidget(

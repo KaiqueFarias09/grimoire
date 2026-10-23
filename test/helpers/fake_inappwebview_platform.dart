@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -10,7 +11,9 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 class FakeInAppWebViewPlatform extends PlatformInterface
     with MockPlatformInterfaceMixin
     implements InAppWebViewPlatform {
-  FakeInAppWebViewPlatform() : super(token: Object());
+  FakeInAppWebViewPlatform({this.autoBoot = false}) : super(token: Object());
+
+  final bool autoBoot;
 
   /// Every headless webview created since installation, in order.
   final List<FakePlatformHeadlessInAppWebView> headlessViews = <FakePlatformHeadlessInAppWebView>[];
@@ -25,7 +28,18 @@ class FakeInAppWebViewPlatform extends PlatformInterface
   }
 
   @override
+  PlatformInAppWebViewWidget createPlatformInAppWebViewWidget(
+    final PlatformInAppWebViewWidgetCreationParams params,
+  ) => _FakePlatformInAppWebViewWidget(params, autoBoot: autoBoot);
+
+  @override
   dynamic noSuchMethod(final Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+FakeInAppWebViewPlatform installFakeInAppWebViewPlatform({final bool autoBoot = false}) {
+  final platform = FakeInAppWebViewPlatform(autoBoot: autoBoot);
+  InAppWebViewPlatform.instance = platform;
+  return platform;
 }
 
 /// The recorded stand-in for `HeadlessInAppWebView`. `run()` fakes the
@@ -71,18 +85,34 @@ class FakePlatformHeadlessInAppWebView extends PlatformInterface
 class FakePlatformInAppWebViewController extends PlatformInterface
     with MockPlatformInterfaceMixin
     implements PlatformInAppWebViewController {
-  FakePlatformInAppWebViewController(this.params) : super(token: Object());
+  FakePlatformInAppWebViewController(this.params, {this.autoBoot = false}) : super(token: Object());
 
   @override
   final PlatformInAppWebViewControllerCreationParams params;
 
+  final bool autoBoot;
+
   final Map<String, JavaScriptHandlerCallback> handlers = <String, JavaScriptHandlerCallback>{};
+
+  final List<URLRequest> loadedRequests = <URLRequest>[];
 
   /// Answers every `evaluateJavascript` call.
   Object? Function(String source)? evaluateAnswer;
 
   /// Answers every `takeScreenshot` call.
   Uint8List? screenshotBytes;
+
+  @override
+  Future<void> loadUrl({
+    required final URLRequest urlRequest,
+    final Uri? iosAllowingReadAccessTo,
+    final WebUri? allowingReadAccessTo,
+  }) async {
+    loadedRequests.add(urlRequest);
+    if (autoBoot) {
+      handlers['GrimoireBridge']?.call(<dynamic>['{"type":"ready","chars":100,"columns":5}']);
+    }
+  }
 
   @override
   void addJavaScriptHandler({
@@ -109,4 +139,38 @@ class FakePlatformInAppWebViewController extends PlatformInterface
 
   @override
   dynamic noSuchMethod(final Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakePlatformInAppWebViewWidget extends PlatformInAppWebViewWidget {
+  _FakePlatformInAppWebViewWidget(
+    final PlatformInAppWebViewWidgetCreationParams params, {
+    required this.autoBoot,
+  }) : super.implementation(params);
+
+  final bool autoBoot;
+  bool _created = false;
+  late final FakePlatformInAppWebViewController _controller = FakePlatformInAppWebViewController(
+    PlatformInAppWebViewControllerCreationParams(id: 'widget', webviewParams: params),
+    autoBoot: autoBoot,
+  );
+
+  @override
+  Widget build(final BuildContext context) {
+    if (!_created) {
+      _created = true;
+      final wrapped = params.controllerFromPlatform?.call(_controller);
+      if (wrapped != null) {
+        params.onWebViewCreated?.call(wrapped);
+      }
+    }
+    return const SizedBox.shrink();
+  }
+
+  @override
+  T controllerFromPlatform<T>(final PlatformInAppWebViewController controller) {
+    return InAppWebViewController.fromPlatform(platform: controller) as T;
+  }
+
+  @override
+  void dispose() {}
 }

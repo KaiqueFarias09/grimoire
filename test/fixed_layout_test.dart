@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grimoire/grimoire.dart';
 import 'package:grimoire/src/features/rendering/adapters/fake_viewer_engine.dart';
+import 'package:grimoire/src/features/rendering/adapters/webview_flutter_engine.dart';
 import 'package:grimoire/src/features/serving/fixed_layout.dart';
 import 'package:unseal/unseal.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart' as wf;
@@ -392,7 +393,7 @@ void main() {
     test('loads the staged page and turns pages through the bridge', () async {
       final platform = installFakeWebViewPlatform(autoBoot: true);
       final book = await Unseal.readFile('test/resources/books/epub/fxl-xhtml-viewport.epub');
-      final controller = ViewerController(book)
+      final controller = ViewerController(book, engineFactory: WebviewFlutterEngineFactory())
         ..mathJaxEnabled = false
         ..pageCountMode = BookPageCountMode.estimate;
       addTearDown(controller.dispose);

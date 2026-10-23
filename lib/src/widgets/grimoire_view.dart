@@ -258,9 +258,28 @@ class _GrimoireViewState extends State<GrimoireView> {
       future: _startFuture,
       builder: (final context, final snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const ColoredBox(
-            color: Colors.white,
-            child: Center(child: CircularProgressIndicator()),
+          final controller = _controller;
+          return AnimatedBuilder(
+            animation: controller,
+            builder: (final context, final _) {
+              final engines = controller.engines;
+              final active = controller.activeEngineIndex;
+              return Stack(
+                children: [
+                  if (engines.length > active)
+                    Positioned.fill(
+                      key: ObjectKey(engines[active]),
+                      child: engines[active].buildWidget(),
+                    ),
+                  const Positioned.fill(
+                    child: ColoredBox(
+                      color: Colors.white,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         }
         if (snapshot.hasError) {
@@ -321,9 +340,15 @@ class _GrimoireViewState extends State<GrimoireView> {
                             // Inactive engine below (preloaded content), active on
                             // top, reader chrome overlays everything.
                             if (engines.length > below)
-                              Positioned.fill(child: engines[below].buildWidget()),
+                              Positioned.fill(
+                                key: ObjectKey(engines[below]),
+                                child: engines[below].buildWidget(),
+                              ),
                             if (engines.length > active)
-                              Positioned.fill(child: engines[active].buildWidget()),
+                              Positioned.fill(
+                                key: ObjectKey(engines[active]),
+                                child: engines[active].buildWidget(),
+                              ),
                             if (widget.showShell)
                               Positioned.fill(child: ReaderShell(controller: controller)),
                           ],
