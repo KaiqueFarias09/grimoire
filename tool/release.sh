@@ -192,18 +192,19 @@ run_release_gate_snapshot() {
   printf 'commit: %s\n' "$GRIMOIRE_RELEASE_COMMIT"
 }
 
-run_release_gate() {
+run_release_gate_for_commit() {
+  release_gate_commit=$1
   require_command git
   require_command tar
-  require_version_metadata
   require_clean_main
   require_repository_identity
   resolve_flutter
 
-  release_gate_commit=$(git rev-parse HEAD)
+  release_checkout_commit=$(git rev-parse HEAD)
   create_tracked_snapshot "$release_gate_commit"
 
-  printf 'release-check: using tracked HEAD snapshot; ignored local overrides are excluded.\n'
+  printf 'release-check: using tracked snapshot %s; ignored local overrides are excluded.\n' \
+    "$release_gate_commit"
   if (
     cd "$release_snapshot_dir" &&
       VERSION="$release_version" \
@@ -219,12 +220,17 @@ run_release_gate() {
   remove_tracked_snapshot
   [ "$release_gate_status" -eq 0 ] || return "$release_gate_status"
 
-  # Checks run from the tracked snapshot, but the source checkout must still
-  # match the commit that was validated before release operations continue.
+  # Checks run from the tracked snapshot, but the source checkout must remain
+  # unchanged while validation runs.
   require_clean_main
   release_current_commit=$(git rev-parse HEAD)
-  [ "$release_current_commit" = "$release_gate_commit" ] ||
-    fail "HEAD changed during release validation (validated $release_gate_commit, now $release_current_commit)."
+  [ "$release_current_commit" = "$release_checkout_commit" ] ||
+    fail "HEAD changed during release validation (started at $release_checkout_commit, now $release_current_commit)."
+}
+
+run_release_gate() {
+  require_version_metadata
+  run_release_gate_for_commit "$(git rev-parse HEAD)"
 }
 
 run_package_dry_run() {
@@ -277,6 +283,21 @@ require_tag_at_head() {
     fail "$release_tag on origin points to $release_remote_tag_commit, not HEAD $release_head"
 }
 
+require_tag_on_main() {
+  release_head=$(git rev-parse HEAD)
+  release_local_tag_commit=$(tag_commit)
+  [ -n "$release_local_tag_commit" ] || fail "$release_tag does not exist locally"
+
+  release_remote_tag_commit=$(remote_tag_commit)
+  [ -n "$release_remote_tag_commit" ] || fail "$release_tag has not been pushed to origin"
+  [ "$release_remote_tag_commit" = "$release_local_tag_commit" ] ||
+    fail "$release_tag on origin points to $release_remote_tag_commit, not local tag commit $release_local_tag_commit"
+  git merge-base --is-ancestor "$release_local_tag_commit" "$release_head" ||
+    fail "$release_tag at $release_local_tag_commit is not on current main history ending at $release_head"
+
+  release_publish_commit=$release_local_tag_commit
+}
+
 github_release_url() {
   gh release view "$release_tag" --json url --jq .url 2>/dev/null || true
 }
@@ -320,8 +341,8 @@ run_github_release() {
 
   release_existing_url=$(github_release_url)
   if [ -n "$release_existing_url" ]; then
-    require_tag_at_head
-    printf 'release-github: %s already exists at the correct commit.\n' "$release_tag"
+    require_tag_on_main
+    printf 'release-github: %s already exists on current main history.\n' "$release_tag"
     printf 'url: %s\n' "$release_existing_url"
     return
   fi
@@ -365,20 +386,23 @@ run_publish() {
     return
   fi
 
-  run_release_gate
   fetch_and_require_synced_main
+  require_tag_on_main
+  run_release_gate_for_commit "$release_publish_commit"
+  fetch_and_require_synced_main
+  require_tag_on_main
   require_command gh
   gh auth status >/dev/null 2>&1 || fail 'GitHub CLI is not authenticated; run gh auth login first.'
-  require_tag_at_head
 
   release_existing_url=$(github_release_url)
   [ -n "$release_existing_url" ] ||
     fail "$release_tag has no GitHub Release; run make release-github VERSION=$release_version first"
 
   printf 'publish: GitHub release verified: %s\n' "$release_existing_url"
-  create_tracked_snapshot "$release_head"
-  printf 'publish: starting interactive pub.dev publication for grimoire %s from tracked HEAD; ignored local overrides are excluded.\n' \
-    "$release_version"
+  create_tracked_snapshot "$release_publish_commit"
+  printf 'publish: starting interactive pub.dev publication for grimoire %s from tag %s; ignored local overrides are excluded.\n' \
+    "$release_version" \
+    "$release_tag"
   (cd "$release_snapshot_dir" && "$release_flutter_bin" pub publish)
 }
 

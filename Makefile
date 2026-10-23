@@ -31,7 +31,7 @@ help:
 	  '      and create the matching GitHub Release.' \
 	  '  make publish VERSION=1.0.0' \
 	  '      Re-run the gate, require the matching tag and GitHub Release,' \
-	  '      then publish the tracked package snapshot interactively.' \
+	  '      then publish the tagged package snapshot interactively.' \
 	  '' \
 	  'Options:' \
 	  '  YES=1                  Skip release-github confirmation.' \

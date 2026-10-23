@@ -130,9 +130,9 @@ make publish VERSION=1.0.0
 `release-github` checks that local `main` matches `origin/main`, then creates
 and pushes the version tag and creates the matching GitHub Release. The target
 asks for confirmation unless you pass `YES=1`. `publish` checks the remote tag
-and GitHub Release, then starts the interactive pub.dev publication from the
-same tracked-files snapshot used by the release gate, so local dependency
-overrides do not affect publication.
+and GitHub Release, validates the tagged commit, then starts the interactive
+pub.dev publication from that tag's tracked-files snapshot. Local dependency
+overrides do not affect validation or publication.
 
 Do not run release mutation targets without an explicit release request. See
 [the archived publication snapshot](archive/publication-readiness-2026-09-23.md)
