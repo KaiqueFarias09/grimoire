@@ -1,3 +1,10 @@
+## 1.0.1
+
+### Fixed
+
+- Shortened the package description to meet pub.dev's metadata limit.
+- Included the complete MIT license text so pub.dev can identify the package license.
+
 ## 1.0.0
 
 The first Grimoire release. All features and fixes accumulated before the

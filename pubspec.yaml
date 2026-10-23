@@ -1,10 +1,9 @@
 name: grimoire
-version: 1.0.0
+version: 1.0.1
 description: >-
-  Calibre-style ebook reader for Flutter built on Unseal. Renders
-  EPUB, MOBI, AZW3, FB2/FBZ, TXT/TXZ, HTML/HTMLZ, DOCX, AZW4,
-  CBZ/CBR/CB7/CBC, ODT and PDF with paginated layouts, themes, table
-  of contents, search and text selection hooks.
+  Calibre-style Flutter ebook reader built on Unseal, with paginated or scrolling
+  layouts, navigation, search, bookmarks, highlights, themes, and text selection
+  hooks.
 repository: https://github.com/KaiqueFarias09/grimoire
 issue_tracker: https://github.com/KaiqueFarias09/grimoire/issues
 

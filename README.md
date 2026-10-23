@@ -322,4 +322,4 @@ handles loopback internally).
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
