@@ -142,10 +142,7 @@ class FakePlatformInAppWebViewController extends PlatformInterface
 }
 
 class _FakePlatformInAppWebViewWidget extends PlatformInAppWebViewWidget {
-  _FakePlatformInAppWebViewWidget(
-    final PlatformInAppWebViewWidgetCreationParams params, {
-    required this.autoBoot,
-  }) : super.implementation(params);
+  _FakePlatformInAppWebViewWidget(super.params, {required this.autoBoot}) : super.implementation();
 
   final bool autoBoot;
   bool _created = false;
